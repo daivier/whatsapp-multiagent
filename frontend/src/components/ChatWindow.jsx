@@ -108,15 +108,11 @@ export default function ChatWindow({ conversation, socket, onClose, onDelete }) 
   }, [socket, conversation]);
 
   useEffect(() => {
-    if (!messagesRef.current) return;
-    if (isFirstLoad.current) {
-      // Carga inicial: scroll imediato para o fim
+    // Aguarda o browser terminar o paint antes de scrollar
+    requestAnimationFrame(() => {
+      if (!messagesRef.current) return;
       messagesRef.current.scrollTop = messagesRef.current.scrollHeight;
-      isFirstLoad.current = false;
-    } else {
-      // Nova mensagem: scroll suave
-      bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
-    }
+    });
   }, [messages]);
 
   async function loadHistory() {
