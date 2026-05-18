@@ -17,10 +17,15 @@ export default function ChatWindow({ conversation, socket, onClose }) {
 
   useEffect(() => {
     if (!socket) return;
-    function handler({ message, conversationId }) {
-      if (conversationId === conversation?.id || message?.conversation_id === conversation?.id) {
-        setMessages(prev => [...prev, message]);
-      }
+    function handler({ message, conversation: conv }) {
+      const convId = conv?.id ?? message?.conversation_id;
+      if (convId !== conversation?.id) return;
+      // Evita duplicar mensagens próprias que já vieram via optimistic update
+      if (message.from_me) return;
+      setMessages(prev => {
+        if (prev.some(m => m.id === message.id)) return prev;
+        return [...prev, message];
+      });
     }
     socket.on('message:new', handler);
     return () => socket.off('message:new', handler);
@@ -36,13 +41,22 @@ export default function ChatWindow({ conversation, socket, onClose }) {
     setWarning('');
     const body = text;
     setText('');
+
+    // Mostra a mensagem imediatamente (optimistic update)
+    const tempId = `temp-${Date.now()}`;
+    const tempMsg = { id: tempId, conversation_id: conversation.id, from_me: 1, body, timestamp: new Date().toISOString(), sender_name: user.name };
+    setMessages(prev => [...prev, tempMsg]);
+
     socket.emit('message:send', { conversation_id: conversation.id, body }, (res) => {
       setSending(false);
       if (res?.message) {
-        setMessages(prev => [...prev, res.message]);
+        // Substitui a msg temporária pela real (com ID correto da BD)
+        setMessages(prev => prev.map(m => m.id === tempId ? res.message : m));
       } else if (res?.error) {
         setWarning(res.error);
-        setText(body); // devolve o texto se falhou
+        // Mantém a mensagem mas marca como falhou
+        setMessages(prev => prev.map(m => m.id === tempId ? { ...m, failed: true } : m));
+        setText(body);
       }
     });
   }
@@ -80,7 +94,7 @@ export default function ChatWindow({ conversation, socket, onClose }) {
             {msg.from_me && msg.sender_name && (
               <span style={styles.senderName}>{msg.sender_name}</span>
             )}
-            <p style={styles.msgText}>{msg.body}</p>
+            <p style={styles.msgText}>{msg.body}{msg.failed ? ' ⚠️' : ''}</p>
             <span style={styles.time}>{new Date(msg.timestamp).toLocaleTimeString('pt-PT', { hour: '2-digit', minute: '2-digit' })}</span>
           </div>
         ))}
