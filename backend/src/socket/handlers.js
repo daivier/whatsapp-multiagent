@@ -61,6 +61,24 @@ function initSocket(io) {
       }
     });
 
+    // Sala da conversa (para typing indicator)
+    socket.on('conv:join', ({ conversation_id }) => {
+      socket.join(`conv:${conversation_id}`);
+    });
+    socket.on('conv:leave', ({ conversation_id }) => {
+      socket.leave(`conv:${conversation_id}`);
+      socket.to(`conv:${conversation_id}`).emit('typing:update', { userId: user.id, name: user.name, typing: false, conversation_id });
+    });
+
+    // Indicador de digitação
+    socket.on('typing:start', ({ conversation_id }) => {
+      socket.to(`conv:${conversation_id}`).emit('typing:update', { userId: user.id, name: user.name, typing: true, conversation_id });
+    });
+
+    socket.on('typing:stop', ({ conversation_id }) => {
+      socket.to(`conv:${conversation_id}`).emit('typing:update', { userId: user.id, name: user.name, typing: false, conversation_id });
+    });
+
     // Atualizar status do atendente
     socket.on('user:status', ({ status }) => {
       if (!['online', 'busy', 'offline'].includes(status)) return;

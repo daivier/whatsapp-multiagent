@@ -8,27 +8,43 @@ export default function ChatWindow({ conversation, socket, onClose }) {
   const [text, setText] = useState('');
   const [sending, setSending] = useState(false);
   const [warning, setWarning] = useState('');
+  const [typers, setTypers] = useState({}); // { userId: name }
+  const typingTimer = useRef(null);
   const bottomRef = useRef(null);
 
   useEffect(() => {
     if (!conversation) return;
-    api.get(`/conversations/${conversation.id}/messages`).then(r => setMessages(r.data));
+    api.get(`/conversations/${conversation.id}/messages`).then(r => setMessages(Array.isArray(r.data) ? r.data : []));
+    socket?.emit('conv:join', { conversation_id: conversation.id });
+    return () => socket?.emit('conv:leave', { conversation_id: conversation.id });
   }, [conversation]);
 
   useEffect(() => {
-    if (!socket) return;
-    function handler({ message, conversation: conv }) {
+    if (!socket || !conversation) return;
+
+    function onMessage({ message, conversation: conv }) {
       const convId = conv?.id ?? message?.conversation_id;
       if (convId !== conversation?.id) return;
-      // Evita duplicar mensagens próprias que já vieram via optimistic update
       if (message.from_me) return;
-      setMessages(prev => {
-        if (prev.some(m => m.id === message.id)) return prev;
-        return [...prev, message];
+      setMessages(prev => prev.some(m => m.id === message.id) ? prev : [...prev, message]);
+    }
+
+    function onTyping({ userId, name, typing, conversation_id }) {
+      if (conversation_id !== conversation.id) return;
+      setTypers(prev => {
+        const next = { ...prev };
+        if (typing) next[userId] = name;
+        else delete next[userId];
+        return next;
       });
     }
-    socket.on('message:new', handler);
-    return () => socket.off('message:new', handler);
+
+    socket.on('message:new', onMessage);
+    socket.on('typing:update', onTyping);
+    return () => {
+      socket.off('message:new', onMessage);
+      socket.off('typing:update', onTyping);
+    };
   }, [socket, conversation]);
 
   useEffect(() => {
@@ -61,9 +77,21 @@ export default function ChatWindow({ conversation, socket, onClose }) {
     });
   }
 
+  function handleTyping(e) {
+    setText(e.target.value);
+    if (!socket || !conversation) return;
+    socket.emit('typing:start', { conversation_id: conversation.id });
+    clearTimeout(typingTimer.current);
+    typingTimer.current = setTimeout(() => {
+      socket.emit('typing:stop', { conversation_id: conversation.id });
+    }, 2000);
+  }
+
   function handleKey(e) {
     if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send(); }
   }
+
+  const typerNames = Object.values(typers).filter(Boolean);
 
   if (!conversation) {
     return (
@@ -101,6 +129,12 @@ export default function ChatWindow({ conversation, socket, onClose }) {
         <div ref={bottomRef} />
       </div>
 
+      {typerNames.length > 0 && (
+        <div style={styles.typingBar}>
+          <span style={styles.typingDots}>●●●</span>
+          {typerNames.join(', ')} {typerNames.length === 1 ? 'está' : 'estão'} a digitar...
+        </div>
+      )}
       {warning && (
         <div style={styles.warning}>{warning}</div>
       )}
@@ -108,7 +142,7 @@ export default function ChatWindow({ conversation, socket, onClose }) {
         <textarea
           style={styles.textarea}
           value={text}
-          onChange={e => setText(e.target.value)}
+          onChange={handleTyping}
           onKeyDown={handleKey}
           placeholder="Escreve uma mensagem..."
           rows={2}
@@ -140,4 +174,6 @@ const styles = {
   textarea: { flex: 1, padding: '0.5rem', border: '1px solid #ddd', borderRadius: '8px', resize: 'none', fontSize: '0.9rem', outline: 'none' },
   sendBtn: { padding: '0 1.25rem', background: '#25D366', color: '#fff', border: 'none', borderRadius: '8px', cursor: 'pointer', fontWeight: 600 },
   warning: { background: '#fff3cd', color: '#856404', padding: '0.4rem 1rem', fontSize: '0.82rem', borderTop: '1px solid #ffc107' },
+  typingBar: { padding: '0.3rem 1rem', fontSize: '0.8rem', color: '#555', background: '#f9f9f9', borderTop: '1px solid #eee', display: 'flex', alignItems: 'center', gap: '0.4rem' },
+  typingDots: { color: '#25D366', fontSize: '0.6rem', letterSpacing: '2px', animation: 'pulse 1s infinite' },
 };
