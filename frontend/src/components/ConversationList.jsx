@@ -34,7 +34,7 @@ export default function ConversationList({ socket, selected, onSelect }) {
 
   async function load() {
     const { data } = await api.get('/conversations', { params: { status: filter || undefined } });
-    setConversations(data);
+    setConversations(Array.isArray(data) ? data : []);
   }
 
   return (

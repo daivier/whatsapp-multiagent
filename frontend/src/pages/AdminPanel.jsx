@@ -38,7 +38,7 @@ export default function AdminPanel({ socket }) {
 
   async function loadAttendants() {
     const { data } = await api.get('/users');
-    setAttendants(data.filter(u => u.role === 'attendant'));
+    setAttendants(Array.isArray(data) ? data.filter(u => u.role === 'attendant') : []);
   }
 
   async function loadMetrics() {
