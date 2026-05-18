@@ -1,13 +1,28 @@
 const express = require('express');
+const multer = require('multer');
+const path = require('path');
+const fs = require('fs');
 const db = require('../db/schema');
 const { authMiddleware, ownerOnly } = require('../middleware/auth');
-const { sendMessage } = require('../whatsapp/client');
+const { sendMessage, sendMedia } = require('../whatsapp/client');
+const ioInstance = require('../io-instance');
 
 const router = express.Router();
 
+const UPLOADS_DIR = path.join(__dirname, '../../../uploads');
+const storage = multer.diskStorage({
+  destination: (req, file, cb) => cb(null, UPLOADS_DIR),
+  filename: (req, file, cb) => {
+    const ext = path.extname(file.originalname) || '.bin';
+    cb(null, `${Date.now()}-${Math.random().toString(36).slice(2)}${ext}`);
+  },
+});
+const upload = multer({ storage, limits: { fileSize: 32 * 1024 * 1024 } });
+
 function conversationQuery(extraWhere = '') {
   return `
-    SELECT conv.*, con.phone, con.wa_id, con.name as contact_name, u.name as attendant_name
+    SELECT conv.*, con.phone, con.wa_id, con.name as contact_name, u.name as attendant_name,
+      (SELECT COUNT(*) FROM messages WHERE conversation_id = conv.id AND from_me = 0 AND read = 0) as unread_count
     FROM conversations conv
     JOIN contacts con ON con.id = conv.contact_id
     LEFT JOIN users u ON u.id = conv.assigned_to
@@ -16,7 +31,7 @@ function conversationQuery(extraWhere = '') {
   `;
 }
 
-// GET /conversations — atendente vê as suas; owner vê todas
+// GET /conversations
 router.get('/', authMiddleware, (req, res) => {
   const { status } = req.query;
   let where = '';
@@ -59,7 +74,7 @@ router.get('/:id/messages', authMiddleware, (req, res) => {
   res.json(messages);
 });
 
-// POST /conversations/:id/notes — nota interna
+// POST /conversations/:id/notes
 router.post('/:id/notes', authMiddleware, (req, res) => {
   const { body } = req.body;
   if (!body?.trim()) return res.status(400).json({ error: 'body obrigatório' });
@@ -74,7 +89,37 @@ router.post('/:id/notes', authMiddleware, (req, res) => {
   res.json(message);
 });
 
-// GET /conversations/contact/:phone — histórico de conversas do contacto
+// POST /conversations/:id/send-media — enviar ficheiro/imagem
+router.post('/:id/send-media', authMiddleware, upload.single('file'), async (req, res) => {
+  const conv = db.prepare('SELECT conv.*, con.phone, con.wa_id FROM conversations conv JOIN contacts con ON con.id = conv.contact_id WHERE conv.id = ?').get(req.params.id);
+  if (!conv) return res.status(404).json({ error: 'Conversa não encontrada' });
+  if (req.user.role === 'attendant' && conv.assigned_to !== req.user.id) return res.status(403).json({ error: 'Sem permissão' });
+
+  const file = req.file;
+  if (!file) return res.status(400).json({ error: 'Ficheiro obrigatório' });
+
+  const caption = req.body.caption || '';
+  const mediaUrl = `/uploads/${file.filename}`;
+
+  try {
+    await sendMedia(conv.wa_id || conv.phone, file.path, file.originalname, caption);
+
+    const result = db.prepare('INSERT INTO messages (conversation_id, from_me, sender_id, body, media_url, media_type) VALUES (?, 1, ?, ?, ?, ?)')
+      .run(conv.id, req.user.id, caption, mediaUrl, file.mimetype);
+    db.prepare('UPDATE conversations SET updated_at = CURRENT_TIMESTAMP WHERE id = ?').run(conv.id);
+
+    const message = db.prepare('SELECT m.*, u.name as sender_name FROM messages m LEFT JOIN users u ON u.id = m.sender_id WHERE m.id = ?').get(result.lastInsertRowid);
+    const fullConv = db.prepare(conversationQuery('WHERE conv.id = ?')).get(conv.id);
+
+    ioInstance.get()?.emit('message:new', { message, conversation: fullConv });
+    res.json(message);
+  } catch (err) {
+    try { fs.unlinkSync(file.path); } catch (_) {}
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// GET /conversations/contact/:phone
 router.get('/contact/:phone', authMiddleware, (req, res) => {
   const contact = db.prepare('SELECT * FROM contacts WHERE phone = ? OR wa_id LIKE ?').get(req.params.phone, `${req.params.phone}%`);
   if (!contact) return res.json([]);
@@ -89,7 +134,7 @@ router.get('/contact/:phone', authMiddleware, (req, res) => {
   res.json(convs);
 });
 
-// POST /conversations/:id/transfer — owner transfere conversa
+// POST /conversations/:id/transfer
 router.post('/:id/transfer', authMiddleware, ownerOnly, async (req, res) => {
   const { attendant_id, notify = true } = req.body;
   if (!attendant_id) return res.status(400).json({ error: 'attendant_id obrigatório' });
@@ -102,44 +147,53 @@ router.post('/:id/transfer', authMiddleware, ownerOnly, async (req, res) => {
 
   const conv = db.prepare(conversationQuery('WHERE conv.id = ?')).get(req.params.id);
 
-  // Envia mensagem automática ao cliente
   if (notify) {
     const notifyText = `Olá! O seu atendimento foi transferido para *${attendant.name}*, que irá continuar a ajudá-lo em breve. 😊`;
     try {
       await sendMessage(conv.wa_id || conv.phone, notifyText);
       db.prepare('INSERT INTO messages (conversation_id, from_me, body) VALUES (?, 1, ?)').run(conv.id, notifyText);
     } catch (err) {
-      console.error('Aviso: não foi possível enviar notificação de transferência:', err.message);
+      console.error('Aviso: notificação de transferência não enviada:', err.message);
     }
   }
 
   res.json(conv);
 });
 
-// PATCH /conversations/:id/close — fechar conversa
+// PATCH /conversations/:id/close
 router.patch('/:id/close', authMiddleware, (req, res) => {
   const conv = db.prepare('SELECT * FROM conversations WHERE id = ?').get(req.params.id);
   if (!conv) return res.status(404).json({ error: 'Conversa não encontrada' });
-
-  if (req.user.role === 'attendant' && conv.assigned_to !== req.user.id) {
-    return res.status(403).json({ error: 'Sem permissão' });
-  }
+  if (req.user.role === 'attendant' && conv.assigned_to !== req.user.id) return res.status(403).json({ error: 'Sem permissão' });
 
   db.prepare(`UPDATE conversations SET status = 'closed', updated_at = CURRENT_TIMESTAMP WHERE id = ?`).run(req.params.id);
-  res.json({ ok: true });
+  const updated = db.prepare(conversationQuery('WHERE conv.id = ?')).get(req.params.id);
+  ioInstance.get()?.emit('conversation:updated', updated);
+  res.json(updated);
 });
 
-// DELETE /conversations/:id — owner elimina conversa e mensagens
+// PATCH /conversations/:id/reopen
+router.patch('/:id/reopen', authMiddleware, (req, res) => {
+  const conv = db.prepare('SELECT * FROM conversations WHERE id = ?').get(req.params.id);
+  if (!conv) return res.status(404).json({ error: 'Conversa não encontrada' });
+  if (req.user.role === 'attendant' && conv.assigned_to !== req.user.id) return res.status(403).json({ error: 'Sem permissão' });
+
+  db.prepare(`UPDATE conversations SET status = 'open', updated_at = CURRENT_TIMESTAMP WHERE id = ?`).run(req.params.id);
+  const updated = db.prepare(conversationQuery('WHERE conv.id = ?')).get(req.params.id);
+  ioInstance.get()?.emit('conversation:updated', updated);
+  res.json(updated);
+});
+
+// DELETE /conversations/:id
 router.delete('/:id', authMiddleware, ownerOnly, (req, res) => {
   const conv = db.prepare('SELECT id FROM conversations WHERE id = ?').get(req.params.id);
   if (!conv) return res.status(404).json({ error: 'Conversa não encontrada' });
-
   db.prepare('DELETE FROM messages WHERE conversation_id = ?').run(req.params.id);
   db.prepare('DELETE FROM conversations WHERE id = ?').run(req.params.id);
   res.json({ ok: true });
 });
 
-// GET /conversations/metrics — resumo geral (owner only)
+// GET /conversations/metrics
 router.get('/metrics', authMiddleware, ownerOnly, (req, res) => {
   const metrics = db.prepare(`
     SELECT
@@ -152,7 +206,7 @@ router.get('/metrics', authMiddleware, ownerOnly, (req, res) => {
   res.json(metrics);
 });
 
-// GET /conversations/reports — relatórios detalhados (owner only)
+// GET /conversations/reports
 router.get('/reports', authMiddleware, ownerOnly, (req, res) => {
   const byAttendant = db.prepare(`
     SELECT u.name, COUNT(c.id) as total,

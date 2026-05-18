@@ -62,6 +62,9 @@ app.post('/whatsapp/disconnect', authMiddleware, ownerOnly, async (req, res) => 
   res.json({ ok: true });
 });
 
+// Disponibiliza o io globalmente para rotas
+require('./io-instance').set(io);
+
 // Socket.io
 initSocket(io);
 

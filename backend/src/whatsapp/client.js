@@ -1,4 +1,4 @@
-const { Client, LocalAuth } = require('whatsapp-web.js');
+const { Client, LocalAuth, MessageMedia } = require('whatsapp-web.js');
 const qrcode = require('qrcode');
 const db = require('../db/schema');
 const fs = require('fs');
@@ -203,6 +203,23 @@ async function sendMessage(phone, body) {
   }
 }
 
+async function sendMedia(phone, filePath, filename, caption) {
+  if (!isReady) throw new Error('WhatsApp não está conectado');
+  const media = MessageMedia.fromFilePath(filePath);
+  if (filename) media.filename = filename;
+  const opts = caption ? { caption } : {};
+  let waId = phone.includes('@') ? phone : `${phone}@c.us`;
+  try {
+    await client.sendMessage(waId, media, opts);
+  } catch (err) {
+    if (waId.endsWith('@c.us') && err.message && (err.message.includes('No LID') || err.message === 't')) {
+      await client.sendMessage(waId.replace('@c.us', '@lid'), media, opts);
+    } else {
+      throw err;
+    }
+  }
+}
+
 function getStatus() {
   return { isReady, hasQr: !!qrCodeData, qrCode: qrCodeData };
 }
@@ -219,4 +236,4 @@ function getConversationWithContact(conversationId) {
     .get(conversationId);
 }
 
-module.exports = { initWhatsApp, sendMessage, getStatus, disconnectWhatsApp };
+module.exports = { initWhatsApp, sendMessage, sendMedia, getStatus, disconnectWhatsApp };

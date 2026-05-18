@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import ConversationList from '../components/ConversationList';
 import ChatWindow from '../components/ChatWindow';
 import { useAuth } from '../context/AuthContext';
+import { useNotifications } from '../hooks/useNotifications';
 import api from '../api';
 
 const STATUS_OPTIONS = [
@@ -13,6 +14,7 @@ const STATUS_OPTIONS = [
 export default function AttendantPanel({ socket }) {
   const { user, logout } = useAuth();
   const [selectedConv, setSelectedConv] = useState(null);
+  useNotifications(socket, selectedConv);
   const [status, setStatus] = useState(() => {
     const s = user.status;
     return (s && s !== 'offline') ? s : 'online';
@@ -81,7 +83,7 @@ export default function AttendantPanel({ socket }) {
         )}
         {showChat && (
           <div style={isMobile ? { flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' } : S.chatPane}>
-            <ChatWindow conversation={selectedConv} socket={socket} onClose={() => setSelectedConv(null)} />
+            <ChatWindow conversation={selectedConv} socket={socket} onClose={() => setSelectedConv(null)} onConversationChange={setSelectedConv} />
           </div>
         )}
       </div>

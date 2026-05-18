@@ -46,13 +46,20 @@ function MessageContent({ msg, onMediaLoad }) {
     );
   }
   if (msg.media_url) {
-    return <a href={`${API}${msg.media_url}`} target="_blank" rel="noreferrer" style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', fontSize: '0.85rem', color: 'var(--accent)', textDecoration: 'none' }}>📎 Abrir ficheiro</a>;
+    const fname = msg.media_url.split('/').pop();
+    return (
+      <a href={`${API}${msg.media_url}`} target="_blank" rel="noreferrer"
+        style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', fontSize: '0.85rem', color: 'var(--accent)', textDecoration: 'none' }}>
+        📎 {fname}
+      </a>
+    );
   }
   return <p style={{ margin: 0, fontSize: '0.9rem', whiteSpace: 'pre-wrap' }}>{msg.body}</p>;
 }
 
-export default function ChatWindow({ conversation, socket, onClose, onDelete }) {
+export default function ChatWindow({ conversation: convProp, socket, onClose, onDelete, onConversationChange }) {
   const { user } = useAuth();
+  const [conversation, setConversation] = useState(convProp);
   const [messages, setMessages] = useState([]);
   const [text, setText] = useState('');
   const [sending, setSending] = useState(false);
@@ -70,10 +77,14 @@ export default function ChatWindow({ conversation, socket, onClose, onDelete }) 
   const [scheduleBody, setScheduleBody] = useState('');
   const [scheduleAt, setScheduleAt] = useState('');
   const [scheduleSaving, setScheduleSaving] = useState(false);
+  const [uploadingFile, setUploadingFile] = useState(false);
+  const fileInputRef = useRef(null);
   const typingTimer = useRef(null);
-  const bottomRef = useRef(null);
   const messagesRef = useRef(null);
-  const isFirstLoad = useRef(true);
+  const bottomRef = useRef(null);
+
+  // Sync conversation prop → state (close/reopen updates it)
+  useEffect(() => { setConversation(convProp); }, [convProp]);
 
   useEffect(() => {
     api.get('/quick-replies').then(r => setQuickReplies(Array.isArray(r.data) ? r.data : []));
@@ -87,9 +98,9 @@ export default function ChatWindow({ conversation, socket, onClose, onDelete }) 
     socket?.emit('conv:join', { conversation_id: conversation.id });
     setIsInternal(false);
     setShowTagPicker(false);
-    isFirstLoad.current = true;
+    setWarning('');
     return () => socket?.emit('conv:leave', { conversation_id: conversation.id });
-  }, [conversation]);
+  }, [conversation?.id]);
 
   useEffect(() => {
     if (!socket || !conversation) return;
@@ -121,6 +132,27 @@ export default function ChatWindow({ conversation, socket, onClose, onDelete }) 
     const r = await api.get(`/conversations/contact/${conversation.phone}`);
     setHistory(Array.isArray(r.data) ? r.data.filter(c => c.id !== conversation.id) : []);
     setShowHistory(true);
+  }
+
+  async function closeConversation() {
+    if (!confirm('Fechar esta conversa?')) return;
+    try {
+      const { data } = await api.patch(`/conversations/${conversation.id}/close`);
+      setConversation(data);
+      onConversationChange?.(data);
+    } catch (err) {
+      setWarning(err.response?.data?.error || 'Erro ao fechar');
+    }
+  }
+
+  async function reopenConversation() {
+    try {
+      const { data } = await api.patch(`/conversations/${conversation.id}/reopen`);
+      setConversation(data);
+      onConversationChange?.(data);
+    } catch (err) {
+      setWarning(err.response?.data?.error || 'Erro ao reabrir');
+    }
   }
 
   async function send() {
@@ -158,6 +190,23 @@ export default function ChatWindow({ conversation, socket, onClose, onDelete }) 
     });
   }
 
+  async function sendFile(file) {
+    if (!file) return;
+    setUploadingFile(true);
+    setWarning('');
+    try {
+      const formData = new FormData();
+      formData.append('file', file);
+      const { data: message } = await api.post(`/conversations/${conversation.id}/send-media`, formData, {
+        headers: { 'Content-Type': 'multipart/form-data' },
+      });
+      setMessages(prev => [...prev, message]);
+    } catch (err) {
+      setWarning(err.response?.data?.error || 'Erro ao enviar ficheiro');
+    }
+    setUploadingFile(false);
+  }
+
   function handleTyping(e) {
     const val = e.target.value;
     setText(val);
@@ -173,10 +222,7 @@ export default function ChatWindow({ conversation, socket, onClose, onDelete }) 
     typingTimer.current = setTimeout(() => socket.emit('typing:stop', { conversation_id: conversation.id }), 2000);
   }
 
-  function applyQuickReply(qr) {
-    setText(qr.body);
-    setQrSuggestions([]);
-  }
+  function applyQuickReply(qr) { setText(qr.body); setQrSuggestions([]); }
 
   async function saveSchedule() {
     if (!scheduleBody.trim() || !scheduleAt) return;
@@ -191,7 +237,6 @@ export default function ChatWindow({ conversation, socket, onClose, onDelete }) 
       setShowSchedule(false);
       setScheduleBody('');
       setScheduleAt('');
-      setWarning('');
     } catch (err) {
       setWarning(err.response?.data?.error || 'Erro ao agendar');
     }
@@ -215,6 +260,7 @@ export default function ChatWindow({ conversation, socket, onClose, onDelete }) 
   }
 
   const typerNames = Object.values(typers).filter(Boolean);
+  const isClosed = conversation?.status === 'closed';
 
   if (!conversation) {
     return (
@@ -234,6 +280,7 @@ export default function ChatWindow({ conversation, socket, onClose, onDelete }) 
         <div style={{ flex: 1, minWidth: 0 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flexWrap: 'wrap' }}>
             <strong style={{ fontSize: '0.9rem', color: 'var(--text)' }}>{conversation.contact_name || conversation.phone}</strong>
+            {isClosed && <span style={{ background: '#f3f4f6', color: 'var(--hint)', borderRadius: '999px', padding: '0.1rem 0.55rem', fontSize: '0.7rem', fontWeight: 600 }}>Fechada</span>}
             {convTags.map(t => (
               <span key={t.id} style={{ background: t.color + '18', border: `1px solid ${t.color}55`, color: t.color, borderRadius: '999px', padding: '0.1rem 0.5rem', fontSize: '0.7rem', fontWeight: 600 }}>{t.name}</span>
             ))}
@@ -252,7 +299,7 @@ export default function ChatWindow({ conversation, socket, onClose, onDelete }) 
                 {allTags.map(t => {
                   const active = convTags.some(ct => ct.id === t.id);
                   return (
-                    <div key={t.id} onClick={() => toggleTag(t)} style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', padding: '0.35rem 0.5rem', cursor: 'pointer', borderRadius: 'var(--r-sm)', background: active ? t.color + '15' : 'none', transition: 'background .1s' }}>
+                    <div key={t.id} onClick={() => toggleTag(t)} style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', padding: '0.35rem 0.5rem', cursor: 'pointer', borderRadius: 'var(--r-sm)', background: active ? t.color + '15' : 'none' }}>
                       <span style={{ width: 9, height: 9, borderRadius: '50%', background: t.color, flexShrink: 0 }} />
                       <span style={{ fontSize: '0.85rem', flex: 1, color: 'var(--text)' }}>{t.name}</span>
                       {active && <span style={{ color: t.color, fontWeight: 700, fontSize: '0.85rem' }}>✓</span>}
@@ -262,9 +309,14 @@ export default function ChatWindow({ conversation, socket, onClose, onDelete }) 
               </div>
             )}
           </div>
-          <button style={S.iconBtn} onClick={loadHistory} title="Histórico de conversas">🕐</button>
+          <button style={S.iconBtn} onClick={loadHistory} title="Histórico">🕐</button>
+          {isClosed ? (
+            <button style={{ ...S.iconBtn, color: 'var(--success)', borderColor: 'var(--success)' }} onClick={reopenConversation}>Reabrir</button>
+          ) : (
+            <button style={{ ...S.iconBtn, color: 'var(--warn)', borderColor: 'var(--warn)' }} onClick={closeConversation}>Fechar</button>
+          )}
           {onDelete && <button style={S.dangerBtn} onClick={onDelete}>Eliminar</button>}
-          <button style={S.closeBtn} onClick={onClose}>Fechar</button>
+          <button style={S.closeBtn} onClick={onClose}>✕</button>
         </div>
       </div>
 
@@ -290,11 +342,7 @@ export default function ChatWindow({ conversation, socket, onClose, onDelete }) 
       {/* Messages */}
       <div ref={messagesRef} style={S.messages}>
         {messages.map((msg) => (
-          <div key={msg.id} style={{
-            ...S.bubble,
-            ...(msg.from_me ? S.mine : S.theirs),
-            ...(msg.is_internal ? S.internal : {}),
-          }}>
+          <div key={msg.id} style={{ ...S.bubble, ...(msg.from_me ? S.mine : S.theirs), ...(msg.is_internal ? S.internal : {}) }}>
             {!!msg.from_me && msg.sender_name && (
               <span style={S.senderName}>{msg.sender_name}{msg.is_internal ? ' · nota interna' : ''}</span>
             )}
@@ -309,13 +357,12 @@ export default function ChatWindow({ conversation, socket, onClose, onDelete }) 
       {typerNames.length > 0 && (
         <div style={S.typingBar}>
           <span style={{ color: 'var(--wa-green)', fontSize: '0.55rem', letterSpacing: '3px' }}>●●●</span>
-          <span style={{ color: 'var(--muted)', fontSize: '0.8rem' }}>{typerNames.join(', ')} {typerNames.length === 1 ? 'está' : 'estão'} a digitar...</span>
+          <span style={{ color: 'var(--muted)', fontSize: '0.8rem' }}>{typerNames.join(', ')} a digitar...</span>
         </div>
       )}
 
       {warning && <div style={S.warning}>{warning}</div>}
 
-      {/* Quick reply suggestions */}
       {qrSuggestions.length > 0 && (
         <div style={S.qrDropdown}>
           {qrSuggestions.map(qr => (
@@ -327,7 +374,6 @@ export default function ChatWindow({ conversation, socket, onClose, onDelete }) 
         </div>
       )}
 
-      {/* Schedule panel */}
       {showSchedule && (
         <div style={S.schedulePanel}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.6rem' }}>
@@ -336,7 +382,7 @@ export default function ChatWindow({ conversation, socket, onClose, onDelete }) 
           </div>
           <input type="datetime-local" style={{ ...S.schedInput, marginBottom: '0.5rem' }}
             value={scheduleAt} onChange={e => setScheduleAt(e.target.value)}
-            min={new Date(Date.now() + 60000).toISOString().slice(0,16)} />
+            min={new Date(Date.now() + 60000).toISOString().slice(0, 16)} />
           <textarea style={{ ...S.schedInput, resize: 'vertical', minHeight: '60px' }}
             placeholder="Texto da mensagem..." value={scheduleBody}
             onChange={e => setScheduleBody(e.target.value)} />
@@ -346,35 +392,44 @@ export default function ChatWindow({ conversation, socket, onClose, onDelete }) 
         </div>
       )}
 
-      {/* Input area */}
-      <div style={S.inputArea}>
-        <div style={{ display: 'flex', flexDirection: 'column', flex: 1, gap: '0.3rem' }}>
-          <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
-            <button
-              style={{ ...S.modeBtn, ...(isInternal ? S.modeBtnInternal : {}) }}
-              onClick={() => setIsInternal(v => !v)}
-              title="Nota interna (não enviada ao cliente)"
-            >
-              {isInternal ? '🔒 Nota' : '💬 Mensagem'}
-            </button>
-            <span style={{ fontSize: '0.72rem', color: 'var(--hint)' }}>Digite / para respostas rápidas</span>
+      {/* Input area — bloqueado se conversa fechada */}
+      {isClosed ? (
+        <div style={S.closedBar}>
+          <span>Conversa fechada.</span>
+          <button style={{ ...S.iconBtn, color: 'var(--success)', borderColor: 'var(--success)', marginLeft: '0.75rem' }} onClick={reopenConversation}>Reabrir para responder</button>
+        </div>
+      ) : (
+        <div style={S.inputArea}>
+          {/* Hidden file input */}
+          <input ref={fileInputRef} type="file" style={{ display: 'none' }}
+            accept="image/*,video/*,audio/*,.pdf,.doc,.docx,.xls,.xlsx,.zip"
+            onChange={e => { sendFile(e.target.files?.[0]); e.target.value = ''; }} />
+
+          <div style={{ display: 'flex', flexDirection: 'column', flex: 1, gap: '0.3rem' }}>
+            <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
+              <button style={{ ...S.modeBtn, ...(isInternal ? S.modeBtnInternal : {}) }} onClick={() => setIsInternal(v => !v)}>
+                {isInternal ? '🔒 Nota' : '💬 Mensagem'}
+              </button>
+              <span style={{ fontSize: '0.72rem', color: 'var(--hint)' }}>/ para respostas rápidas</span>
+            </div>
+            <textarea
+              style={{ ...S.textarea, ...(isInternal ? S.textareaInternal : {}) }}
+              value={text}
+              onChange={handleTyping}
+              onKeyDown={handleKey}
+              placeholder={isInternal ? 'Nota interna (só a equipa vê)...' : 'Escreve uma mensagem...'}
+              rows={2}
+            />
           </div>
-          <textarea
-            style={{ ...S.textarea, ...(isInternal ? S.textareaInternal : {}) }}
-            value={text}
-            onChange={handleTyping}
-            onKeyDown={handleKey}
-            placeholder={isInternal ? 'Nota interna (só a equipa vê)...' : 'Escreve uma mensagem...'}
-            rows={2}
-          />
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.3rem' }}>
+            <button style={S.schedIconBtn} onClick={() => fileInputRef.current?.click()} title="Enviar ficheiro" disabled={uploadingFile}>
+              {uploadingFile ? '⏳' : '📎'}
+            </button>
+            <button style={S.schedIconBtn} onClick={() => setShowSchedule(v => !v)} title="Agendar mensagem">📅</button>
+            <button style={S.sendBtn} onClick={send} disabled={sending || !text.trim()}>▶</button>
+          </div>
         </div>
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.3rem' }}>
-          <button style={S.schedIconBtn} onClick={() => setShowSchedule(v => !v)} title="Agendar mensagem">📅</button>
-          <button style={S.sendBtn} onClick={send} disabled={sending || !text.trim()}>
-            {sending ? '...' : '▶'}
-          </button>
-        </div>
-      </div>
+      )}
     </div>
   );
 }
@@ -383,14 +438,14 @@ const S = {
   container: { display: 'flex', flexDirection: 'column', flex: 1, minHeight: 0, background: 'var(--bg)' },
   empty: { display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%', background: 'var(--bg)' },
   emptyInner: { display: 'flex', flexDirection: 'column', alignItems: 'center', textAlign: 'center' },
-  header: { display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0.75rem 1rem', background: 'var(--card)', borderBottom: '1px solid var(--border)', flexShrink: 0, boxShadow: 'var(--sh)' },
+  header: { display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0.75rem 1rem', background: 'var(--card)', borderBottom: '1px solid var(--border)', flexShrink: 0, boxShadow: 'var(--sh)', gap: '0.75rem' },
   phone: { display: 'block', fontSize: '0.75rem', color: 'var(--hint)', marginTop: '1px' },
-  headerActions: { display: 'flex', gap: '0.4rem', alignItems: 'center', flexShrink: 0 },
+  headerActions: { display: 'flex', gap: '0.4rem', alignItems: 'center', flexShrink: 0, flexWrap: 'wrap' },
   attendantBadge: { background: 'var(--accent-l)', color: 'var(--accent)', padding: '0.2rem 0.65rem', borderRadius: '999px', fontSize: '0.75rem', fontWeight: 600 },
-  iconBtn: { background: 'none', border: '1px solid var(--border-m)', padding: '0.25rem 0.5rem', borderRadius: 'var(--r-sm)', cursor: 'pointer', fontSize: '0.95rem' },
+  iconBtn: { background: 'none', border: '1px solid var(--border-m)', padding: '0.25rem 0.5rem', borderRadius: 'var(--r-sm)', cursor: 'pointer', fontSize: '0.82rem', color: 'var(--muted)' },
   tagPicker: { position: 'absolute', right: 0, top: '110%', background: 'var(--card)', border: '1px solid var(--border)', borderRadius: 'var(--r-md)', boxShadow: 'var(--sh-md)', padding: '0.4rem', minWidth: '170px', zIndex: 100 },
   dangerBtn: { background: 'none', border: '1px solid var(--danger)', color: 'var(--danger)', padding: '0.25rem 0.65rem', borderRadius: 'var(--r-sm)', cursor: 'pointer', fontSize: '0.8rem' },
-  closeBtn: { background: 'none', border: '1px solid var(--border-m)', color: 'var(--muted)', padding: '0.25rem 0.65rem', borderRadius: 'var(--r-sm)', cursor: 'pointer', fontSize: '0.82rem' },
+  closeBtn: { background: 'none', border: '1px solid var(--border-m)', color: 'var(--muted)', padding: '0.25rem 0.5rem', borderRadius: 'var(--r-sm)', cursor: 'pointer', fontSize: '0.82rem' },
   historyPanel: { background: 'var(--warn-l)', borderBottom: '1px solid rgba(217,119,6,0.2)', padding: '0.75rem 1rem', maxHeight: '150px', overflowY: 'auto' },
   historyItem: { display: 'flex', alignItems: 'center', padding: '0.25rem 0', borderBottom: '1px solid rgba(217,119,6,0.12)' },
   messages: { flex: 1, overflowY: 'auto', padding: '1rem', display: 'flex', flexDirection: 'column', gap: '0.5rem' },
@@ -403,10 +458,11 @@ const S = {
   typingBar: { padding: '0.3rem 1rem', background: 'var(--card)', borderTop: '1px solid var(--border)', display: 'flex', alignItems: 'center', gap: '0.5rem', flexShrink: 0 },
   warning: { background: 'var(--warn-l)', color: 'var(--warn)', padding: '0.4rem 1rem', fontSize: '0.82rem', borderTop: '1px solid rgba(217,119,6,0.25)', flexShrink: 0 },
   qrDropdown: { background: 'var(--card)', borderTop: '1px solid var(--border)', maxHeight: '180px', overflowY: 'auto', flexShrink: 0 },
-  qrItem: { padding: '0.5rem 1rem', cursor: 'pointer', borderBottom: '1px solid var(--border)', display: 'flex', alignItems: 'baseline', transition: 'background .1s' },
+  qrItem: { padding: '0.5rem 1rem', cursor: 'pointer', borderBottom: '1px solid var(--border)', display: 'flex', alignItems: 'baseline' },
   schedulePanel: { background: 'var(--accent-l)', borderTop: '1px solid rgba(26,86,160,0.15)', padding: '0.75rem 1rem', display: 'flex', flexDirection: 'column', gap: '0.35rem', flexShrink: 0 },
   schedInput: { padding: '0.4rem 0.6rem', border: '1px solid var(--border-m)', borderRadius: 'var(--r-sm)', fontSize: '0.85rem', width: '100%', boxSizing: 'border-box', background: 'var(--card)', color: 'var(--text)' },
   schedBtn: { padding: '0.4rem 1rem', background: 'var(--accent)', color: '#fff', border: 'none', borderRadius: 'var(--r-sm)', cursor: 'pointer', fontWeight: 600, alignSelf: 'flex-start', fontSize: '0.85rem' },
+  closedBar: { padding: '0.75rem 1rem', background: '#f3f4f6', borderTop: '1px solid var(--border)', display: 'flex', alignItems: 'center', flexShrink: 0, fontSize: '0.85rem', color: 'var(--muted)' },
   inputArea: { display: 'flex', gap: '0.5rem', padding: '0.75rem', background: 'var(--card)', borderTop: '1px solid var(--border)', alignItems: 'flex-end', flexShrink: 0 },
   modeBtn: { padding: '0.2rem 0.6rem', border: '1px solid var(--border-m)', borderRadius: 'var(--r-sm)', cursor: 'pointer', fontSize: '0.78rem', whiteSpace: 'nowrap', background: 'none', color: 'var(--muted)' },
   modeBtnInternal: { background: 'var(--warn-l)', borderColor: 'var(--warn)', color: '#92400e' },

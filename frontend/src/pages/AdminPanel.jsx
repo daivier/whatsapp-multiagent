@@ -3,6 +3,7 @@ import api from '../api';
 import ConversationList from '../components/ConversationList';
 import ChatWindow from '../components/ChatWindow';
 import { useAuth } from '../context/AuthContext';
+import { useNotifications } from '../hooks/useNotifications';
 
 const COLORS = ['#ef4444','#f97316','#eab308','#22c55e','#3b82f6','#8b5cf6','#ec4899','#6b7280'];
 
@@ -22,6 +23,7 @@ function SimpleBar({ label, value, max, color }) {
 
 export default function AdminPanel({ socket }) {
   const { user, logout } = useAuth();
+  useNotifications(socket, selectedConv);
   const [tab, setTab] = useState('conversations');
   const [selectedConv, setSelectedConv] = useState(null);
   const [isMobile, setIsMobile] = useState(window.innerWidth < 768);
@@ -281,7 +283,7 @@ export default function AdminPanel({ socket }) {
                   </span>
                 </div>
               )}
-              <ChatWindow conversation={selectedConv} socket={socket} onClose={() => setSelectedConv(null)} onDelete={deleteConversation} />
+              <ChatWindow conversation={selectedConv} socket={socket} onClose={() => setSelectedConv(null)} onDelete={deleteConversation} onConversationChange={setSelectedConv} />
             </div>
           </div>
         )}
