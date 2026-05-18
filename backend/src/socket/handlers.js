@@ -23,9 +23,9 @@ function initSocket(io) {
     socket.join(`user:${user.id}`);
     if (user.role === 'owner') socket.join('owners');
 
-    // offline = desconectado; away/busy = escolha do utilizador — preserva
-    const currentStatus = db.prepare('SELECT status FROM users WHERE id = ?').get(user.id)?.status;
-    const connectStatus = (!currentStatus || currentStatus === 'offline') ? 'online' : currentStatus;
+    // Restaura o preferred_status (último status escolhido pelo utilizador, nunca 'offline')
+    const row = db.prepare('SELECT preferred_status FROM users WHERE id = ?').get(user.id);
+    const connectStatus = row?.preferred_status || 'online';
     db.prepare('UPDATE users SET status = ? WHERE id = ?').run(connectStatus, user.id);
     io.emit('user:status', { userId: user.id, status: connectStatus });
 
@@ -86,6 +86,10 @@ function initSocket(io) {
     socket.on('user:status', ({ status }) => {
       if (!['online', 'busy', 'away', 'offline'].includes(status)) return;
       db.prepare('UPDATE users SET status = ? WHERE id = ?').run(status, user.id);
+      // Guarda preferred_status (só quando o utilizador escolhe — nunca 'offline')
+      if (status !== 'offline') {
+        db.prepare('UPDATE users SET preferred_status = ? WHERE id = ?').run(status, user.id);
+      }
       io.emit('user:status', { userId: user.id, status });
     });
 

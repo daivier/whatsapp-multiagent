@@ -13,7 +13,8 @@ db.exec(`
     email TEXT UNIQUE NOT NULL,
     password_hash TEXT NOT NULL,
     role TEXT NOT NULL DEFAULT 'attendant', -- 'owner' | 'attendant'
-    status TEXT NOT NULL DEFAULT 'offline', -- 'online' | 'busy' | 'offline'
+    status TEXT NOT NULL DEFAULT 'offline', -- 'online' | 'busy' | 'away' | 'offline'
+    preferred_status TEXT NOT NULL DEFAULT 'online', -- last status chosen by user (never 'offline')
     active INTEGER NOT NULL DEFAULT 1,
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP
   );
@@ -48,5 +49,10 @@ db.exec(`
   CREATE INDEX IF NOT EXISTS idx_conversations_assigned ON conversations(assigned_to);
   CREATE INDEX IF NOT EXISTS idx_messages_conversation ON messages(conversation_id);
 `);
+
+// Migration: add preferred_status if not exists
+try {
+  db.exec(`ALTER TABLE users ADD COLUMN preferred_status TEXT NOT NULL DEFAULT 'online'`);
+} catch (_) { /* column already exists */ }
 
 module.exports = db;

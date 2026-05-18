@@ -36,6 +36,9 @@ router.patch('/status', authMiddleware, (req, res) => {
   if (!['online', 'busy', 'away', 'offline'].includes(status)) return res.status(400).json({ error: 'Status inválido' });
 
   db.prepare('UPDATE users SET status = ? WHERE id = ?').run(status, req.user.id);
+  if (status !== 'offline') {
+    db.prepare('UPDATE users SET preferred_status = ? WHERE id = ?').run(status, req.user.id);
+  }
   res.json({ ok: true });
 });
 
