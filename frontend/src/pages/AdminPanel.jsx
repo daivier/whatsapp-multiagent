@@ -636,7 +636,7 @@ const S = {
   ownerBadge: { background: 'var(--accent-l)', color: 'var(--accent)', padding: '0.1rem 0.5rem', borderRadius: '999px', fontSize: '0.7rem', fontWeight: 600 },
   nav: { display: 'flex', flexDirection: 'column', gap: '1px' },
   navBtn: { padding: '0.6rem 1rem', background: 'none', border: 'none', color: 'var(--muted)', cursor: 'pointer', textAlign: 'left', fontSize: '0.84rem', fontWeight: 500, transition: 'all .1s' },
-  navActive: { background: 'var(--accent-l)', color: 'var(--accent)', fontWeight: 700, borderLeft: '3px solid var(--accent)', paddingLeft: 'calc(1rem - 3px)' },
+  navActive: { background: 'var(--accent-l)', color: 'var(--accent)', fontWeight: 700, boxShadow: 'inset 3px 0 0 var(--accent)' },
   logoutBtn: { margin: '0 1rem', padding: '0.45rem', background: 'none', border: '1px solid var(--border-m)', color: 'var(--muted)', borderRadius: 'var(--r-sm)', cursor: 'pointer', fontSize: '0.82rem' },
   main: { flex: 1, overflow: 'hidden', display: 'flex', flexDirection: 'column' },
   mobileHeader: { display: 'flex', alignItems: 'center', gap: '0.75rem', padding: '0.6rem 1rem', background: 'var(--card)', borderBottom: '1px solid var(--border)', flexShrink: 0, boxShadow: 'var(--sh)' },
