@@ -57,6 +57,7 @@ export default function AdminPanel({ socket }) {
   const [editingContact, setEditingContact] = useState(null);
 
   const [scheduled, setScheduled] = useState([]);
+  const [transferLogs, setTransferLogs] = useState([]);
 
   const [settings, setSettings] = useState({
     bot_enabled: '0', bot_message: '',
@@ -75,6 +76,7 @@ export default function AdminPanel({ socket }) {
     if (tab === 'reports') loadReports();
     if (tab === 'scheduled') loadScheduled();
     if (tab === 'contacts') loadContacts();
+    if (tab === 'transfers') loadTransferLogs();
   }, [tab]);
 
   useEffect(() => {
@@ -137,6 +139,10 @@ export default function AdminPanel({ socket }) {
     const { data } = await api.delete('/contacts/cleanup/invalid');
     alert(`${data.deleted} contacto(s) removido(s).`);
     loadContacts(contactSearch);
+  }
+  async function loadTransferLogs() {
+    const { data } = await api.get('/conversations/transfer-logs');
+    setTransferLogs(Array.isArray(data) ? data : []);
   }
   async function loadScheduled() {
     const { data } = await api.get('/scheduled-messages');
@@ -203,7 +209,8 @@ export default function AdminPanel({ socket }) {
   const TABS = [
     ['conversations','Conversas'],['attendants','Atendentes'],['contacts','Contactos'],
     ['metrics','Métricas'],['reports','Relatórios'],['scheduled','Agendamentos'],
-    ['quickreplies','Respostas Rápidas'],['tags','Etiquetas'],['bot','Bot'],['whatsapp','WhatsApp'],
+    ['transfers','Transferências'],['quickreplies','Respostas Rápidas'],
+    ['tags','Etiquetas'],['bot','Bot'],['whatsapp','WhatsApp'],
   ];
 
   function selectTab(key) {
@@ -406,7 +413,14 @@ export default function AdminPanel({ socket }) {
         {/* RELATÓRIOS */}
         {tab === 'reports' && (
           <div style={S.section}>
-            <h2 style={S.sectionTitle}>Relatórios</h2>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', marginBottom: '1.5rem', flexWrap: 'wrap' }}>
+              <h2 style={{ margin: 0, fontSize: '1.15rem', fontWeight: 700, color: 'var(--text)' }}>Relatórios</h2>
+              <a href={`${import.meta.env.VITE_API_URL || ''}/conversations/export`}
+                style={{ ...S.addBtn, textDecoration: 'none', fontSize: '0.82rem', padding: '0.35rem 0.9rem' }}
+                download>
+                📤 Exportar CSV
+              </a>
+            </div>
             {!reports ? <p style={{ color: 'var(--hint)' }}>A carregar...</p> : (
               <div style={{ display: 'flex', flexDirection: 'column', gap: '2rem' }}>
                 <div>
@@ -531,6 +545,33 @@ export default function AdminPanel({ socket }) {
                       </td>
                       <td style={{ fontSize: '0.85rem', color: 'var(--muted)' }}>{s.created_by_name || '—'}</td>
                       <td><button style={{ ...S.outlineBtn, color: 'var(--danger)', borderColor: 'var(--danger)' }} onClick={() => cancelScheduled(s.id)}>Cancelar</button></td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            )}
+          </div>
+        )}
+
+        {/* TRANSFERÊNCIAS */}
+        {tab === 'transfers' && (
+          <div style={S.section}>
+            <h2 style={S.sectionTitle}>Log de Transferências</h2>
+            {transferLogs.length === 0 ? (
+              <p style={{ color: 'var(--hint)' }}>Sem transferências registadas.</p>
+            ) : (
+              <table style={S.table}>
+                <thead><tr><th>Data</th><th>Contacto</th><th>De</th><th>Para</th><th>Por</th></tr></thead>
+                <tbody>
+                  {transferLogs.map(t => (
+                    <tr key={t.id}>
+                      <td style={{ whiteSpace: 'nowrap', fontSize: '0.82rem', color: 'var(--muted)' }}>
+                        {new Date(t.created_at).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}
+                      </td>
+                      <td style={{ fontWeight: 600 }}>{t.contact_name || t.phone}</td>
+                      <td style={{ fontSize: '0.85rem', color: 'var(--muted)' }}>{t.from_name || '—'}</td>
+                      <td style={{ fontSize: '0.85rem', color: 'var(--accent)', fontWeight: 600 }}>{t.to_name}</td>
+                      <td style={{ fontSize: '0.82rem', color: 'var(--hint)' }}>{t.by_name}</td>
                     </tr>
                   ))}
                 </tbody>

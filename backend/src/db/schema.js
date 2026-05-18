@@ -84,8 +84,18 @@ db.exec(`
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP
   );
 
+  CREATE TABLE IF NOT EXISTS transfer_logs (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    conversation_id INTEGER NOT NULL REFERENCES conversations(id) ON DELETE CASCADE,
+    from_user_id INTEGER REFERENCES users(id),
+    to_user_id INTEGER NOT NULL REFERENCES users(id),
+    transferred_by INTEGER NOT NULL REFERENCES users(id),
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+  );
+
   CREATE INDEX IF NOT EXISTS idx_conversations_assigned ON conversations(assigned_to);
   CREATE INDEX IF NOT EXISTS idx_messages_conversation ON messages(conversation_id);
+  CREATE INDEX IF NOT EXISTS idx_transfer_logs_conv ON transfer_logs(conversation_id);
 `);
 
 // Migrations

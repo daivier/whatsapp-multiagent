@@ -1,5 +1,26 @@
 import { useEffect } from 'react';
 
+function playNotificationSound() {
+  try {
+    const ctx = new (window.AudioContext || window.webkitAudioContext)();
+    // Dois tons: "ding-dong" suave
+    [[880, 0], [1100, 0.18]].forEach(([freq, delay]) => {
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      osc.type = 'sine';
+      osc.frequency.value = freq;
+      const t = ctx.currentTime + delay;
+      gain.gain.setValueAtTime(0, t);
+      gain.gain.linearRampToValueAtTime(0.22, t + 0.02);
+      gain.gain.exponentialRampToValueAtTime(0.001, t + 0.35);
+      osc.start(t);
+      osc.stop(t + 0.35);
+    });
+  } catch (_) {}
+}
+
 export function useNotifications(socket, selectedConv) {
   // Pede permissão ao montar
   useEffect(() => {
@@ -12,23 +33,23 @@ export function useNotifications(socket, selectedConv) {
     if (!socket) return;
 
     function onNewMessage({ message, conversation }) {
-      // Só notifica se a janela não está em foco e não é a conversa aberta
-      if (document.hasFocus()) return;
-      if (conversation?.id === selectedConv?.id) return;
       if (message?.from_me) return;
-      if (Notification.permission !== 'granted') return;
+      if (conversation?.id === selectedConv?.id) return;
 
-      const name = conversation?.contact_name || conversation?.phone || 'Mensagem nova';
-      const body = message?.body || '📎 Ficheiro';
+      // Som — sempre que chega mensagem noutras conversas
+      playNotificationSound();
 
-      const n = new Notification(name, {
-        body: body.length > 80 ? body.slice(0, 80) + '…' : body,
-        icon: '/favicon.ico',
-        tag: `conv-${conversation?.id}`,   // agrupa notificações da mesma conversa
-      });
-
-      // Foca a janela ao clicar na notificação
-      n.onclick = () => { window.focus(); n.close(); };
+      // Notificação visual — só se janela não está em foco
+      if (!document.hasFocus() && Notification.permission === 'granted') {
+        const name = conversation?.contact_name || conversation?.phone || 'Mensagem nova';
+        const body = message?.body || '📎 Ficheiro';
+        const n = new Notification(name, {
+          body: body.length > 80 ? body.slice(0, 80) + '…' : body,
+          icon: '/favicon.ico',
+          tag: `conv-${conversation?.id}`,
+        });
+        n.onclick = () => { window.focus(); n.close(); };
+      }
     }
 
     socket.on('message:new', onNewMessage);

@@ -22,7 +22,8 @@ const upload = multer({ storage, limits: { fileSize: 32 * 1024 * 1024 } });
 function conversationQuery(extraWhere = '') {
   return `
     SELECT conv.*, con.phone, con.wa_id, con.name as contact_name, u.name as attendant_name,
-      (SELECT COUNT(*) FROM messages WHERE conversation_id = conv.id AND from_me = 0 AND read = 0) as unread_count
+      (SELECT COUNT(*) FROM messages WHERE conversation_id = conv.id AND from_me = 0 AND read = 0) as unread_count,
+      (SELECT MAX(timestamp) FROM messages WHERE conversation_id = conv.id AND from_me = 0) as last_client_at
     FROM conversations conv
     JOIN contacts con ON con.id = conv.contact_id
     LEFT JOIN users u ON u.id = conv.assigned_to
@@ -142,8 +143,13 @@ router.post('/:id/transfer', authMiddleware, ownerOnly, async (req, res) => {
   const attendant = db.prepare('SELECT id, name FROM users WHERE id = ? AND role = ? AND active = 1').get(attendant_id, 'attendant');
   if (!attendant) return res.status(404).json({ error: 'Atendente não encontrado' });
 
+  const prevConv = db.prepare('SELECT assigned_to FROM conversations WHERE id = ?').get(req.params.id);
   db.prepare(`UPDATE conversations SET assigned_to = ?, status = 'open', updated_at = CURRENT_TIMESTAMP WHERE id = ?`)
     .run(attendant_id, req.params.id);
+
+  // Log de transferência
+  db.prepare('INSERT INTO transfer_logs (conversation_id, from_user_id, to_user_id, transferred_by) VALUES (?, ?, ?, ?)')
+    .run(req.params.id, prevConv?.assigned_to || null, attendant_id, req.user.id);
 
   const conv = db.prepare(conversationQuery('WHERE conv.id = ?')).get(req.params.id);
 
@@ -204,6 +210,47 @@ router.get('/metrics', authMiddleware, ownerOnly, (req, res) => {
     FROM conversations
   `).get();
   res.json(metrics);
+});
+
+// GET /conversations/export — CSV com histórico
+router.get('/export', authMiddleware, ownerOnly, (req, res) => {
+  const rows = db.prepare(`
+    SELECT conv.id, con.name as contact_name, con.phone, conv.status,
+      u.name as attendant_name, conv.created_at, conv.updated_at,
+      (SELECT COUNT(*) FROM messages WHERE conversation_id = conv.id) as msg_count,
+      (SELECT COUNT(*) FROM messages WHERE conversation_id = conv.id AND from_me = 0) as client_msgs,
+      (SELECT COUNT(*) FROM messages WHERE conversation_id = conv.id AND from_me = 1) as agent_msgs
+    FROM conversations conv
+    JOIN contacts con ON con.id = conv.contact_id
+    LEFT JOIN users u ON u.id = conv.assigned_to
+    ORDER BY conv.created_at DESC
+  `).all();
+
+  const header = 'ID,Contacto,Telefone,Status,Atendente,Criado em,Última actualização,Total msgs,Msgs cliente,Msgs atendente';
+  const escape = v => `"${String(v ?? '').replace(/"/g, '""')}"`;
+  const lines = rows.map(r => [r.id, r.contact_name || '', r.phone, r.status, r.attendant_name || '', r.created_at, r.updated_at, r.msg_count, r.client_msgs, r.agent_msgs].map(escape).join(','));
+
+  res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+  res.setHeader('Content-Disposition', `attachment; filename="conversas-${new Date().toISOString().slice(0,10)}.csv"`);
+  res.send('﻿' + [header, ...lines].join('\r\n')); // BOM para Excel
+});
+
+// GET /conversations/transfer-logs
+router.get('/transfer-logs', authMiddleware, ownerOnly, (req, res) => {
+  const logs = db.prepare(`
+    SELECT tl.id, tl.created_at,
+      conv.id as conversation_id, con.name as contact_name, con.phone,
+      fu.name as from_name, tu.name as to_name, bu.name as by_name
+    FROM transfer_logs tl
+    JOIN conversations conv ON conv.id = tl.conversation_id
+    JOIN contacts con ON con.id = conv.contact_id
+    LEFT JOIN users fu ON fu.id = tl.from_user_id
+    JOIN users tu ON tu.id = tl.to_user_id
+    JOIN users bu ON bu.id = tl.transferred_by
+    ORDER BY tl.created_at DESC
+    LIMIT 200
+  `).all();
+  res.json(logs);
 });
 
 // GET /conversations/reports
