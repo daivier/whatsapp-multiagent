@@ -2,6 +2,67 @@ import { useState, useEffect, useRef } from 'react';
 import api from '../api';
 import { useAuth } from '../context/AuthContext';
 
+const API = import.meta.env.VITE_API_URL || '';
+
+function parseVcard(vcf) {
+  const fn = vcf.match(/FN[^:]*:(.+)/)?.[1]?.trim() || 'Contacto';
+  const tel = vcf.match(/TEL[^:]*:(.+)/)?.[1]?.trim() || '';
+  return { fn, tel };
+}
+
+function MessageContent({ msg }) {
+  // vCard
+  if (msg.media_type === 'vcard') {
+    const { fn, tel } = parseVcard(msg.body || '');
+    return (
+      <div style={{ background: 'rgba(0,0,0,0.05)', borderRadius: '8px', padding: '0.5rem 0.75rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+        <span style={{ fontSize: '1.5rem' }}>👤</span>
+        <div>
+          <p style={{ margin: 0, fontWeight: 600, fontSize: '0.9rem' }}>{fn}</p>
+          {tel && <p style={{ margin: 0, fontSize: '0.8rem', color: '#666' }}>{tel}</p>}
+        </div>
+      </div>
+    );
+  }
+  // Imagem
+  if (msg.media_url && msg.media_type?.startsWith('image/')) {
+    return (
+      <>
+        <img
+          src={`${API}${msg.media_url}`}
+          alt="imagem"
+          style={{ maxWidth: '100%', maxHeight: '300px', borderRadius: '6px', display: 'block', cursor: 'pointer', marginBottom: msg.body ? '0.25rem' : 0 }}
+          onClick={() => window.open(`${API}${msg.media_url}`, '_blank')}
+        />
+        {msg.body && <p style={{ margin: '0.25rem 0 0', fontSize: '0.9rem' }}>{msg.body}</p>}
+      </>
+    );
+  }
+  // Áudio
+  if (msg.media_url && msg.media_type?.startsWith('audio/')) {
+    return <audio controls src={`${API}${msg.media_url}`} style={{ maxWidth: '100%', display: 'block' }} />;
+  }
+  // Vídeo
+  if (msg.media_url && msg.media_type?.startsWith('video/')) {
+    return (
+      <>
+        <video controls src={`${API}${msg.media_url}`} style={{ maxWidth: '100%', maxHeight: '300px', borderRadius: '6px', display: 'block' }} />
+        {msg.body && <p style={{ margin: '0.25rem 0 0', fontSize: '0.9rem' }}>{msg.body}</p>}
+      </>
+    );
+  }
+  // Ficheiro genérico
+  if (msg.media_url) {
+    return (
+      <a href={`${API}${msg.media_url}`} target="_blank" rel="noreferrer" style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', fontSize: '0.85rem', color: '#2563eb', textDecoration: 'none' }}>
+        <span>📎</span> Abrir ficheiro
+      </a>
+    );
+  }
+  // Texto simples
+  return <p style={{ margin: 0, fontSize: '0.9rem' }}>{msg.body}</p>;
+}
+
 export default function ChatWindow({ conversation, socket, onClose, onDelete }) {
   const { user } = useAuth();
   const [messages, setMessages] = useState([]);
@@ -125,26 +186,8 @@ export default function ChatWindow({ conversation, socket, onClose, onDelete }) 
             {!!msg.from_me && msg.sender_name && (
               <span style={styles.senderName}>{msg.sender_name}</span>
             )}
-            {msg.media_url && msg.media_type?.startsWith('image/') && (
-              <img
-                src={`${import.meta.env.VITE_API_URL || ''}${msg.media_url}`}
-                alt="imagem"
-                style={{ maxWidth: '100%', maxHeight: '300px', borderRadius: '6px', display: 'block', marginBottom: msg.body ? '0.25rem' : 0 }}
-                onClick={() => window.open(`${import.meta.env.VITE_API_URL || ''}${msg.media_url}`, '_blank')}
-              />
-            )}
-            {msg.media_url && msg.media_type?.startsWith('audio/') && (
-              <audio controls src={`${import.meta.env.VITE_API_URL || ''}${msg.media_url}`} style={{ maxWidth: '100%' }} />
-            )}
-            {msg.media_url && msg.media_type?.startsWith('video/') && (
-              <video controls src={`${import.meta.env.VITE_API_URL || ''}${msg.media_url}`} style={{ maxWidth: '100%', maxHeight: '300px', borderRadius: '6px' }} />
-            )}
-            {msg.media_url && !msg.media_type?.startsWith('image/') && !msg.media_type?.startsWith('audio/') && !msg.media_type?.startsWith('video/') && (
-              <a href={`${import.meta.env.VITE_API_URL || ''}${msg.media_url}`} target="_blank" rel="noreferrer" style={{ fontSize: '0.85rem', color: '#2563eb' }}>📎 Ficheiro</a>
-            )}
-            {(msg.body || msg.failed) && (
-              <p style={styles.msgText}>{msg.body}{msg.failed ? ' ⚠️' : ''}</p>
-            )}
+            <MessageContent msg={msg} />
+            {msg.failed && <p style={{ ...styles.msgText, color: '#e53e3e' }}>⚠️ Falhou</p>}
             <span style={styles.time}>{new Date(msg.timestamp).toLocaleTimeString('pt-PT', { hour: '2-digit', minute: '2-digit' })}</span>
           </div>
         ))}

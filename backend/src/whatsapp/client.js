@@ -49,8 +49,9 @@ function initWhatsApp(socketIO) {
     if (msg.from === 'status@broadcast') return;
     if (msg.from.endsWith('@g.us')) return;
     if (msg.from.endsWith('@newsletter')) return;
-    // Ignora mensagens sem texto nem media
-    if (!msg.hasMedia && (!msg.body || !msg.body.trim())) return;
+    // Ignora mensagens sem texto, media ou vcard
+    const isVcard = msg.type === 'vcard' || msg.type === 'multi_vcard';
+    if (!msg.hasMedia && !isVcard && (!msg.body || !msg.body.trim())) return;
 
     // Guarda o identificador completo (ex: "351912345678@c.us" ou "88244750422224@lid")
     const waId = msg.from;
@@ -102,9 +103,15 @@ function initWhatsApp(socketIO) {
       }
     }
 
-    // Guardar media se existir
+    // Tratar vCard
     let mediaUrl = null;
     let mediaType = null;
+    if (isVcard) {
+      mediaType = 'vcard';
+      // body já tem o VCF — não precisa de fazer nada mais
+    }
+
+    // Guardar media se existir
     if (msg.hasMedia) {
       try {
         const media = await msg.downloadMedia();
