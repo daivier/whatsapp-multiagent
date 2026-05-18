@@ -13,16 +13,20 @@ const STATUS_OPTIONS = [
 export default function AttendantPanel({ socket }) {
   const { user, logout } = useAuth();
   const [selectedConv, setSelectedConv] = useState(null);
-  const [status, setStatus] = useState(user.status || 'online');
+  const [status, setStatus] = useState(() => {
+    const s = user.status;
+    return (s && s !== 'offline') ? s : 'online';
+  });
 
-  // Sincroniza o status visual com o que está na BD ao ligar o socket
+  // Quando o socket liga, o backend emite user:status com o preferred_status restaurado
   useEffect(() => {
     if (!socket) return;
-    api.get('/auth/me').then(r => {
-      const s = r.data.user?.status;
-      if (s && s !== 'offline') setStatus(s);
-    });
-  }, [socket]);
+    function onUserStatus({ userId, status: s }) {
+      if (userId === user.id && s !== 'offline') setStatus(s);
+    }
+    socket.on('user:status', onUserStatus);
+    return () => socket.off('user:status', onUserStatus);
+  }, [socket, user.id]);
 
   async function changeStatus(newStatus) {
     setStatus(newStatus);
