@@ -71,6 +71,8 @@ export default function ChatWindow({ conversation, socket, onClose, onDelete }) 
   const [scheduleSaving, setScheduleSaving] = useState(false);
   const typingTimer = useRef(null);
   const bottomRef = useRef(null);
+  const messagesRef = useRef(null);
+  const isFirstLoad = useRef(true);
 
   useEffect(() => {
     api.get('/quick-replies').then(r => setQuickReplies(Array.isArray(r.data) ? r.data : []));
@@ -84,6 +86,7 @@ export default function ChatWindow({ conversation, socket, onClose, onDelete }) 
     socket?.emit('conv:join', { conversation_id: conversation.id });
     setIsInternal(false);
     setShowTagPicker(false);
+    isFirstLoad.current = true;
     return () => socket?.emit('conv:leave', { conversation_id: conversation.id });
   }, [conversation]);
 
@@ -104,7 +107,17 @@ export default function ChatWindow({ conversation, socket, onClose, onDelete }) 
     return () => { socket.off('message:new', onMessage); socket.off('typing:update', onTyping); };
   }, [socket, conversation]);
 
-  useEffect(() => { bottomRef.current?.scrollIntoView({ behavior: 'smooth' }); }, [messages]);
+  useEffect(() => {
+    if (!messagesRef.current) return;
+    if (isFirstLoad.current) {
+      // Carga inicial: scroll imediato para o fim
+      messagesRef.current.scrollTop = messagesRef.current.scrollHeight;
+      isFirstLoad.current = false;
+    } else {
+      // Nova mensagem: scroll suave
+      bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
+    }
+  }, [messages]);
 
   async function loadHistory() {
     if (!conversation) return;
@@ -278,7 +291,7 @@ export default function ChatWindow({ conversation, socket, onClose, onDelete }) 
       )}
 
       {/* Messages */}
-      <div style={S.messages}>
+      <div ref={messagesRef} style={S.messages}>
         {messages.map((msg) => (
           <div key={msg.id} style={{
             ...S.bubble,
