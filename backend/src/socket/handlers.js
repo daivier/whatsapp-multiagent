@@ -23,9 +23,9 @@ function initSocket(io) {
     socket.join(`user:${user.id}`);
     if (user.role === 'owner') socket.join('owners');
 
-    // Só muda para online se estava offline — preserva busy/ausente
+    // offline = desconectado; away/busy = escolha do utilizador — preserva
     const currentStatus = db.prepare('SELECT status FROM users WHERE id = ?').get(user.id)?.status;
-    const connectStatus = currentStatus === 'offline' ? 'online' : currentStatus;
+    const connectStatus = (!currentStatus || currentStatus === 'offline') ? 'online' : currentStatus;
     db.prepare('UPDATE users SET status = ? WHERE id = ?').run(connectStatus, user.id);
     io.emit('user:status', { userId: user.id, status: connectStatus });
 
@@ -84,7 +84,7 @@ function initSocket(io) {
 
     // Atualizar status do atendente
     socket.on('user:status', ({ status }) => {
-      if (!['online', 'busy', 'offline'].includes(status)) return;
+      if (!['online', 'busy', 'away', 'offline'].includes(status)) return;
       db.prepare('UPDATE users SET status = ? WHERE id = ?').run(status, user.id);
       io.emit('user:status', { userId: user.id, status });
     });

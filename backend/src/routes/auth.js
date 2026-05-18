@@ -33,7 +33,7 @@ router.get('/me', authMiddleware, (req, res) => {
 // PATCH /auth/status
 router.patch('/status', authMiddleware, (req, res) => {
   const { status } = req.body;
-  if (!['online', 'busy', 'offline'].includes(status)) return res.status(400).json({ error: 'Status inválido' });
+  if (!['online', 'busy', 'away', 'offline'].includes(status)) return res.status(400).json({ error: 'Status inválido' });
 
   db.prepare('UPDATE users SET status = ? WHERE id = ?').run(status, req.user.id);
   res.json({ ok: true });

@@ -7,7 +7,7 @@ import api from '../api';
 const STATUS_OPTIONS = [
   { value: 'online', label: 'Disponível', color: '#10b981' },
   { value: 'busy', label: 'Ocupado', color: '#f59e0b' },
-  { value: 'offline', label: 'Ausente', color: '#6b7280' },
+  { value: 'away', label: 'Ausente', color: '#6b7280' },
 ];
 
 export default function AttendantPanel({ socket }) {
