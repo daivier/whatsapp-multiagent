@@ -40,6 +40,12 @@ function initWhatsApp(socketIO) {
 
   client.on('message', async (msg) => {
     if (msg.fromMe) return;
+    // Ignora status do WhatsApp, grupos e newsletter
+    if (msg.from === 'status@broadcast') return;
+    if (msg.from.endsWith('@g.us')) return;
+    if (msg.from.endsWith('@newsletter')) return;
+    // Ignora mensagens sem texto (imagens, áudios, stickers, etc.)
+    if (!msg.body || !msg.body.trim()) return;
 
     // Guarda o identificador completo (ex: "351912345678@c.us" ou "88244750422224@lid")
     const waId = msg.from;
