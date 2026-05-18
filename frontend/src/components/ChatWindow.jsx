@@ -65,6 +65,10 @@ export default function ChatWindow({ conversation, socket, onClose, onDelete }) 
   const [allTags, setAllTags] = useState([]);
   const [convTags, setConvTags] = useState([]);
   const [showTagPicker, setShowTagPicker] = useState(false);
+  const [showSchedule, setShowSchedule] = useState(false);
+  const [scheduleBody, setScheduleBody] = useState('');
+  const [scheduleAt, setScheduleAt] = useState('');
+  const [scheduleSaving, setScheduleSaving] = useState(false);
   const typingTimer = useRef(null);
   const bottomRef = useRef(null);
 
@@ -164,6 +168,26 @@ export default function ChatWindow({ conversation, socket, onClose, onDelete }) 
   function applyQuickReply(qr) {
     setText(qr.body);
     setQrSuggestions([]);
+  }
+
+  async function saveSchedule() {
+    if (!scheduleBody.trim() || !scheduleAt) return;
+    setScheduleSaving(true);
+    try {
+      await api.post('/scheduled-messages', {
+        conversation_id: conversation.id,
+        wa_id: conversation.wa_id || conversation.phone,
+        body: scheduleBody,
+        scheduled_at: scheduleAt,
+      });
+      setShowSchedule(false);
+      setScheduleBody('');
+      setScheduleAt('');
+      setWarning('');
+    } catch (err) {
+      setWarning(err.response?.data?.error || 'Erro ao agendar');
+    }
+    setScheduleSaving(false);
   }
 
   async function toggleTag(tag) {
@@ -283,6 +307,25 @@ export default function ChatWindow({ conversation, socket, onClose, onDelete }) 
         </div>
       )}
 
+      {/* Modal de agendamento */}
+      {showSchedule && (
+        <div style={styles.schedulePanel}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem' }}>
+            <strong style={{ fontSize: '0.85rem' }}>Agendar mensagem</strong>
+            <button onClick={() => setShowSchedule(false)} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: '1rem' }}>✕</button>
+          </div>
+          <input type="datetime-local" style={{ ...styles.scheduleInput, marginBottom: '0.5rem' }}
+            value={scheduleAt} onChange={e => setScheduleAt(e.target.value)}
+            min={new Date(Date.now() + 60000).toISOString().slice(0,16)} />
+          <textarea style={{ ...styles.scheduleInput, resize: 'vertical', minHeight: '60px' }}
+            placeholder="Texto da mensagem..." value={scheduleBody}
+            onChange={e => setScheduleBody(e.target.value)} />
+          <button style={{ ...styles.scheduleBtn, marginTop: '0.5rem' }} onClick={saveSchedule} disabled={scheduleSaving || !scheduleBody.trim() || !scheduleAt}>
+            {scheduleSaving ? 'A guardar...' : '📅 Agendar'}
+          </button>
+        </div>
+      )}
+
       <div style={styles.inputArea}>
         <div style={{ display: 'flex', flexDirection: 'column', flex: 1, gap: '0.25rem' }}>
           <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
@@ -304,9 +347,12 @@ export default function ChatWindow({ conversation, socket, onClose, onDelete }) 
             rows={2}
           />
         </div>
-        <button style={styles.sendBtn} onClick={send} disabled={sending || !text.trim()}>
-          {sending ? '...' : 'Enviar'}
-        </button>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem' }}>
+          <button style={styles.scheduleIconBtn} onClick={() => setShowSchedule(v => !v)} title="Agendar mensagem">📅</button>
+          <button style={styles.sendBtn} onClick={send} disabled={sending || !text.trim()}>
+            {sending ? '...' : 'Env'}
+          </button>
+        </div>
       </div>
     </div>
   );
@@ -340,5 +386,9 @@ const styles = {
   inputArea: { display: 'flex', gap: '0.5rem', padding: '0.75rem', background: '#fff', borderTop: '1px solid #e5e5e5', alignItems: 'flex-end' },
   modeBtn: { padding: '0.2rem 0.6rem', border: '1px solid #ddd', borderRadius: '6px', cursor: 'pointer', fontSize: '0.78rem', whiteSpace: 'nowrap' },
   textarea: { width: '100%', padding: '0.5rem', border: '1px solid #ddd', borderRadius: '8px', resize: 'none', fontSize: '0.9rem', outline: 'none', boxSizing: 'border-box' },
-  sendBtn: { padding: '0 1.25rem', background: '#25D366', color: '#fff', border: 'none', borderRadius: '8px', cursor: 'pointer', fontWeight: 600, minHeight: '60px' },
+  sendBtn: { padding: '0 0.75rem', background: '#25D366', color: '#fff', border: 'none', borderRadius: '8px', cursor: 'pointer', fontWeight: 600, flex: 1 },
+  scheduleIconBtn: { padding: '0.2rem 0.5rem', background: 'none', border: '1px solid #ddd', borderRadius: '6px', cursor: 'pointer', fontSize: '1rem' },
+  schedulePanel: { background: '#f0f9ff', borderTop: '1px solid #bae6fd', padding: '0.75rem 1rem', display: 'flex', flexDirection: 'column', gap: '0.25rem' },
+  scheduleInput: { padding: '0.4rem 0.6rem', border: '1px solid #ddd', borderRadius: '6px', fontSize: '0.85rem', width: '100%', boxSizing: 'border-box' },
+  scheduleBtn: { padding: '0.4rem 1rem', background: '#3b82f6', color: '#fff', border: 'none', borderRadius: '6px', cursor: 'pointer', fontWeight: 600, alignSelf: 'flex-start' },
 };

@@ -17,6 +17,8 @@ const messagesRoutes = require('./routes/messages');
 const quickRepliesRoutes = require('./routes/quick-replies');
 const tagsRoutes = require('./routes/tags');
 const settingsRoutes = require('./routes/settings');
+const scheduledMessagesRoutes = require('./routes/scheduled-messages');
+const { startScheduledMessagesCron } = require('./scheduled/cron');
 
 const app = express();
 const server = http.createServer(app);
@@ -45,6 +47,7 @@ app.use('/messages', messagesRoutes);
 app.use('/quick-replies', quickRepliesRoutes);
 app.use('/tags', tagsRoutes);
 app.use('/settings', settingsRoutes);
+app.use('/scheduled-messages', scheduledMessagesRoutes);
 
 // WhatsApp status
 app.get('/whatsapp/status', authMiddleware, (req, res) => {
@@ -62,6 +65,9 @@ initSocket(io);
 
 // WhatsApp
 initWhatsApp(io);
+
+// Cron de mensagens agendadas
+startScheduledMessagesCron(io);
 
 const PORT = process.env.PORT || 3001;
 server.listen(PORT, () => {

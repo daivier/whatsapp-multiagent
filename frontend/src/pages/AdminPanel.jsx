@@ -51,6 +51,9 @@ export default function AdminPanel({ socket }) {
   const [tags, setTags] = useState([]);
   const [newTag, setNewTag] = useState({ name: '', color: '#25D366' });
 
+  // Agendamentos
+  const [scheduled, setScheduled] = useState([]);
+
   // Settings / Bot
   const [settings, setSettings] = useState({
     bot_enabled: '0', bot_message: '',
@@ -67,6 +70,7 @@ export default function AdminPanel({ socket }) {
 
   useEffect(() => {
     if (tab === 'reports') loadReports();
+    if (tab === 'scheduled') loadScheduled();
   }, [tab]);
 
   useEffect(() => {
@@ -106,6 +110,15 @@ export default function AdminPanel({ socket }) {
     const { data } = await api.get('/tags');
     setTags(Array.isArray(data) ? data : []);
   }
+  async function loadScheduled() {
+    const { data } = await api.get('/scheduled-messages');
+    setScheduled(Array.isArray(data) ? data : []);
+  }
+  async function cancelScheduled(id) {
+    await api.delete(`/scheduled-messages/${id}`);
+    loadScheduled();
+  }
+
   async function loadSettings() {
     const { data } = await api.get('/settings');
     setSettings(s => ({ ...s, ...data }));
@@ -164,8 +177,8 @@ export default function AdminPanel({ socket }) {
   const activeAttendants = attendants.filter(a => a.active);
   const TABS = [
     ['conversations','Conversas'],['attendants','Atendentes'],['metrics','Métricas'],
-    ['reports','Relatórios'],['quickreplies','Respostas Rápidas'],['tags','Etiquetas'],
-    ['bot','Bot'],['whatsapp','WhatsApp'],
+    ['reports','Relatórios'],['scheduled','Agendamentos'],['quickreplies','Respostas Rápidas'],
+    ['tags','Etiquetas'],['bot','Bot'],['whatsapp','WhatsApp'],
   ];
 
   function selectTab(key) {
@@ -396,6 +409,36 @@ export default function AdminPanel({ socket }) {
                 </div>
               ))}
             </div>
+          </div>
+        )}
+
+        {/* AGENDAMENTOS */}
+        {tab === 'scheduled' && (
+          <div style={styles.section}>
+            <h2 style={styles.sectionTitle}>Mensagens Agendadas</h2>
+            {scheduled.length === 0 ? (
+              <p style={{ color: '#999' }}>Sem mensagens agendadas pendentes.</p>
+            ) : (
+              <table style={styles.table}>
+                <thead><tr><th>Contacto</th><th>Mensagem</th><th>Data / Hora</th><th>Agendado por</th><th></th></tr></thead>
+                <tbody>
+                  {scheduled.map(s => (
+                    <tr key={s.id}>
+                      <td>{s.contact_name || s.phone || s.wa_id}</td>
+                      <td style={{ maxWidth: '260px', wordBreak: 'break-word', fontSize: '0.85rem' }}>{s.body}</td>
+                      <td style={{ whiteSpace: 'nowrap', fontSize: '0.85rem' }}>
+                        {new Date(s.scheduled_at).toLocaleString('pt-BR', { day:'2-digit', month:'2-digit', year:'numeric', hour:'2-digit', minute:'2-digit' })}
+                      </td>
+                      <td style={{ fontSize: '0.85rem' }}>{s.created_by_name || '—'}</td>
+                      <td>
+                        <button style={{ ...styles.toggleBtn, color: '#ef4444', borderColor: '#ef4444' }}
+                          onClick={() => cancelScheduled(s.id)}>Cancelar</button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            )}
           </div>
         )}
 

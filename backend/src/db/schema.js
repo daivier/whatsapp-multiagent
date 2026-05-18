@@ -72,6 +72,18 @@ db.exec(`
     value TEXT
   );
 
+  CREATE TABLE IF NOT EXISTS scheduled_messages (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    conversation_id INTEGER REFERENCES conversations(id),
+    wa_id TEXT NOT NULL,
+    body TEXT NOT NULL,
+    scheduled_at DATETIME NOT NULL,
+    sent_at DATETIME,
+    cancelled INTEGER NOT NULL DEFAULT 0,
+    created_by INTEGER REFERENCES users(id),
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+  );
+
   CREATE INDEX IF NOT EXISTS idx_conversations_assigned ON conversations(assigned_to);
   CREATE INDEX IF NOT EXISTS idx_messages_conversation ON messages(conversation_id);
 `);
