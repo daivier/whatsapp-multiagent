@@ -1,0 +1,67 @@
+const jwt = require('jsonwebtoken');
+const db = require('../db/schema');
+const { SECRET } = require('../middleware/auth');
+const { sendMessage } = require('../whatsapp/client');
+
+function initSocket(io) {
+  io.use((socket, next) => {
+    const token = socket.handshake.auth?.token;
+    if (!token) return next(new Error('Não autenticado'));
+    try {
+      const payload = jwt.verify(token, SECRET);
+      const user = db.prepare('SELECT id, name, role, status FROM users WHERE id = ? AND active = 1').get(payload.id);
+      if (!user) return next(new Error('Utilizador não encontrado'));
+      socket.user = user;
+      next();
+    } catch {
+      next(new Error('Token inválido'));
+    }
+  });
+
+  io.on('connection', (socket) => {
+    const { user } = socket;
+    socket.join(`user:${user.id}`);
+    if (user.role === 'owner') socket.join('owners');
+
+    db.prepare('UPDATE users SET status = ? WHERE id = ?').run('online', user.id);
+    io.emit('user:status', { userId: user.id, status: 'online' });
+
+    // Atendente envia mensagem via socket
+    socket.on('message:send', async ({ conversation_id, body }, callback) => {
+      const conv = db
+        .prepare('SELECT conv.*, con.phone FROM conversations conv JOIN contacts con ON con.id = conv.contact_id WHERE conv.id = ?')
+        .get(conversation_id);
+
+      if (!conv) return callback?.({ error: 'Conversa não encontrada' });
+      if (user.role === 'attendant' && conv.assigned_to !== user.id) return callback?.({ error: 'Sem permissão' });
+
+      try {
+        await sendMessage(conv.phone, body);
+        const result = db
+          .prepare('INSERT INTO messages (conversation_id, from_me, sender_id, body) VALUES (?, 1, ?, ?)')
+          .run(conversation_id, user.id, body);
+        db.prepare('UPDATE conversations SET updated_at = CURRENT_TIMESTAMP WHERE id = ?').run(conversation_id);
+
+        const message = db.prepare('SELECT * FROM messages WHERE id = ?').get(result.lastInsertRowid);
+        io.emit('message:new', { message, conversationId: conversation_id });
+        callback?.({ ok: true, message });
+      } catch (err) {
+        callback?.({ error: 'WhatsApp não conectado' });
+      }
+    });
+
+    // Atualizar status do atendente
+    socket.on('user:status', ({ status }) => {
+      if (!['online', 'busy', 'offline'].includes(status)) return;
+      db.prepare('UPDATE users SET status = ? WHERE id = ?').run(status, user.id);
+      io.emit('user:status', { userId: user.id, status });
+    });
+
+    socket.on('disconnect', () => {
+      db.prepare('UPDATE users SET status = ? WHERE id = ?').run('offline', user.id);
+      io.emit('user:status', { userId: user.id, status: 'offline' });
+    });
+  });
+}
+
+module.exports = { initSocket };
