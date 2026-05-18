@@ -29,7 +29,7 @@ function initSocket(io) {
     // Atendente envia mensagem via socket
     socket.on('message:send', async ({ conversation_id, body }, callback) => {
       const conv = db
-        .prepare('SELECT conv.*, con.phone FROM conversations conv JOIN contacts con ON con.id = conv.contact_id WHERE conv.id = ?')
+        .prepare('SELECT conv.*, con.phone, con.wa_id FROM conversations conv JOIN contacts con ON con.id = conv.contact_id WHERE conv.id = ?')
         .get(conversation_id);
 
       if (!conv) return callback?.({ error: 'Conversa não encontrada' });
@@ -53,9 +53,9 @@ function initSocket(io) {
       io.emit('message:new', { message, conversation: fullConversation });
       callback?.({ ok: true, message });
 
-      // Tenta enviar pelo WhatsApp (erro não bloqueia a UI)
+      // Usa wa_id (ex: @lid) se disponível, senão usa phone
       try {
-        await sendMessage(conv.phone, body);
+        await sendMessage(conv.wa_id || conv.phone, body);
       } catch (err) {
         console.error('Aviso: mensagem guardada mas não enviada pelo WhatsApp:', err.message);
       }

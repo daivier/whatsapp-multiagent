@@ -22,6 +22,7 @@ db.exec(`
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     phone TEXT UNIQUE NOT NULL,
     name TEXT,
+    wa_id TEXT,
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP
   );
 

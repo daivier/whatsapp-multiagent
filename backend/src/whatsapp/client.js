@@ -41,16 +41,26 @@ function initWhatsApp(socketIO) {
   client.on('message', async (msg) => {
     if (msg.fromMe) return;
 
-    const phone = msg.from.replace(/@c\.us$/, '').replace(/@lid$/, '');
+    // Guarda o identificador completo (ex: "351912345678@c.us" ou "88244750422224@lid")
+    const waId = msg.from;
+    // Número limpo para display
+    const phone = waId.replace(/@c\.us$/, '').replace(/@lid$/, '');
     const body = msg.body;
 
-    // Upsert contact
-    let contact = db.prepare('SELECT * FROM contacts WHERE phone = ?').get(phone);
+    // Upsert contact — procura pelo waId completo
+    let contact = db.prepare('SELECT * FROM contacts WHERE wa_id = ?').get(waId);
+    if (!contact) {
+      // Tenta também pelo número simples (migração de dados antigos)
+      contact = db.prepare('SELECT * FROM contacts WHERE phone = ?').get(phone);
+    }
     if (!contact) {
       const info = await msg.getContact();
       const name = info.pushname || info.name || phone;
-      db.prepare('INSERT INTO contacts (phone, name) VALUES (?, ?)').run(phone, name);
-      contact = db.prepare('SELECT * FROM contacts WHERE phone = ?').get(phone);
+      db.prepare('INSERT INTO contacts (phone, name, wa_id) VALUES (?, ?, ?)').run(phone, name, waId);
+      contact = db.prepare('SELECT * FROM contacts WHERE wa_id = ?').get(waId);
+    } else if (!contact.wa_id) {
+      // Actualiza contactos antigos sem wa_id
+      db.prepare('UPDATE contacts SET wa_id = ? WHERE id = ?').run(waId, contact.id);
     }
 
     // Find open conversation or create new one
@@ -103,23 +113,22 @@ function initWhatsApp(socketIO) {
 async function sendMessage(phone, body) {
   if (!isReady) throw new Error('WhatsApp não está conectado');
 
-  const cleanPhone = phone.replace(/@c\.us$/, '').replace(/@lid$/, '');
+  // Se phone já tem sufixo (@lid ou @c.us), usa directamente
+  // Senão, adiciona @c.us como fallback
+  let waId;
+  if (phone.includes('@')) {
+    waId = phone;
+  } else {
+    waId = `${phone}@c.us`;
+  }
 
-  // Tenta @c.us primeiro; se falhar com "No LID", tenta com o número via getContactById
   try {
-    await client.sendMessage(`${cleanPhone}@c.us`, body);
+    await client.sendMessage(waId, body);
   } catch (err) {
-    if (err.message && err.message.includes('No LID')) {
-      // Para contas novas que usam o sistema LID do WhatsApp
-      const contacts = await client.getContacts();
-      const match = contacts.find(c =>
-        c.number === cleanPhone || c.id?.user === cleanPhone
-      );
-      if (match) {
-        await client.sendMessage(match.id._serialized, body);
-      } else {
-        throw new Error(`Contacto não encontrado para o número ${cleanPhone}`);
-      }
+    // Se @c.us falhar com LID error, tenta @lid
+    if (waId.endsWith('@c.us') && err.message && (err.message.includes('No LID') || err.message === 't')) {
+      const lidId = waId.replace('@c.us', '@lid');
+      await client.sendMessage(lidId, body);
     } else {
       throw err;
     }
