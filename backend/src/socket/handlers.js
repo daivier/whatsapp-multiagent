@@ -23,8 +23,11 @@ function initSocket(io) {
     socket.join(`user:${user.id}`);
     if (user.role === 'owner') socket.join('owners');
 
-    db.prepare('UPDATE users SET status = ? WHERE id = ?').run('online', user.id);
-    io.emit('user:status', { userId: user.id, status: 'online' });
+    // Só muda para online se estava offline — preserva busy/ausente
+    const currentStatus = db.prepare('SELECT status FROM users WHERE id = ?').get(user.id)?.status;
+    const connectStatus = currentStatus === 'offline' ? 'online' : currentStatus;
+    db.prepare('UPDATE users SET status = ? WHERE id = ?').run(connectStatus, user.id);
+    io.emit('user:status', { userId: user.id, status: connectStatus });
 
     // Atendente envia mensagem via socket
     socket.on('message:send', async ({ conversation_id, body }, callback) => {

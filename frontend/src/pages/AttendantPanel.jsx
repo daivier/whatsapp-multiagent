@@ -15,9 +15,13 @@ export default function AttendantPanel({ socket }) {
   const [selectedConv, setSelectedConv] = useState(null);
   const [status, setStatus] = useState(user.status || 'online');
 
+  // Sincroniza o status visual com o que está na BD ao ligar o socket
   useEffect(() => {
     if (!socket) return;
-    socket.emit('user:status', { status: 'online' });
+    api.get('/auth/me').then(r => {
+      const s = r.data.user?.status;
+      if (s && s !== 'offline') setStatus(s);
+    });
   }, [socket]);
 
   async function changeStatus(newStatus) {
