@@ -41,8 +41,16 @@ function initSocket(io) {
         .run(conversation_id, user.id, body);
       db.prepare('UPDATE conversations SET updated_at = CURRENT_TIMESTAMP WHERE id = ?').run(conversation_id);
       const message = db.prepare('SELECT * FROM messages WHERE id = ?').get(result.lastInsertRowid);
+      const fullConversation = db.prepare(`
+        SELECT conv.*, con.phone, con.name as contact_name, u.name as attendant_name
+        FROM conversations conv
+        JOIN contacts con ON con.id = conv.contact_id
+        LEFT JOIN users u ON u.id = conv.assigned_to
+        WHERE conv.id = ?
+      `).get(conversation_id);
 
-      io.emit('message:new', { message, conversationId: conversation_id });
+      // Formato unificado com o evento do whatsapp/client.js
+      io.emit('message:new', { message, conversation: fullConversation });
       callback?.({ ok: true, message });
 
       // Tenta enviar pelo WhatsApp (erro não bloqueia a UI)
