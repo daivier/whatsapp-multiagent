@@ -66,9 +66,14 @@ export default function AdminPanel({ socket }) {
 
   async function transferConversation() {
     if (!selectedConv || !transferTo) return;
-    await api.post(`/conversations/${selectedConv.id}/transfer`, { attendant_id: parseInt(transferTo) });
-    setSelectedConv(null);
-    setTransferTo('');
+    try {
+      const { data } = await api.post(`/conversations/${selectedConv.id}/transfer`, { attendant_id: parseInt(transferTo) });
+      setSelectedConv(data); // actualiza a conversa com o novo atendente
+      setTransferTo('');
+      alert(`Transferido para ${activeAttendants.find(a => a.id == transferTo)?.name}`);
+    } catch (err) {
+      alert('Erro ao transferir: ' + (err.response?.data?.error || err.message));
+    }
   }
 
   const activeAttendants = attendants.filter(a => a.active);
@@ -101,12 +106,29 @@ export default function AdminPanel({ socket }) {
             </div>
             <div style={styles.chatPane}>
               {selectedConv && (
-                <div style={{ padding: '0.5rem 1rem', background: '#fff', borderBottom: '1px solid #eee', display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
-                  <select value={transferTo} onChange={e => setTransferTo(e.target.value)} style={styles.select}>
-                    <option value="">Transferir para...</option>
-                    {activeAttendants.map(a => <option key={a.id} value={a.id}>{a.name}</option>)}
-                  </select>
-                  <button style={styles.transferBtn} onClick={transferConversation} disabled={!transferTo}>Transferir</button>
+                <div style={{ padding: '0.5rem 1rem', background: '#fff', borderBottom: '1px solid #eee', display: 'flex', gap: '0.5rem', alignItems: 'center', flexWrap: 'wrap' }}>
+                  {activeAttendants.length === 0 ? (
+                    <span style={{ color: '#e53e3e', fontSize: '0.85rem' }}>
+                      Sem atendentes activos — cria atendentes em <strong>Atendentes</strong>
+                    </span>
+                  ) : (
+                    <>
+                      <select value={transferTo} onChange={e => setTransferTo(e.target.value)} style={styles.select}>
+                        <option value="">Transferir para...</option>
+                        {activeAttendants.map(a => (
+                          <option key={a.id} value={a.id}>
+                            {a.name} ({userStatuses[a.id] || a.status || 'offline'})
+                          </option>
+                        ))}
+                      </select>
+                      <button style={styles.transferBtn} onClick={transferConversation} disabled={!transferTo}>
+                        Transferir
+                      </button>
+                    </>
+                  )}
+                  <span style={{ marginLeft: 'auto', fontSize: '0.8rem', color: '#888' }}>
+                    Atendente: <strong>{selectedConv.attendant_name || 'Sem atendente'}</strong>
+                  </span>
                 </div>
               )}
               <ChatWindow conversation={selectedConv} socket={socket} onClose={() => setSelectedConv(null)} />
