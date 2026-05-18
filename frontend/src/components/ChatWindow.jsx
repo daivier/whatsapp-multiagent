@@ -2,7 +2,7 @@ import { useState, useEffect, useRef } from 'react';
 import api from '../api';
 import { useAuth } from '../context/AuthContext';
 
-export default function ChatWindow({ conversation, socket, onClose }) {
+export default function ChatWindow({ conversation, socket, onClose, onDelete }) {
   const { user } = useAuth();
   const [messages, setMessages] = useState([]);
   const [text, setText] = useState('');
@@ -112,6 +112,9 @@ export default function ChatWindow({ conversation, socket, onClose }) {
           {user.role === 'owner' && (
             <span style={styles.badge}>{conversation.attendant_name || 'Sem atendente'}</span>
           )}
+          {onDelete && (
+            <button style={styles.deleteBtn} onClick={onDelete}>Eliminar</button>
+          )}
           <button style={styles.closeBtn} onClick={onClose}>Fechar</button>
         </div>
       </div>
@@ -162,6 +165,7 @@ const styles = {
   phone: { display: 'block', fontSize: '0.8rem', color: '#888' },
   headerActions: { display: 'flex', gap: '0.5rem', alignItems: 'center' },
   badge: { background: '#e8f5e9', color: '#2e7d32', padding: '0.25rem 0.75rem', borderRadius: '999px', fontSize: '0.8rem' },
+  deleteBtn: { background: 'none', border: '1px solid #ef4444', color: '#ef4444', padding: '0.25rem 0.75rem', borderRadius: '6px', cursor: 'pointer', fontSize: '0.85rem' },
   closeBtn: { background: 'none', border: '1px solid #ddd', padding: '0.25rem 0.75rem', borderRadius: '6px', cursor: 'pointer' },
   messages: { flex: 1, overflowY: 'auto', padding: '1rem', display: 'flex', flexDirection: 'column', gap: '0.5rem' },
   bubble: { maxWidth: '70%', padding: '0.5rem 0.75rem', borderRadius: '10px', position: 'relative' },

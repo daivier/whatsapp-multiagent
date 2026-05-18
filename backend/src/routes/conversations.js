@@ -99,6 +99,16 @@ router.patch('/:id/close', authMiddleware, (req, res) => {
   res.json({ ok: true });
 });
 
+// DELETE /conversations/:id — owner elimina conversa e mensagens
+router.delete('/:id', authMiddleware, ownerOnly, (req, res) => {
+  const conv = db.prepare('SELECT id FROM conversations WHERE id = ?').get(req.params.id);
+  if (!conv) return res.status(404).json({ error: 'Conversa não encontrada' });
+
+  db.prepare('DELETE FROM messages WHERE conversation_id = ?').run(req.params.id);
+  db.prepare('DELETE FROM conversations WHERE id = ?').run(req.params.id);
+  res.json({ ok: true });
+});
+
 // GET /conversations/metrics — resumo geral (owner only)
 router.get('/metrics', authMiddleware, ownerOnly, (req, res) => {
   const metrics = db.prepare(`

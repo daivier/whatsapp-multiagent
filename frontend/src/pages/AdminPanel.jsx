@@ -16,6 +16,7 @@ export default function AdminPanel({ socket }) {
   const [newUser, setNewUser] = useState({ name: '', email: '', password: '' });
   const [transferTo, setTransferTo] = useState('');
   const [userStatuses, setUserStatuses] = useState({});
+  const [listKey, setListKey] = useState(0);
 
   useEffect(() => {
     loadAttendants();
@@ -65,6 +66,14 @@ export default function AdminPanel({ socket }) {
     loadAttendants();
   }
 
+  async function deleteConversation() {
+    if (!selectedConv) return;
+    if (!confirm(`Eliminar conversa com "${selectedConv.contact_name || selectedConv.phone}"? Esta acção é irreversível.`)) return;
+    await api.delete(`/conversations/${selectedConv.id}`);
+    setSelectedConv(null);
+    setListKey(k => k + 1);
+  }
+
   async function transferConversation() {
     if (!selectedConv || !transferTo) return;
     try {
@@ -103,7 +112,7 @@ export default function AdminPanel({ socket }) {
         {tab === 'conversations' && (
           <div style={styles.chatLayout}>
             <div style={styles.listPane}>
-              <ConversationList socket={socket} selected={selectedConv} onSelect={setSelectedConv} />
+              <ConversationList key={listKey} socket={socket} selected={selectedConv} onSelect={setSelectedConv} />
             </div>
             <div style={styles.chatPane}>
               {selectedConv && (
@@ -132,7 +141,7 @@ export default function AdminPanel({ socket }) {
                   </span>
                 </div>
               )}
-              <ChatWindow conversation={selectedConv} socket={socket} onClose={() => setSelectedConv(null)} />
+              <ChatWindow conversation={selectedConv} socket={socket} onClose={() => setSelectedConv(null)} onDelete={deleteConversation} />
             </div>
           </div>
         )}
