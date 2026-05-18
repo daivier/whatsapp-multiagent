@@ -11,7 +11,7 @@ function initWhatsApp(socketIO) {
   io = socketIO;
 
   client = new Client({
-    authStrategy: new LocalAuth({ dataPath: './whatsapp-session' }),
+    authStrategy: new LocalAuth({ dataPath: process.env.WA_SESSION_PATH || './whatsapp-session' }),
     puppeteer: {
       headless: true,
       args: ['--no-sandbox', '--disable-setuid-sandbox'],

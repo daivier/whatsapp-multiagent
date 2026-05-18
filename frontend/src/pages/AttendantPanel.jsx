@@ -41,7 +41,7 @@ export default function AttendantPanel({ socket }) {
       <header style={styles.header}>
         <div style={styles.logoArea}>
           <span style={{ fontSize: '1.4rem' }}>💬</span>
-          <strong style={{ color: '#fff' }}>WhatsApp Multi-Atendente</strong>
+          <strong style={{ color: '#fff' }}>{import.meta.env.VITE_TENANT_NAME || 'WhatsApp Multi-Atendente'}</strong>
         </div>
         <div style={styles.headerRight}>
           <span style={styles.userName}>{user.name}</span>

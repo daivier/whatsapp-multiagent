@@ -86,8 +86,8 @@ export default function AdminPanel({ socket }) {
           <div style={styles.logoArea}>
             <span style={{ fontSize: '1.5rem' }}>💬</span>
             <div>
-              <p style={styles.userName}>{user.name}</p>
-              <span style={styles.ownerBadge}>Dono</span>
+              <p style={styles.userName}>{import.meta.env.VITE_TENANT_NAME || 'WhatsApp Multi-Atendente'}</p>
+              <span style={styles.ownerBadge}>{user.name}</span>
             </div>
           </div>
           <nav style={styles.nav}>
