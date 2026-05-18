@@ -18,6 +18,7 @@ const quickRepliesRoutes = require('./routes/quick-replies');
 const tagsRoutes = require('./routes/tags');
 const settingsRoutes = require('./routes/settings');
 const scheduledMessagesRoutes = require('./routes/scheduled-messages');
+const contactsRoutes = require('./routes/contacts');
 const { startScheduledMessagesCron } = require('./scheduled/cron');
 
 const app = express();
@@ -48,6 +49,7 @@ app.use('/quick-replies', quickRepliesRoutes);
 app.use('/tags', tagsRoutes);
 app.use('/settings', settingsRoutes);
 app.use('/scheduled-messages', scheduledMessagesRoutes);
+app.use('/contacts', contactsRoutes);
 
 // WhatsApp status
 app.get('/whatsapp/status', authMiddleware, (req, res) => {

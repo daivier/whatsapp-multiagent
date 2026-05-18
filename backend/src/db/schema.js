@@ -90,6 +90,8 @@ db.exec(`
 
 // Migrations
 try { db.exec(`ALTER TABLE users ADD COLUMN preferred_status TEXT NOT NULL DEFAULT 'online'`); } catch (_) {}
+try { db.exec(`ALTER TABLE contacts ADD COLUMN notes TEXT`); } catch (_) {}
+try { db.exec(`ALTER TABLE contacts ADD COLUMN email TEXT`); } catch (_) {}
 try { db.exec(`ALTER TABLE messages ADD COLUMN media_url TEXT`); } catch (_) {}
 try { db.exec(`ALTER TABLE messages ADD COLUMN media_type TEXT`); } catch (_) {}
 try { db.exec(`ALTER TABLE messages ADD COLUMN is_internal INTEGER NOT NULL DEFAULT 0`); } catch (_) {}

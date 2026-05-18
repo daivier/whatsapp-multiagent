@@ -51,6 +51,11 @@ export default function AdminPanel({ socket }) {
   const [tags, setTags] = useState([]);
   const [newTag, setNewTag] = useState({ name: '', color: '#25D366' });
 
+  // Contactos
+  const [contacts, setContacts] = useState([]);
+  const [contactSearch, setContactSearch] = useState('');
+  const [editingContact, setEditingContact] = useState(null); // { id, name, notes, email }
+
   // Agendamentos
   const [scheduled, setScheduled] = useState([]);
 
@@ -71,6 +76,7 @@ export default function AdminPanel({ socket }) {
   useEffect(() => {
     if (tab === 'reports') loadReports();
     if (tab === 'scheduled') loadScheduled();
+    if (tab === 'contacts') loadContacts();
   }, [tab]);
 
   useEffect(() => {
@@ -110,6 +116,21 @@ export default function AdminPanel({ socket }) {
     const { data } = await api.get('/tags');
     setTags(Array.isArray(data) ? data : []);
   }
+  async function loadContacts(q = '') {
+    const { data } = await api.get('/contacts', { params: q ? { q } : {} });
+    setContacts(Array.isArray(data) ? data : []);
+  }
+  async function saveContact() {
+    if (!editingContact) return;
+    await api.patch(`/contacts/${editingContact.id}`, {
+      name: editingContact.name,
+      notes: editingContact.notes,
+      email: editingContact.email,
+    });
+    setEditingContact(null);
+    loadContacts(contactSearch);
+  }
+
   async function loadScheduled() {
     const { data } = await api.get('/scheduled-messages');
     setScheduled(Array.isArray(data) ? data : []);
@@ -176,9 +197,9 @@ export default function AdminPanel({ socket }) {
 
   const activeAttendants = attendants.filter(a => a.active);
   const TABS = [
-    ['conversations','Conversas'],['attendants','Atendentes'],['metrics','Métricas'],
-    ['reports','Relatórios'],['scheduled','Agendamentos'],['quickreplies','Respostas Rápidas'],
-    ['tags','Etiquetas'],['bot','Bot'],['whatsapp','WhatsApp'],
+    ['conversations','Conversas'],['attendants','Atendentes'],['contacts','Contactos'],
+    ['metrics','Métricas'],['reports','Relatórios'],['scheduled','Agendamentos'],
+    ['quickreplies','Respostas Rápidas'],['tags','Etiquetas'],['bot','Bot'],['whatsapp','WhatsApp'],
   ];
 
   function selectTab(key) {
@@ -282,6 +303,70 @@ export default function AdminPanel({ socket }) {
                     <td><span style={{ color: a.status === 'online' ? '#10b981' : a.status === 'busy' ? '#f59e0b' : '#6b7280' }}>{a.status}</span></td>
                     <td>{a.active ? 'Sim' : 'Não'}</td>
                     <td><button style={styles.toggleBtn} onClick={() => toggleAttendant(a.id, a.active)}>{a.active ? 'Desativar' : 'Ativar'}</button></td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+
+        {/* CONTACTOS */}
+        {tab === 'contacts' && (
+          <div style={styles.section}>
+            <h2 style={styles.sectionTitle}>Contactos</h2>
+
+            {/* Modal de edição */}
+            {editingContact && (
+              <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.4)', zIndex: 300, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                <div style={{ background: '#fff', borderRadius: '12px', padding: '1.5rem', width: '100%', maxWidth: '420px', boxShadow: '0 8px 32px rgba(0,0,0,0.18)' }}>
+                  <h3 style={{ margin: '0 0 1rem' }}>Editar Contacto</h3>
+                  <label style={styles.fieldLabel}>Nome</label>
+                  <input style={{ ...styles.input, width: '100%', boxSizing: 'border-box', marginBottom: '0.75rem' }}
+                    value={editingContact.name || ''} onChange={e => setEditingContact(p => ({ ...p, name: e.target.value }))} />
+                  <label style={styles.fieldLabel}>Email</label>
+                  <input style={{ ...styles.input, width: '100%', boxSizing: 'border-box', marginBottom: '0.75rem' }}
+                    type="email" placeholder="email@exemplo.com"
+                    value={editingContact.email || ''} onChange={e => setEditingContact(p => ({ ...p, email: e.target.value }))} />
+                  <label style={styles.fieldLabel}>Notas internas</label>
+                  <textarea style={{ ...styles.input, width: '100%', boxSizing: 'border-box', resize: 'vertical', minHeight: '80px', marginBottom: '1rem' }}
+                    placeholder="Ex: Cliente VIP, prefere contacto à tarde..."
+                    value={editingContact.notes || ''} onChange={e => setEditingContact(p => ({ ...p, notes: e.target.value }))} />
+                  <div style={{ display: 'flex', gap: '0.5rem', justifyContent: 'flex-end' }}>
+                    <button style={{ ...styles.toggleBtn }} onClick={() => setEditingContact(null)}>Cancelar</button>
+                    <button style={styles.addBtn} onClick={saveContact}>Guardar</button>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            <input style={{ ...styles.input, width: '100%', maxWidth: '360px', marginBottom: '1rem', boxSizing: 'border-box' }}
+              placeholder="Pesquisar por nome, número ou nota..."
+              value={contactSearch}
+              onChange={e => { setContactSearch(e.target.value); loadContacts(e.target.value); }} />
+
+            <p style={{ color: '#999', fontSize: '0.8rem', marginBottom: '0.75rem' }}>{contacts.length} contacto(s)</p>
+
+            <table style={styles.table}>
+              <thead><tr><th>Nome</th><th>Número</th><th>Email</th><th>Notas</th><th>Conversas</th><th>Último contacto</th><th></th></tr></thead>
+              <tbody>
+                {contacts.map(c => (
+                  <tr key={c.id}>
+                    <td style={{ fontWeight: 600 }}>
+                      <div style={{ width: 32, height: 32, borderRadius: '50%', background: '#25D366', color: '#fff', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', fontWeight: 700, fontSize: '0.85rem', marginRight: '0.5rem' }}>
+                        {(c.name || c.phone || '?')[0].toUpperCase()}
+                      </div>
+                      {c.name || '—'}
+                    </td>
+                    <td style={{ fontSize: '0.85rem', color: '#555' }}>{c.phone}</td>
+                    <td style={{ fontSize: '0.85rem', color: '#555' }}>{c.email || '—'}</td>
+                    <td style={{ fontSize: '0.8rem', color: '#777', maxWidth: '200px', wordBreak: 'break-word' }}>{c.notes || '—'}</td>
+                    <td style={{ textAlign: 'center', fontSize: '0.85rem' }}>{c.conversation_count || 0}</td>
+                    <td style={{ fontSize: '0.8rem', color: '#888', whiteSpace: 'nowrap' }}>
+                      {c.last_contact ? new Date(c.last_contact).toLocaleDateString('pt-BR') : '—'}
+                    </td>
+                    <td>
+                      <button style={styles.toggleBtn} onClick={() => setEditingContact({ ...c })}>Editar</button>
+                    </td>
                   </tr>
                 ))}
               </tbody>
@@ -560,4 +645,5 @@ const styles = {
   select: { padding: '0.4rem 0.75rem', border: '1px solid #ddd', borderRadius: '6px', fontSize: '0.85rem' },
   transferBtn: { padding: '0.4rem 1rem', background: '#3b82f6', color: '#fff', border: 'none', borderRadius: '6px', cursor: 'pointer', fontSize: '0.85rem' },
   settingRow: { display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '1rem', fontSize: '0.9rem' },
+  fieldLabel: { display: 'block', fontSize: '0.8rem', color: '#555', marginBottom: '0.2rem', fontWeight: 600 },
 };
