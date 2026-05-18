@@ -7,6 +7,7 @@ export default function ChatWindow({ conversation, socket, onClose }) {
   const [messages, setMessages] = useState([]);
   const [text, setText] = useState('');
   const [sending, setSending] = useState(false);
+  const [warning, setWarning] = useState('');
   const bottomRef = useRef(null);
 
   useEffect(() => {
@@ -32,14 +33,18 @@ export default function ChatWindow({ conversation, socket, onClose }) {
   async function send() {
     if (!text.trim() || sending) return;
     setSending(true);
-    try {
-      socket.emit('message:send', { conversation_id: conversation.id, body: text }, (res) => {
-        if (res?.message) setMessages(prev => [...prev, res.message]);
-      });
-      setText('');
-    } finally {
+    setWarning('');
+    const body = text;
+    setText('');
+    socket.emit('message:send', { conversation_id: conversation.id, body }, (res) => {
       setSending(false);
-    }
+      if (res?.message) {
+        setMessages(prev => [...prev, res.message]);
+      } else if (res?.error) {
+        setWarning(res.error);
+        setText(body); // devolve o texto se falhou
+      }
+    });
   }
 
   function handleKey(e) {
@@ -82,6 +87,9 @@ export default function ChatWindow({ conversation, socket, onClose }) {
         <div ref={bottomRef} />
       </div>
 
+      {warning && (
+        <div style={styles.warning}>{warning}</div>
+      )}
       <div style={styles.inputArea}>
         <textarea
           style={styles.textarea}
@@ -92,7 +100,7 @@ export default function ChatWindow({ conversation, socket, onClose }) {
           rows={2}
         />
         <button style={styles.sendBtn} onClick={send} disabled={sending || !text.trim()}>
-          Enviar
+          {sending ? '...' : 'Enviar'}
         </button>
       </div>
     </div>
@@ -117,4 +125,5 @@ const styles = {
   inputArea: { display: 'flex', gap: '0.5rem', padding: '0.75rem', background: '#fff', borderTop: '1px solid #e5e5e5' },
   textarea: { flex: 1, padding: '0.5rem', border: '1px solid #ddd', borderRadius: '8px', resize: 'none', fontSize: '0.9rem', outline: 'none' },
   sendBtn: { padding: '0 1.25rem', background: '#25D366', color: '#fff', border: 'none', borderRadius: '8px', cursor: 'pointer', fontWeight: 600 },
+  warning: { background: '#fff3cd', color: '#856404', padding: '0.4rem 1rem', fontSize: '0.82rem', borderTop: '1px solid #ffc107' },
 };

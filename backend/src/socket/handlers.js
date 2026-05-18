@@ -35,18 +35,21 @@ function initSocket(io) {
       if (!conv) return callback?.({ error: 'Conversa não encontrada' });
       if (user.role === 'attendant' && conv.assigned_to !== user.id) return callback?.({ error: 'Sem permissão' });
 
+      // Guarda na BD primeiro — a mensagem aparece sempre na UI
+      const result = db
+        .prepare('INSERT INTO messages (conversation_id, from_me, sender_id, body) VALUES (?, 1, ?, ?)')
+        .run(conversation_id, user.id, body);
+      db.prepare('UPDATE conversations SET updated_at = CURRENT_TIMESTAMP WHERE id = ?').run(conversation_id);
+      const message = db.prepare('SELECT * FROM messages WHERE id = ?').get(result.lastInsertRowid);
+
+      io.emit('message:new', { message, conversationId: conversation_id });
+      callback?.({ ok: true, message });
+
+      // Tenta enviar pelo WhatsApp (erro não bloqueia a UI)
       try {
         await sendMessage(conv.phone, body);
-        const result = db
-          .prepare('INSERT INTO messages (conversation_id, from_me, sender_id, body) VALUES (?, 1, ?, ?)')
-          .run(conversation_id, user.id, body);
-        db.prepare('UPDATE conversations SET updated_at = CURRENT_TIMESTAMP WHERE id = ?').run(conversation_id);
-
-        const message = db.prepare('SELECT * FROM messages WHERE id = ?').get(result.lastInsertRowid);
-        io.emit('message:new', { message, conversationId: conversation_id });
-        callback?.({ ok: true, message });
       } catch (err) {
-        callback?.({ error: 'WhatsApp não conectado' });
+        console.error('Aviso: mensagem guardada mas não enviada pelo WhatsApp:', err.message);
       }
     });
 

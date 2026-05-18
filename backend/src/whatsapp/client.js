@@ -41,7 +41,7 @@ function initWhatsApp(socketIO) {
   client.on('message', async (msg) => {
     if (msg.fromMe) return;
 
-    const phone = msg.from.replace('@c.us', '');
+    const phone = msg.from.replace(/@c\.us$/, '').replace(/@lid$/, '');
     const body = msg.body;
 
     // Upsert contact
@@ -102,7 +102,9 @@ function initWhatsApp(socketIO) {
 
 async function sendMessage(phone, body) {
   if (!isReady) throw new Error('WhatsApp não está conectado');
-  await client.sendMessage(`${phone}@c.us`, body);
+  // Normaliza o número — remove sufixos e adiciona @c.us
+  const cleanPhone = phone.replace(/@c\.us$/, '').replace(/@lid$/, '');
+  await client.sendMessage(`${cleanPhone}@c.us`, body);
 }
 
 function getStatus() {
