@@ -17,6 +17,8 @@ export default function ConversationList({ socket, selected, onSelect }) {
   useEffect(() => {
     if (!socket) return;
     function handler({ conversation }) {
+      // Atendentes só veem conversas atribuídas a eles
+      if (user.role === 'attendant' && conversation?.assigned_to !== user.id) return;
       setConversations(prev => {
         const idx = prev.findIndex(c => c.id === conversation?.id);
         if (idx >= 0) {
