@@ -3,29 +3,23 @@ import api from '../api';
 import { useAuth } from '../context/AuthContext';
 
 const STATUS_LABEL = { waiting: 'Aguarda', open: 'Aberta', closed: 'Fechada' };
-const STATUS_COLOR = { waiting: '#f59e0b', open: '#10b981', closed: '#6b7280' };
+const STATUS_COLOR = { waiting: 'var(--warn)', open: 'var(--success)', closed: 'var(--hint)' };
+const STATUS_BG    = { waiting: 'var(--warn-l)', open: 'var(--success-l)', closed: '#f3f4f6' };
 
 export default function ConversationList({ socket, selected, onSelect }) {
   const { user } = useAuth();
   const [conversations, setConversations] = useState([]);
   const [filter, setFilter] = useState('open');
 
-  useEffect(() => {
-    load();
-  }, [filter]);
+  useEffect(() => { load(); }, [filter]);
 
   useEffect(() => {
     if (!socket) return;
     function handler({ conversation }) {
-      // Atendentes só veem conversas atribuídas a eles
       if (user.role === 'attendant' && conversation?.assigned_to !== user.id) return;
       setConversations(prev => {
         const idx = prev.findIndex(c => c.id === conversation?.id);
-        if (idx >= 0) {
-          const next = [...prev];
-          next[idx] = conversation;
-          return next;
-        }
+        if (idx >= 0) { const next = [...prev]; next[idx] = conversation; return next; }
         return [conversation, ...prev];
       });
     }
@@ -39,64 +33,67 @@ export default function ConversationList({ socket, selected, onSelect }) {
     setConversations(Array.isArray(data) ? data : []);
   }
 
+  const FILTERS = [['open','Abertas'],['waiting','Aguarda'],['closed','Fechadas'],['','Todas']];
+
   return (
-    <div style={styles.container}>
-      <div style={styles.filters}>
-        {['open', 'waiting', 'closed', ''].map(s => (
-          <button
-            key={s}
-            style={{ ...styles.filterBtn, ...(filter === s ? styles.filterActive : {}) }}
-            onClick={() => setFilter(s)}
-          >
-            {s === '' ? 'Todas' : STATUS_LABEL[s]}
-          </button>
+    <div style={S.wrap}>
+      <div style={S.header}>
+        <span style={S.headerTitle}>Conversas</span>
+        <span style={S.count}>{conversations.length}</span>
+      </div>
+      <div style={S.filters}>
+        {FILTERS.map(([val, label]) => (
+          <button key={val} style={{ ...S.filterBtn, ...(filter === val ? S.filterActive : {}) }}
+            onClick={() => setFilter(val)}>{label}</button>
         ))}
       </div>
-
-      <div style={styles.list}>
-        {conversations.length === 0 && (
-          <p style={styles.empty}>Nenhuma conversa</p>
-        )}
-        {conversations.map(conv => (
-          <div
-            key={conv.id}
-            style={{ ...styles.item, ...(selected?.id === conv.id ? styles.itemSelected : {}) }}
-            onClick={() => onSelect(conv)}
-          >
-            <div style={styles.avatar}>{(conv.contact_name || conv.phone)[0].toUpperCase()}</div>
-            <div style={styles.info}>
-              <div style={styles.topRow}>
-                <strong style={styles.name}>{conv.contact_name || conv.phone}</strong>
-                <span style={{ ...styles.status, color: STATUS_COLOR[conv.status] }}>
-                  {STATUS_LABEL[conv.status]}
-                </span>
+      <div style={S.list}>
+        {conversations.length === 0 && <p style={S.empty}>Nenhuma conversa</p>}
+        {conversations.map(conv => {
+          const isSelected = selected?.id === conv.id;
+          const initial = (conv.contact_name || conv.phone || '?')[0].toUpperCase();
+          return (
+            <div key={conv.id} style={{ ...S.item, ...(isSelected ? S.itemActive : {}) }} onClick={() => onSelect(conv)}>
+              <div style={{ ...S.avatar, background: isSelected ? 'var(--accent)' : 'var(--accent-l)', color: isSelected ? '#fff' : 'var(--accent)' }}>
+                {initial}
               </div>
-              {user.role === 'owner' && (
-                <span style={styles.attendant}>{conv.attendant_name || 'Sem atendente'}</span>
-              )}
-              <span style={styles.phone}>{conv.phone}</span>
+              <div style={S.info}>
+                <div style={S.row}>
+                  <span style={S.name}>{conv.contact_name || conv.phone}</span>
+                  <span style={{ ...S.badge, background: STATUS_BG[conv.status], color: STATUS_COLOR[conv.status] }}>
+                    {STATUS_LABEL[conv.status]}
+                  </span>
+                </div>
+                {user.role === 'owner' && (
+                  <span style={S.sub}>{conv.attendant_name || 'Sem atendente'}</span>
+                )}
+                <span style={S.phone}>{conv.phone}</span>
+              </div>
             </div>
-          </div>
-        ))}
+          );
+        })}
       </div>
     </div>
   );
 }
 
-const styles = {
-  container: { display: 'flex', flexDirection: 'column', height: '100%', background: '#fff', borderRight: '1px solid #e5e5e5' },
-  filters: { display: 'flex', gap: '0.25rem', padding: '0.75rem', borderBottom: '1px solid #e5e5e5', flexWrap: 'wrap' },
-  filterBtn: { padding: '0.3rem 0.75rem', borderRadius: '999px', border: '1px solid #ddd', background: 'none', cursor: 'pointer', fontSize: '0.8rem' },
-  filterActive: { background: '#25D366', color: '#fff', border: '1px solid #25D366' },
+const S = {
+  wrap: { display: 'flex', flexDirection: 'column', height: '100%', background: 'var(--card)', borderRight: '1px solid var(--border)' },
+  header: { display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '1rem 1rem 0.5rem', gap: '0.5rem' },
+  headerTitle: { fontWeight: 700, fontSize: '0.95rem', color: 'var(--text)' },
+  count: { background: 'var(--accent-l)', color: 'var(--accent)', borderRadius: '20px', padding: '1px 8px', fontSize: '0.75rem', fontWeight: 600 },
+  filters: { display: 'flex', gap: '0.25rem', padding: '0.5rem 1rem 0.75rem', flexWrap: 'wrap' },
+  filterBtn: { padding: '0.25rem 0.65rem', borderRadius: '20px', border: '1px solid var(--border-m)', background: 'none', cursor: 'pointer', fontSize: '0.75rem', color: 'var(--muted)', fontWeight: 500 },
+  filterActive: { background: 'var(--accent)', color: '#fff', border: '1px solid var(--accent)' },
   list: { flex: 1, overflowY: 'auto' },
-  empty: { textAlign: 'center', color: '#999', padding: '2rem' },
-  item: { display: 'flex', gap: '0.75rem', padding: '0.75rem 1rem', cursor: 'pointer', borderBottom: '1px solid #f5f5f5', alignItems: 'center' },
-  itemSelected: { background: '#e8f5e9' },
-  avatar: { width: '40px', height: '40px', borderRadius: '50%', background: '#25D366', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 700, flexShrink: 0 },
+  empty: { textAlign: 'center', color: 'var(--hint)', padding: '2rem', fontSize: '0.85rem' },
+  item: { display: 'flex', gap: '0.75rem', padding: '0.75rem 1rem', cursor: 'pointer', borderBottom: '1px solid var(--border)', alignItems: 'center', transition: 'background .1s' },
+  itemActive: { background: 'var(--accent-l)' },
+  avatar: { width: 38, height: 38, borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 700, fontSize: '0.9rem', flexShrink: 0, transition: 'all .1s' },
   info: { flex: 1, minWidth: 0 },
-  topRow: { display: 'flex', justifyContent: 'space-between', alignItems: 'center' },
-  name: { fontSize: '0.9rem', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' },
-  status: { fontSize: '0.75rem', fontWeight: 600, flexShrink: 0 },
-  attendant: { display: 'block', fontSize: '0.75rem', color: '#888' },
-  phone: { display: 'block', fontSize: '0.75rem', color: '#aaa' },
+  row: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '0.5rem' },
+  name: { fontSize: '0.875rem', fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', color: 'var(--text)' },
+  badge: { borderRadius: '20px', padding: '1px 7px', fontSize: '0.7rem', fontWeight: 600, flexShrink: 0 },
+  sub: { display: 'block', fontSize: '0.75rem', color: 'var(--muted)', marginTop: '1px' },
+  phone: { display: 'block', fontSize: '0.72rem', color: 'var(--hint)' },
 };

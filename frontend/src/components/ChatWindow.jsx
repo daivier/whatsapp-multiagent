@@ -18,7 +18,7 @@ function MessageContent({ msg }) {
         <span style={{ fontSize: '1.5rem' }}>👤</span>
         <div>
           <p style={{ margin: 0, fontWeight: 600, fontSize: '0.9rem' }}>{fn}</p>
-          {tel && <p style={{ margin: 0, fontSize: '0.8rem', color: '#666' }}>{tel}</p>}
+          {tel && <p style={{ margin: 0, fontSize: '0.8rem', color: 'var(--muted)' }}>{tel}</p>}
         </div>
       </div>
     );
@@ -45,7 +45,7 @@ function MessageContent({ msg }) {
     );
   }
   if (msg.media_url) {
-    return <a href={`${API}${msg.media_url}`} target="_blank" rel="noreferrer" style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', fontSize: '0.85rem', color: '#2563eb', textDecoration: 'none' }}>📎 Abrir ficheiro</a>;
+    return <a href={`${API}${msg.media_url}`} target="_blank" rel="noreferrer" style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', fontSize: '0.85rem', color: 'var(--accent)', textDecoration: 'none' }}>📎 Abrir ficheiro</a>;
   }
   return <p style={{ margin: 0, fontSize: '0.9rem', whiteSpace: 'pre-wrap' }}>{msg.body}</p>;
 }
@@ -108,8 +108,7 @@ export default function ChatWindow({ conversation, socket, onClose, onDelete }) 
 
   async function loadHistory() {
     if (!conversation) return;
-    const phone = conversation.phone;
-    const r = await api.get(`/conversations/contact/${phone}`);
+    const r = await api.get(`/conversations/contact/${conversation.phone}`);
     setHistory(Array.isArray(r.data) ? r.data.filter(c => c.id !== conversation.id) : []);
     setShowHistory(true);
   }
@@ -152,7 +151,6 @@ export default function ChatWindow({ conversation, socket, onClose, onDelete }) 
   function handleTyping(e) {
     const val = e.target.value;
     setText(val);
-    // Respostas rápidas: mostrar sugestões quando começa com /
     if (val.startsWith('/')) {
       const q = val.slice(1).toLowerCase();
       setQrSuggestions(quickReplies.filter(r => r.shortcut.toLowerCase().includes(q) || r.body.toLowerCase().includes(q)));
@@ -209,137 +207,150 @@ export default function ChatWindow({ conversation, socket, onClose, onDelete }) 
   const typerNames = Object.values(typers).filter(Boolean);
 
   if (!conversation) {
-    return <div style={styles.empty}><p>Seleciona uma conversa para começar</p></div>;
+    return (
+      <div style={S.empty}>
+        <div style={S.emptyInner}>
+          <span style={{ fontSize: '2.5rem', marginBottom: '0.75rem' }}>💬</span>
+          <p style={{ color: 'var(--hint)', fontSize: '0.9rem' }}>Seleciona uma conversa para começar</p>
+        </div>
+      </div>
+    );
   }
 
   return (
-    <div style={styles.container}>
-      <div style={styles.header}>
+    <div style={S.container}>
+      {/* Header */}
+      <div style={S.header}>
         <div style={{ flex: 1, minWidth: 0 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flexWrap: 'wrap' }}>
-            <strong>{conversation.contact_name || conversation.phone}</strong>
+            <strong style={{ fontSize: '0.9rem', color: 'var(--text)' }}>{conversation.contact_name || conversation.phone}</strong>
             {convTags.map(t => (
-              <span key={t.id} style={{ background: t.color + '22', border: `1px solid ${t.color}`, color: t.color, borderRadius: '999px', padding: '0.1rem 0.5rem', fontSize: '0.72rem', fontWeight: 600 }}>{t.name}</span>
+              <span key={t.id} style={{ background: t.color + '18', border: `1px solid ${t.color}55`, color: t.color, borderRadius: '999px', padding: '0.1rem 0.5rem', fontSize: '0.7rem', fontWeight: 600 }}>{t.name}</span>
             ))}
           </div>
-          <span style={styles.phone}>{conversation.phone}</span>
+          <span style={S.phone}>{conversation.phone}</span>
         </div>
-        <div style={styles.headerActions}>
+        <div style={S.headerActions}>
           {user.role === 'owner' && (
-            <span style={styles.badge}>{conversation.attendant_name || 'Sem atendente'}</span>
+            <span style={S.attendantBadge}>{conversation.attendant_name || 'Sem atendente'}</span>
           )}
           <div style={{ position: 'relative' }}>
-            <button style={styles.historyBtn} onClick={() => setShowTagPicker(v => !v)} title="Etiquetas">🏷️</button>
+            <button style={S.iconBtn} onClick={() => setShowTagPicker(v => !v)} title="Etiquetas">🏷️</button>
             {showTagPicker && (
-              <div style={styles.tagPicker}>
-                {allTags.length === 0 && <p style={{ margin: 0, color: '#999', fontSize: '0.8rem' }}>Sem etiquetas criadas</p>}
+              <div style={S.tagPicker}>
+                {allTags.length === 0 && <p style={{ margin: 0, color: 'var(--hint)', fontSize: '0.8rem' }}>Sem etiquetas criadas</p>}
                 {allTags.map(t => {
                   const active = convTags.some(ct => ct.id === t.id);
                   return (
-                    <div key={t.id} onClick={() => toggleTag(t)} style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', padding: '0.35rem 0.5rem', cursor: 'pointer', borderRadius: '6px', background: active ? t.color + '15' : 'none' }}>
-                      <span style={{ width: 10, height: 10, borderRadius: '50%', background: t.color, flexShrink: 0 }} />
-                      <span style={{ fontSize: '0.85rem', flex: 1 }}>{t.name}</span>
-                      {active && <span style={{ color: t.color, fontWeight: 700, fontSize: '0.9rem' }}>✓</span>}
+                    <div key={t.id} onClick={() => toggleTag(t)} style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', padding: '0.35rem 0.5rem', cursor: 'pointer', borderRadius: 'var(--r-sm)', background: active ? t.color + '15' : 'none', transition: 'background .1s' }}>
+                      <span style={{ width: 9, height: 9, borderRadius: '50%', background: t.color, flexShrink: 0 }} />
+                      <span style={{ fontSize: '0.85rem', flex: 1, color: 'var(--text)' }}>{t.name}</span>
+                      {active && <span style={{ color: t.color, fontWeight: 700, fontSize: '0.85rem' }}>✓</span>}
                     </div>
                   );
                 })}
               </div>
             )}
           </div>
-          <button style={styles.historyBtn} onClick={loadHistory} title="Histórico de conversas">🕐</button>
-          {onDelete && <button style={styles.deleteBtn} onClick={onDelete}>Eliminar</button>}
-          <button style={styles.closeBtn} onClick={onClose}>Fechar</button>
+          <button style={S.iconBtn} onClick={loadHistory} title="Histórico de conversas">🕐</button>
+          {onDelete && <button style={S.dangerBtn} onClick={onDelete}>Eliminar</button>}
+          <button style={S.closeBtn} onClick={onClose}>Fechar</button>
         </div>
       </div>
 
       {/* Histórico */}
       {showHistory && (
-        <div style={styles.historyPanel}>
+        <div style={S.historyPanel}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem' }}>
-            <strong style={{ fontSize: '0.85rem' }}>Conversas anteriores</strong>
-            <button onClick={() => setShowHistory(false)} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: '1rem' }}>✕</button>
+            <strong style={{ fontSize: '0.82rem', color: 'var(--text)' }}>Conversas anteriores</strong>
+            <button onClick={() => setShowHistory(false)} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: '1rem', color: 'var(--muted)' }}>✕</button>
           </div>
-          {history.length === 0 ? <p style={{ fontSize: '0.8rem', color: '#999', margin: 0 }}>Sem conversas anteriores</p> : history.map(c => (
-            <div key={c.id} style={styles.historyItem}>
-              <span style={{ fontSize: '0.8rem', color: '#555' }}>{new Date(c.created_at).toLocaleDateString('pt-PT')}</span>
-              <span style={{ fontSize: '0.8rem', marginLeft: '0.5rem' }}>{c.attendant_name || 'Sem atendente'} · {c.message_count} msgs</span>
-              <span style={{ fontSize: '0.75rem', color: c.status === 'closed' ? '#6b7280' : '#10b981', marginLeft: 'auto' }}>{c.status}</span>
-            </div>
-          ))}
+          {history.length === 0
+            ? <p style={{ fontSize: '0.8rem', color: 'var(--hint)', margin: 0 }}>Sem conversas anteriores</p>
+            : history.map(c => (
+              <div key={c.id} style={S.historyItem}>
+                <span style={{ fontSize: '0.78rem', color: 'var(--muted)' }}>{new Date(c.created_at).toLocaleDateString('pt-PT')}</span>
+                <span style={{ fontSize: '0.78rem', color: 'var(--text)', marginLeft: '0.5rem' }}>{c.attendant_name || 'Sem atendente'} · {c.message_count} msgs</span>
+                <span style={{ fontSize: '0.72rem', color: c.status === 'closed' ? 'var(--hint)' : 'var(--success)', marginLeft: 'auto' }}>{c.status}</span>
+              </div>
+            ))}
         </div>
       )}
 
-      <div style={styles.messages}>
+      {/* Messages */}
+      <div style={S.messages}>
         {messages.map((msg) => (
           <div key={msg.id} style={{
-            ...styles.bubble,
-            ...(msg.from_me ? styles.mine : styles.theirs),
-            ...(msg.is_internal ? styles.internal : {}),
+            ...S.bubble,
+            ...(msg.from_me ? S.mine : S.theirs),
+            ...(msg.is_internal ? S.internal : {}),
           }}>
             {!!msg.from_me && msg.sender_name && (
-              <span style={styles.senderName}>{msg.sender_name}{msg.is_internal ? ' · nota interna' : ''}</span>
+              <span style={S.senderName}>{msg.sender_name}{msg.is_internal ? ' · nota interna' : ''}</span>
             )}
             <MessageContent msg={msg} />
-            {msg.failed && <span style={{ color: '#e53e3e', fontSize: '0.8rem' }}> ⚠️</span>}
-            <span style={styles.time}>{new Date(msg.timestamp).toLocaleTimeString('pt-PT', { hour: '2-digit', minute: '2-digit' })}</span>
+            {msg.failed && <span style={{ color: 'var(--danger)', fontSize: '0.78rem' }}> ⚠️</span>}
+            <span style={S.time}>{new Date(msg.timestamp).toLocaleTimeString('pt-PT', { hour: '2-digit', minute: '2-digit' })}</span>
           </div>
         ))}
         <div ref={bottomRef} />
       </div>
 
       {typerNames.length > 0 && (
-        <div style={styles.typingBar}>
-          <span style={styles.typingDots}>●●●</span>
-          {typerNames.join(', ')} {typerNames.length === 1 ? 'está' : 'estão'} a digitar...
+        <div style={S.typingBar}>
+          <span style={{ color: 'var(--wa-green)', fontSize: '0.55rem', letterSpacing: '3px' }}>●●●</span>
+          <span style={{ color: 'var(--muted)', fontSize: '0.8rem' }}>{typerNames.join(', ')} {typerNames.length === 1 ? 'está' : 'estão'} a digitar...</span>
         </div>
       )}
-      {warning && <div style={styles.warning}>{warning}</div>}
 
-      {/* Sugestões de respostas rápidas */}
+      {warning && <div style={S.warning}>{warning}</div>}
+
+      {/* Quick reply suggestions */}
       {qrSuggestions.length > 0 && (
-        <div style={styles.qrDropdown}>
+        <div style={S.qrDropdown}>
           {qrSuggestions.map(qr => (
-            <div key={qr.id} style={styles.qrItem} onClick={() => applyQuickReply(qr)}>
-              <strong style={{ color: '#25D366' }}>/{qr.shortcut}</strong>
-              <span style={{ color: '#555', marginLeft: '0.5rem', fontSize: '0.85rem' }}>{qr.body}</span>
+            <div key={qr.id} style={S.qrItem} onClick={() => applyQuickReply(qr)}>
+              <strong style={{ color: 'var(--accent)', fontSize: '0.85rem' }}>/{qr.shortcut}</strong>
+              <span style={{ color: 'var(--muted)', marginLeft: '0.5rem', fontSize: '0.85rem' }}>{qr.body}</span>
             </div>
           ))}
         </div>
       )}
 
-      {/* Modal de agendamento */}
+      {/* Schedule panel */}
       {showSchedule && (
-        <div style={styles.schedulePanel}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem' }}>
-            <strong style={{ fontSize: '0.85rem' }}>Agendar mensagem</strong>
-            <button onClick={() => setShowSchedule(false)} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: '1rem' }}>✕</button>
+        <div style={S.schedulePanel}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.6rem' }}>
+            <strong style={{ fontSize: '0.85rem', color: 'var(--text)' }}>Agendar mensagem</strong>
+            <button onClick={() => setShowSchedule(false)} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: '1rem', color: 'var(--muted)' }}>✕</button>
           </div>
-          <input type="datetime-local" style={{ ...styles.scheduleInput, marginBottom: '0.5rem' }}
+          <input type="datetime-local" style={{ ...S.schedInput, marginBottom: '0.5rem' }}
             value={scheduleAt} onChange={e => setScheduleAt(e.target.value)}
             min={new Date(Date.now() + 60000).toISOString().slice(0,16)} />
-          <textarea style={{ ...styles.scheduleInput, resize: 'vertical', minHeight: '60px' }}
+          <textarea style={{ ...S.schedInput, resize: 'vertical', minHeight: '60px' }}
             placeholder="Texto da mensagem..." value={scheduleBody}
             onChange={e => setScheduleBody(e.target.value)} />
-          <button style={{ ...styles.scheduleBtn, marginTop: '0.5rem' }} onClick={saveSchedule} disabled={scheduleSaving || !scheduleBody.trim() || !scheduleAt}>
+          <button style={S.schedBtn} onClick={saveSchedule} disabled={scheduleSaving || !scheduleBody.trim() || !scheduleAt}>
             {scheduleSaving ? 'A guardar...' : '📅 Agendar'}
           </button>
         </div>
       )}
 
-      <div style={styles.inputArea}>
-        <div style={{ display: 'flex', flexDirection: 'column', flex: 1, gap: '0.25rem' }}>
+      {/* Input area */}
+      <div style={S.inputArea}>
+        <div style={{ display: 'flex', flexDirection: 'column', flex: 1, gap: '0.3rem' }}>
           <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
             <button
-              style={{ ...styles.modeBtn, background: isInternal ? '#fef3c7' : 'none', borderColor: isInternal ? '#f59e0b' : '#ddd', color: isInternal ? '#92400e' : '#888' }}
+              style={{ ...S.modeBtn, ...(isInternal ? S.modeBtnInternal : {}) }}
               onClick={() => setIsInternal(v => !v)}
               title="Nota interna (não enviada ao cliente)"
             >
               {isInternal ? '🔒 Nota' : '💬 Mensagem'}
             </button>
-            <span style={{ fontSize: '0.75rem', color: '#aaa' }}>Digite / para respostas rápidas</span>
+            <span style={{ fontSize: '0.72rem', color: 'var(--hint)' }}>Digite / para respostas rápidas</span>
           </div>
           <textarea
-            style={{ ...styles.textarea, background: isInternal ? '#fffbeb' : '#fff', borderColor: isInternal ? '#f59e0b' : '#ddd' }}
+            style={{ ...S.textarea, ...(isInternal ? S.textareaInternal : {}) }}
             value={text}
             onChange={handleTyping}
             onKeyDown={handleKey}
@@ -347,10 +358,10 @@ export default function ChatWindow({ conversation, socket, onClose, onDelete }) 
             rows={2}
           />
         </div>
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem' }}>
-          <button style={styles.scheduleIconBtn} onClick={() => setShowSchedule(v => !v)} title="Agendar mensagem">📅</button>
-          <button style={styles.sendBtn} onClick={send} disabled={sending || !text.trim()}>
-            {sending ? '...' : 'Env'}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.3rem' }}>
+          <button style={S.schedIconBtn} onClick={() => setShowSchedule(v => !v)} title="Agendar mensagem">📅</button>
+          <button style={S.sendBtn} onClick={send} disabled={sending || !text.trim()}>
+            {sending ? '...' : '▶'}
           </button>
         </div>
       </div>
@@ -358,37 +369,39 @@ export default function ChatWindow({ conversation, socket, onClose, onDelete }) 
   );
 }
 
-const styles = {
-  container: { display: 'flex', flexDirection: 'column', flex: 1, minHeight: 0, background: '#f0f2f5' },
-  empty: { display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%', color: '#999' },
-  header: { display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0.75rem 1rem', background: '#fff', borderBottom: '1px solid #e5e5e5' },
-  phone: { display: 'block', fontSize: '0.8rem', color: '#888' },
-  headerActions: { display: 'flex', gap: '0.5rem', alignItems: 'center' },
-  badge: { background: '#e8f5e9', color: '#2e7d32', padding: '0.25rem 0.75rem', borderRadius: '999px', fontSize: '0.8rem' },
-  historyBtn: { background: 'none', border: '1px solid #ddd', padding: '0.25rem 0.5rem', borderRadius: '6px', cursor: 'pointer', fontSize: '1rem' },
-  tagPicker: { position: 'absolute', right: 0, top: '110%', background: '#fff', border: '1px solid #e5e5e5', borderRadius: '8px', boxShadow: '0 4px 16px rgba(0,0,0,0.12)', padding: '0.5rem', minWidth: '160px', zIndex: 100 },
-  deleteBtn: { background: 'none', border: '1px solid #ef4444', color: '#ef4444', padding: '0.25rem 0.75rem', borderRadius: '6px', cursor: 'pointer', fontSize: '0.85rem' },
-  closeBtn: { background: 'none', border: '1px solid #ddd', padding: '0.25rem 0.75rem', borderRadius: '6px', cursor: 'pointer' },
-  historyPanel: { background: '#fffbeb', borderBottom: '1px solid #fde68a', padding: '0.75rem 1rem', maxHeight: '160px', overflowY: 'auto' },
-  historyItem: { display: 'flex', alignItems: 'center', padding: '0.25rem 0', borderBottom: '1px solid #fef3c7', fontSize: '0.8rem' },
+const S = {
+  container: { display: 'flex', flexDirection: 'column', flex: 1, minHeight: 0, background: 'var(--bg)' },
+  empty: { display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%', background: 'var(--bg)' },
+  emptyInner: { display: 'flex', flexDirection: 'column', alignItems: 'center', textAlign: 'center' },
+  header: { display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0.75rem 1rem', background: 'var(--card)', borderBottom: '1px solid var(--border)', flexShrink: 0, boxShadow: 'var(--sh)' },
+  phone: { display: 'block', fontSize: '0.75rem', color: 'var(--hint)', marginTop: '1px' },
+  headerActions: { display: 'flex', gap: '0.4rem', alignItems: 'center', flexShrink: 0 },
+  attendantBadge: { background: 'var(--accent-l)', color: 'var(--accent)', padding: '0.2rem 0.65rem', borderRadius: '999px', fontSize: '0.75rem', fontWeight: 600 },
+  iconBtn: { background: 'none', border: '1px solid var(--border-m)', padding: '0.25rem 0.5rem', borderRadius: 'var(--r-sm)', cursor: 'pointer', fontSize: '0.95rem' },
+  tagPicker: { position: 'absolute', right: 0, top: '110%', background: 'var(--card)', border: '1px solid var(--border)', borderRadius: 'var(--r-md)', boxShadow: 'var(--sh-md)', padding: '0.4rem', minWidth: '170px', zIndex: 100 },
+  dangerBtn: { background: 'none', border: '1px solid var(--danger)', color: 'var(--danger)', padding: '0.25rem 0.65rem', borderRadius: 'var(--r-sm)', cursor: 'pointer', fontSize: '0.8rem' },
+  closeBtn: { background: 'none', border: '1px solid var(--border-m)', color: 'var(--muted)', padding: '0.25rem 0.65rem', borderRadius: 'var(--r-sm)', cursor: 'pointer', fontSize: '0.82rem' },
+  historyPanel: { background: 'var(--warn-l)', borderBottom: '1px solid rgba(217,119,6,0.2)', padding: '0.75rem 1rem', maxHeight: '150px', overflowY: 'auto' },
+  historyItem: { display: 'flex', alignItems: 'center', padding: '0.25rem 0', borderBottom: '1px solid rgba(217,119,6,0.12)' },
   messages: { flex: 1, overflowY: 'auto', padding: '1rem', display: 'flex', flexDirection: 'column', gap: '0.5rem' },
-  bubble: { maxWidth: '70%', padding: '0.5rem 0.75rem', borderRadius: '10px', position: 'relative' },
-  mine: { alignSelf: 'flex-end', background: '#dcf8c6' },
-  theirs: { alignSelf: 'flex-start', background: '#fff' },
-  internal: { background: '#fef3c7', border: '1px dashed #f59e0b', alignSelf: 'flex-end' },
-  senderName: { fontSize: '0.7rem', color: '#666', display: 'block', marginBottom: '0.2rem' },
-  time: { fontSize: '0.7rem', color: '#999', float: 'right', marginTop: '0.2rem', marginLeft: '0.5rem' },
-  typingBar: { padding: '0.3rem 1rem', fontSize: '0.8rem', color: '#555', background: '#f9f9f9', borderTop: '1px solid #eee', display: 'flex', alignItems: 'center', gap: '0.4rem' },
-  typingDots: { color: '#25D366', fontSize: '0.6rem', letterSpacing: '2px' },
-  warning: { background: '#fff3cd', color: '#856404', padding: '0.4rem 1rem', fontSize: '0.82rem', borderTop: '1px solid #ffc107' },
-  qrDropdown: { background: '#fff', borderTop: '1px solid #e5e5e5', maxHeight: '180px', overflowY: 'auto' },
-  qrItem: { padding: '0.5rem 1rem', cursor: 'pointer', borderBottom: '1px solid #f5f5f5', display: 'flex', alignItems: 'baseline' },
-  inputArea: { display: 'flex', gap: '0.5rem', padding: '0.75rem', background: '#fff', borderTop: '1px solid #e5e5e5', alignItems: 'flex-end' },
-  modeBtn: { padding: '0.2rem 0.6rem', border: '1px solid #ddd', borderRadius: '6px', cursor: 'pointer', fontSize: '0.78rem', whiteSpace: 'nowrap' },
-  textarea: { width: '100%', padding: '0.5rem', border: '1px solid #ddd', borderRadius: '8px', resize: 'none', fontSize: '0.9rem', outline: 'none', boxSizing: 'border-box' },
-  sendBtn: { padding: '0 0.75rem', background: '#25D366', color: '#fff', border: 'none', borderRadius: '8px', cursor: 'pointer', fontWeight: 600, flex: 1 },
-  scheduleIconBtn: { padding: '0.2rem 0.5rem', background: 'none', border: '1px solid #ddd', borderRadius: '6px', cursor: 'pointer', fontSize: '1rem' },
-  schedulePanel: { background: '#f0f9ff', borderTop: '1px solid #bae6fd', padding: '0.75rem 1rem', display: 'flex', flexDirection: 'column', gap: '0.25rem' },
-  scheduleInput: { padding: '0.4rem 0.6rem', border: '1px solid #ddd', borderRadius: '6px', fontSize: '0.85rem', width: '100%', boxSizing: 'border-box' },
-  scheduleBtn: { padding: '0.4rem 1rem', background: '#3b82f6', color: '#fff', border: 'none', borderRadius: '6px', cursor: 'pointer', fontWeight: 600, alignSelf: 'flex-start' },
+  bubble: { maxWidth: '70%', padding: '0.5rem 0.75rem', borderRadius: 'var(--r-md)', position: 'relative' },
+  mine: { alignSelf: 'flex-end', background: 'var(--wa-bubble)', boxShadow: 'var(--sh)' },
+  theirs: { alignSelf: 'flex-start', background: 'var(--card)', boxShadow: 'var(--sh)' },
+  internal: { background: 'var(--warn-l)', border: '1px dashed var(--warn)', alignSelf: 'flex-end' },
+  senderName: { fontSize: '0.68rem', color: 'var(--muted)', display: 'block', marginBottom: '0.2rem', fontWeight: 600 },
+  time: { fontSize: '0.67rem', color: 'var(--hint)', float: 'right', marginTop: '0.25rem', marginLeft: '0.5rem' },
+  typingBar: { padding: '0.3rem 1rem', background: 'var(--card)', borderTop: '1px solid var(--border)', display: 'flex', alignItems: 'center', gap: '0.5rem', flexShrink: 0 },
+  warning: { background: 'var(--warn-l)', color: 'var(--warn)', padding: '0.4rem 1rem', fontSize: '0.82rem', borderTop: '1px solid rgba(217,119,6,0.25)', flexShrink: 0 },
+  qrDropdown: { background: 'var(--card)', borderTop: '1px solid var(--border)', maxHeight: '180px', overflowY: 'auto', flexShrink: 0 },
+  qrItem: { padding: '0.5rem 1rem', cursor: 'pointer', borderBottom: '1px solid var(--border)', display: 'flex', alignItems: 'baseline', transition: 'background .1s' },
+  schedulePanel: { background: 'var(--accent-l)', borderTop: '1px solid rgba(26,86,160,0.15)', padding: '0.75rem 1rem', display: 'flex', flexDirection: 'column', gap: '0.35rem', flexShrink: 0 },
+  schedInput: { padding: '0.4rem 0.6rem', border: '1px solid var(--border-m)', borderRadius: 'var(--r-sm)', fontSize: '0.85rem', width: '100%', boxSizing: 'border-box', background: 'var(--card)', color: 'var(--text)' },
+  schedBtn: { padding: '0.4rem 1rem', background: 'var(--accent)', color: '#fff', border: 'none', borderRadius: 'var(--r-sm)', cursor: 'pointer', fontWeight: 600, alignSelf: 'flex-start', fontSize: '0.85rem' },
+  inputArea: { display: 'flex', gap: '0.5rem', padding: '0.75rem', background: 'var(--card)', borderTop: '1px solid var(--border)', alignItems: 'flex-end', flexShrink: 0 },
+  modeBtn: { padding: '0.2rem 0.6rem', border: '1px solid var(--border-m)', borderRadius: 'var(--r-sm)', cursor: 'pointer', fontSize: '0.78rem', whiteSpace: 'nowrap', background: 'none', color: 'var(--muted)' },
+  modeBtnInternal: { background: 'var(--warn-l)', borderColor: 'var(--warn)', color: '#92400e' },
+  textarea: { width: '100%', padding: '0.5rem', border: '1px solid var(--border-m)', borderRadius: 'var(--r-sm)', resize: 'none', fontSize: '0.9rem', outline: 'none', boxSizing: 'border-box', background: 'var(--card)', color: 'var(--text)' },
+  textareaInternal: { background: 'var(--warn-l)', borderColor: 'var(--warn)' },
+  sendBtn: { padding: '0 0.85rem', background: 'var(--accent)', color: '#fff', border: 'none', borderRadius: 'var(--r-sm)', cursor: 'pointer', fontWeight: 700, flex: 1, fontSize: '1rem' },
+  schedIconBtn: { padding: '0.2rem 0.5rem', background: 'none', border: '1px solid var(--border-m)', borderRadius: 'var(--r-sm)', cursor: 'pointer', fontSize: '0.95rem' },
 };

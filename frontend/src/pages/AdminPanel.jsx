@@ -10,11 +10,11 @@ function SimpleBar({ label, value, max, color }) {
   const pct = max ? Math.round((value / max) * 100) : 0;
   return (
     <div style={{ marginBottom: '0.5rem' }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.8rem', marginBottom: '2px' }}>
-        <span>{label}</span><span>{value}</span>
+      <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.8rem', marginBottom: '2px', color: 'var(--muted)' }}>
+        <span>{label}</span><span style={{ fontWeight: 600, color: 'var(--text)' }}>{value}</span>
       </div>
-      <div style={{ background: '#e5e7eb', borderRadius: '4px', height: '8px' }}>
-        <div style={{ width: `${pct}%`, background: color || '#25D366', height: '8px', borderRadius: '4px', transition: 'width 0.3s' }} />
+      <div style={{ background: 'var(--accent-l)', borderRadius: '4px', height: '7px' }}>
+        <div style={{ width: `${pct}%`, background: color || 'var(--accent)', height: '7px', borderRadius: '4px', transition: 'width 0.3s' }} />
       </div>
     </div>
   );
@@ -32,6 +32,7 @@ export default function AdminPanel({ socket }) {
     window.addEventListener('resize', handler);
     return () => window.removeEventListener('resize', handler);
   }, []);
+
   const [attendants, setAttendants] = useState([]);
   const [metrics, setMetrics] = useState(null);
   const [reports, setReports] = useState(null);
@@ -43,23 +44,18 @@ export default function AdminPanel({ socket }) {
   const [userStatuses, setUserStatuses] = useState({});
   const [listKey, setListKey] = useState(0);
 
-  // Quick Replies
   const [quickReplies, setQuickReplies] = useState([]);
   const [newQR, setNewQR] = useState({ shortcut: '', body: '' });
 
-  // Tags
   const [tags, setTags] = useState([]);
   const [newTag, setNewTag] = useState({ name: '', color: '#25D366' });
 
-  // Contactos
   const [contacts, setContacts] = useState([]);
   const [contactSearch, setContactSearch] = useState('');
-  const [editingContact, setEditingContact] = useState(null); // { id, name, notes, email }
+  const [editingContact, setEditingContact] = useState(null);
 
-  // Agendamentos
   const [scheduled, setScheduled] = useState([]);
 
-  // Settings / Bot
   const [settings, setSettings] = useState({
     bot_enabled: '0', bot_message: '',
     hours_0: 'closed', hours_1: '08:00-18:00', hours_2: '08:00-18:00',
@@ -123,9 +119,7 @@ export default function AdminPanel({ socket }) {
   async function saveContact() {
     if (!editingContact) return;
     await api.patch(`/contacts/${editingContact.id}`, {
-      name: editingContact.name,
-      notes: editingContact.notes,
-      email: editingContact.email,
+      name: editingContact.name, notes: editingContact.notes, email: editingContact.email,
     });
     setEditingContact(null);
     loadContacts(contactSearch);
@@ -142,7 +136,6 @@ export default function AdminPanel({ socket }) {
     alert(`${data.deleted} contacto(s) removido(s).`);
     loadContacts(contactSearch);
   }
-
   async function loadScheduled() {
     const { data } = await api.get('/scheduled-messages');
     setScheduled(Array.isArray(data) ? data : []);
@@ -151,12 +144,10 @@ export default function AdminPanel({ socket }) {
     await api.delete(`/scheduled-messages/${id}`);
     loadScheduled();
   }
-
   async function loadSettings() {
     const { data } = await api.get('/settings');
     setSettings(s => ({ ...s, ...data }));
   }
-
   async function createAttendant(e) {
     e.preventDefault();
     await api.post('/users', newUser);
@@ -183,7 +174,6 @@ export default function AdminPanel({ socket }) {
     await api.delete(`/conversations/${selectedConv.id}`);
     setSelectedConv(null); setListKey(k => k + 1);
   }
-
   async function addQuickReply(e) {
     e.preventDefault();
     if (!newQR.shortcut || !newQR.body) return;
@@ -224,41 +214,39 @@ export default function AdminPanel({ socket }) {
   const showChat = tab === 'conversations' && (!isMobile || !!selectedConv);
 
   return (
-    <div style={styles.shell}>
-      {/* Overlay para fechar sidebar no mobile */}
+    <div style={S.shell}>
       {isMobile && showSidebar && (
-        <div onClick={() => setShowSidebar(false)} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.4)', zIndex: 150 }} />
+        <div onClick={() => setShowSidebar(false)} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.35)', zIndex: 150 }} />
       )}
 
-      <aside style={{ ...styles.sidebar, ...(isMobile ? { position: 'fixed', left: showSidebar ? 0 : '-220px', top: 0, bottom: 0, zIndex: 200, transition: 'left 0.25s ease' } : {}) }}>
-        <div style={styles.sidebarTop}>
-          <div style={styles.logoArea}>
-            <span style={{ fontSize: '1.5rem' }}>💬</span>
-            <div>
-              <p style={styles.userName}>{import.meta.env.VITE_TENANT_NAME || 'WhatsApp Multi-Atendente'}</p>
-              <span style={styles.ownerBadge}>{user.name}</span>
+      <aside style={{ ...S.sidebar, ...(isMobile ? { position: 'fixed', left: showSidebar ? 0 : '-220px', top: 0, bottom: 0, zIndex: 200, transition: 'left 0.25s ease' } : {}) }}>
+        <div style={S.sidebarTop}>
+          <div style={S.logoArea}>
+            <span style={{ fontSize: '1.4rem' }}>💬</span>
+            <div style={{ minWidth: 0 }}>
+              <p style={S.logoName}>{import.meta.env.VITE_TENANT_NAME || 'WhatsApp'}</p>
+              <span style={S.ownerBadge}>{user.name}</span>
             </div>
           </div>
-          <nav style={styles.nav}>
+          <nav style={S.nav}>
             {TABS.map(([key, label]) => (
-              <button key={key} style={{ ...styles.navBtn, ...(tab === key ? styles.navActive : {}) }} onClick={() => selectTab(key)}>{label}</button>
+              <button key={key} style={{ ...S.navBtn, ...(tab === key ? S.navActive : {}) }} onClick={() => selectTab(key)}>{label}</button>
             ))}
           </nav>
         </div>
-        <button style={styles.logoutBtn} onClick={logout}>Sair</button>
+        <button style={S.logoutBtn} onClick={logout}>Sair</button>
       </aside>
 
-      <main style={{ ...styles.main, ...(isMobile ? { marginLeft: 0 } : {}) }}>
+      <main style={{ ...S.main, ...(isMobile ? { marginLeft: 0 } : {}) }}>
 
-        {/* Header mobile */}
         {isMobile && (
-          <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', padding: '0.6rem 1rem', background: '#1a1a2e', flexShrink: 0 }}>
+          <div style={S.mobileHeader}>
             {tab === 'conversations' && selectedConv ? (
-              <button onClick={() => setSelectedConv(null)} style={{ background: 'none', border: 'none', color: '#fff', fontSize: '1.3rem', cursor: 'pointer', padding: 0 }}>←</button>
+              <button onClick={() => setSelectedConv(null)} style={S.mobileBtn}>←</button>
             ) : (
-              <button onClick={() => setShowSidebar(v => !v)} style={{ background: 'none', border: 'none', color: '#fff', fontSize: '1.4rem', cursor: 'pointer', padding: 0 }}>☰</button>
+              <button onClick={() => setShowSidebar(v => !v)} style={S.mobileBtn}>☰</button>
             )}
-            <span style={{ color: '#fff', fontWeight: 600, fontSize: '0.95rem' }}>
+            <span style={S.mobileTitle}>
               {tab === 'conversations' && selectedConv ? (selectedConv.contact_name || selectedConv.phone) : TABS.find(([k]) => k === tab)?.[1] || ''}
             </span>
           </div>
@@ -266,28 +254,30 @@ export default function AdminPanel({ socket }) {
 
         {/* CONVERSAS */}
         {tab === 'conversations' && (
-          <div style={{ ...styles.chatLayout, flex: 1, overflow: 'hidden' }}>
-            {showList && <div style={{ ...(isMobile ? { flex: 1, overflowY: 'auto' } : styles.listPane) }}>
-              <ConversationList key={listKey} socket={socket} selected={selectedConv} onSelect={setSelectedConv} />
-            </div>}
-            <div style={{ ...styles.chatPane, ...(!showChat ? { display: 'none' } : {}) }}>
+          <div style={{ ...S.chatLayout, flex: 1, overflow: 'hidden' }}>
+            {showList && (
+              <div style={{ ...(isMobile ? { flex: 1, overflowY: 'auto' } : S.listPane) }}>
+                <ConversationList key={listKey} socket={socket} selected={selectedConv} onSelect={setSelectedConv} />
+              </div>
+            )}
+            <div style={{ ...S.chatPane, ...(!showChat ? { display: 'none' } : {}) }}>
               {selectedConv && (
-                <div style={{ padding: '0.5rem 1rem', background: '#fff', borderBottom: '1px solid #eee', display: 'flex', gap: '0.5rem', alignItems: 'center', flexWrap: 'wrap' }}>
+                <div style={S.transferBar}>
                   {activeAttendants.length === 0 ? (
-                    <span style={{ color: '#e53e3e', fontSize: '0.85rem' }}>Sem atendentes activos</span>
+                    <span style={{ color: 'var(--danger)', fontSize: '0.85rem' }}>Sem atendentes activos</span>
                   ) : (
                     <>
-                      <select value={transferTo} onChange={e => setTransferTo(e.target.value)} style={styles.select}>
+                      <select value={transferTo} onChange={e => setTransferTo(e.target.value)} style={S.select}>
                         <option value="">Transferir para...</option>
                         {activeAttendants.map(a => (
                           <option key={a.id} value={a.id}>{a.name} ({userStatuses[a.id] || a.status || 'offline'})</option>
                         ))}
                       </select>
-                      <button style={styles.transferBtn} onClick={transferConversation} disabled={!transferTo}>Transferir</button>
+                      <button style={S.transferBtn} onClick={transferConversation} disabled={!transferTo}>Transferir</button>
                     </>
                   )}
-                  <span style={{ marginLeft: 'auto', fontSize: '0.8rem', color: '#888' }}>
-                    Atendente: <strong>{selectedConv.attendant_name || 'Sem atendente'}</strong>
+                  <span style={{ marginLeft: 'auto', fontSize: '0.8rem', color: 'var(--muted)' }}>
+                    Atendente: <strong style={{ color: 'var(--text)' }}>{selectedConv.attendant_name || 'Sem atendente'}</strong>
                   </span>
                 </div>
               )}
@@ -298,23 +288,26 @@ export default function AdminPanel({ socket }) {
 
         {/* ATENDENTES */}
         {tab === 'attendants' && (
-          <div style={styles.section}>
-            <h2 style={styles.sectionTitle}>Atendentes</h2>
-            <form onSubmit={createAttendant} style={styles.form}>
-              <input style={styles.input} placeholder="Nome" value={newUser.name} onChange={e => setNewUser(p => ({ ...p, name: e.target.value }))} required />
-              <input style={styles.input} type="email" placeholder="Email" value={newUser.email} onChange={e => setNewUser(p => ({ ...p, email: e.target.value }))} required />
-              <input style={styles.input} type="password" placeholder="Password" value={newUser.password} onChange={e => setNewUser(p => ({ ...p, password: e.target.value }))} required />
-              <button style={styles.addBtn} type="submit">Adicionar</button>
+          <div style={S.section}>
+            <h2 style={S.sectionTitle}>Atendentes</h2>
+            <form onSubmit={createAttendant} style={S.form}>
+              <input style={S.input} placeholder="Nome" value={newUser.name} onChange={e => setNewUser(p => ({ ...p, name: e.target.value }))} required />
+              <input style={S.input} type="email" placeholder="Email" value={newUser.email} onChange={e => setNewUser(p => ({ ...p, email: e.target.value }))} required />
+              <input style={S.input} type="password" placeholder="Password" value={newUser.password} onChange={e => setNewUser(p => ({ ...p, password: e.target.value }))} required />
+              <button style={S.addBtn} type="submit">Adicionar</button>
             </form>
-            <table style={styles.table}>
+            <table style={S.table}>
               <thead><tr><th>Nome</th><th>Email</th><th>Estado</th><th>Ativo</th><th></th></tr></thead>
               <tbody>
                 {attendants.map(a => (
                   <tr key={a.id}>
-                    <td>{a.name}</td><td>{a.email}</td>
-                    <td><span style={{ color: a.status === 'online' ? '#10b981' : a.status === 'busy' ? '#f59e0b' : '#6b7280' }}>{a.status}</span></td>
-                    <td>{a.active ? 'Sim' : 'Não'}</td>
-                    <td><button style={styles.toggleBtn} onClick={() => toggleAttendant(a.id, a.active)}>{a.active ? 'Desativar' : 'Ativar'}</button></td>
+                    <td style={{ fontWeight: 600 }}>{a.name}</td>
+                    <td style={{ color: 'var(--muted)' }}>{a.email}</td>
+                    <td>
+                      <span style={{ color: a.status === 'online' ? 'var(--success)' : a.status === 'busy' ? 'var(--warn)' : 'var(--hint)', fontWeight: 500, fontSize: '0.85rem' }}>{a.status}</span>
+                    </td>
+                    <td style={{ color: a.active ? 'var(--success)' : 'var(--hint)', fontWeight: 500 }}>{a.active ? 'Sim' : 'Não'}</td>
+                    <td><button style={S.outlineBtn} onClick={() => toggleAttendant(a.id, a.active)}>{a.active ? 'Desativar' : 'Ativar'}</button></td>
                   </tr>
                 ))}
               </tbody>
@@ -324,72 +317,68 @@ export default function AdminPanel({ socket }) {
 
         {/* CONTACTOS */}
         {tab === 'contacts' && (
-          <div style={styles.section}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', marginBottom: '1.5rem' }}>
-              <h2 style={{ margin: 0, fontSize: '1.2rem' }}>Contactos</h2>
-              <button style={{ ...styles.toggleBtn, color: '#ef4444', borderColor: '#ef4444', fontSize: '0.8rem' }} onClick={cleanupInvalidContacts}>
+          <div style={S.section}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', marginBottom: '1.5rem', flexWrap: 'wrap' }}>
+              <h2 style={{ margin: 0, fontSize: '1.15rem', fontWeight: 700, color: 'var(--text)' }}>Contactos</h2>
+              <button style={{ ...S.outlineBtn, color: 'var(--danger)', borderColor: 'var(--danger)', fontSize: '0.8rem' }} onClick={cleanupInvalidContacts}>
                 🧹 Limpar inválidos
               </button>
             </div>
 
-            {/* Modal de edição */}
             {editingContact && (
-              <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.4)', zIndex: 300, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                <div style={{ background: '#fff', borderRadius: '12px', padding: '1.5rem', width: '100%', maxWidth: '420px', boxShadow: '0 8px 32px rgba(0,0,0,0.18)' }}>
-                  <h3 style={{ margin: '0 0 1rem' }}>Editar Contacto</h3>
-                  <label style={styles.fieldLabel}>Nome</label>
-                  <input style={{ ...styles.input, width: '100%', boxSizing: 'border-box', marginBottom: '0.75rem' }}
+              <div style={S.modalOverlay}>
+                <div style={S.modal}>
+                  <h3 style={{ margin: '0 0 1.25rem', fontSize: '1rem', color: 'var(--text)' }}>Editar Contacto</h3>
+                  <label style={S.fieldLabel}>Nome</label>
+                  <input style={{ ...S.input, width: '100%', boxSizing: 'border-box', marginBottom: '0.75rem' }}
                     value={editingContact.name || ''} onChange={e => setEditingContact(p => ({ ...p, name: e.target.value }))} />
-                  <label style={styles.fieldLabel}>Email</label>
-                  <input style={{ ...styles.input, width: '100%', boxSizing: 'border-box', marginBottom: '0.75rem' }}
+                  <label style={S.fieldLabel}>Email</label>
+                  <input style={{ ...S.input, width: '100%', boxSizing: 'border-box', marginBottom: '0.75rem' }}
                     type="email" placeholder="email@exemplo.com"
                     value={editingContact.email || ''} onChange={e => setEditingContact(p => ({ ...p, email: e.target.value }))} />
-                  <label style={styles.fieldLabel}>Notas internas</label>
-                  <textarea style={{ ...styles.input, width: '100%', boxSizing: 'border-box', resize: 'vertical', minHeight: '80px', marginBottom: '1rem' }}
+                  <label style={S.fieldLabel}>Notas internas</label>
+                  <textarea style={{ ...S.input, width: '100%', boxSizing: 'border-box', resize: 'vertical', minHeight: '80px', marginBottom: '1.25rem' }}
                     placeholder="Ex: Cliente VIP, prefere contacto à tarde..."
                     value={editingContact.notes || ''} onChange={e => setEditingContact(p => ({ ...p, notes: e.target.value }))} />
-                  <div style={{ display: 'flex', gap: '0.5rem', justifyContent: 'space-between' }}>
-                    <button style={{ ...styles.toggleBtn, color: '#ef4444', borderColor: '#ef4444' }}
+                  <div style={{ display: 'flex', gap: '0.5rem', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <button style={{ ...S.outlineBtn, color: 'var(--danger)', borderColor: 'var(--danger)' }}
                       onClick={() => deleteContact(editingContact.id, editingContact.name || editingContact.phone)}>
                       Eliminar
                     </button>
                     <div style={{ display: 'flex', gap: '0.5rem' }}>
-                      <button style={styles.toggleBtn} onClick={() => setEditingContact(null)}>Cancelar</button>
-                      <button style={styles.addBtn} onClick={saveContact}>Guardar</button>
+                      <button style={S.outlineBtn} onClick={() => setEditingContact(null)}>Cancelar</button>
+                      <button style={S.addBtn} onClick={saveContact}>Guardar</button>
                     </div>
                   </div>
                 </div>
               </div>
             )}
 
-            <input style={{ ...styles.input, width: '100%', maxWidth: '360px', marginBottom: '1rem', boxSizing: 'border-box' }}
+            <input style={{ ...S.input, width: '100%', maxWidth: '360px', marginBottom: '0.75rem', boxSizing: 'border-box' }}
               placeholder="Pesquisar por nome, número ou nota..."
               value={contactSearch}
               onChange={e => { setContactSearch(e.target.value); loadContacts(e.target.value); }} />
+            <p style={{ color: 'var(--hint)', fontSize: '0.8rem', marginBottom: '0.75rem' }}>{contacts.length} contacto(s)</p>
 
-            <p style={{ color: '#999', fontSize: '0.8rem', marginBottom: '0.75rem' }}>{contacts.length} contacto(s)</p>
-
-            <table style={styles.table}>
+            <table style={S.table}>
               <thead><tr><th>Nome</th><th>Número</th><th>Email</th><th>Notas</th><th>Conversas</th><th>Último contacto</th><th></th></tr></thead>
               <tbody>
                 {contacts.map(c => (
                   <tr key={c.id}>
                     <td style={{ fontWeight: 600 }}>
-                      <div style={{ width: 32, height: 32, borderRadius: '50%', background: '#25D366', color: '#fff', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', fontWeight: 700, fontSize: '0.85rem', marginRight: '0.5rem' }}>
+                      <div style={{ display: 'inline-flex', width: 30, height: 30, borderRadius: '50%', background: 'var(--accent-l)', color: 'var(--accent)', alignItems: 'center', justifyContent: 'center', fontWeight: 700, fontSize: '0.8rem', marginRight: '0.5rem', verticalAlign: 'middle' }}>
                         {(c.name || c.phone || '?')[0].toUpperCase()}
                       </div>
                       {c.name || '—'}
                     </td>
-                    <td style={{ fontSize: '0.85rem', color: '#555' }}>{c.phone}</td>
-                    <td style={{ fontSize: '0.85rem', color: '#555' }}>{c.email || '—'}</td>
-                    <td style={{ fontSize: '0.8rem', color: '#777', maxWidth: '200px', wordBreak: 'break-word' }}>{c.notes || '—'}</td>
+                    <td style={{ fontSize: '0.85rem', color: 'var(--muted)' }}>{c.phone}</td>
+                    <td style={{ fontSize: '0.85rem', color: 'var(--muted)' }}>{c.email || '—'}</td>
+                    <td style={{ fontSize: '0.8rem', color: 'var(--hint)', maxWidth: '200px', wordBreak: 'break-word' }}>{c.notes || '—'}</td>
                     <td style={{ textAlign: 'center', fontSize: '0.85rem' }}>{c.conversation_count || 0}</td>
-                    <td style={{ fontSize: '0.8rem', color: '#888', whiteSpace: 'nowrap' }}>
+                    <td style={{ fontSize: '0.8rem', color: 'var(--hint)', whiteSpace: 'nowrap' }}>
                       {c.last_contact ? new Date(c.last_contact).toLocaleDateString('pt-BR') : '—'}
                     </td>
-                    <td>
-                      <button style={styles.toggleBtn} onClick={() => setEditingContact({ ...c })}>Editar</button>
-                    </td>
+                    <td><button style={S.outlineBtn} onClick={() => setEditingContact({ ...c })}>Editar</button></td>
                   </tr>
                 ))}
               </tbody>
@@ -399,13 +388,13 @@ export default function AdminPanel({ socket }) {
 
         {/* MÉTRICAS */}
         {tab === 'metrics' && metrics && (
-          <div style={styles.section}>
-            <h2 style={styles.sectionTitle}>Métricas</h2>
-            <div style={styles.cards}>
-              {[['Total', metrics.total, '#3b82f6'], ['Aguarda', metrics.waiting, '#f59e0b'], ['Abertas', metrics.open, '#10b981'], ['Fechadas', metrics.closed, '#6b7280']].map(([label, value, color]) => (
-                <div key={label} style={{ ...styles.card, borderTop: `4px solid ${color}` }}>
-                  <p style={styles.cardValue}>{value}</p>
-                  <p style={styles.cardLabel}>{label}</p>
+          <div style={S.section}>
+            <h2 style={S.sectionTitle}>Métricas</h2>
+            <div style={S.cards}>
+              {[['Total', metrics.total, 'var(--accent)'], ['Aguarda', metrics.waiting, 'var(--warn)'], ['Abertas', metrics.open, 'var(--success)'], ['Fechadas', metrics.closed, 'var(--hint)']].map(([label, value, color]) => (
+                <div key={label} style={{ ...S.card, borderTop: `3px solid ${color}` }}>
+                  <p style={{ ...S.cardValue, color }}>{value}</p>
+                  <p style={S.cardLabel}>{label}</p>
                 </div>
               ))}
             </div>
@@ -414,25 +403,25 @@ export default function AdminPanel({ socket }) {
 
         {/* RELATÓRIOS */}
         {tab === 'reports' && (
-          <div style={styles.section}>
-            <h2 style={styles.sectionTitle}>Relatórios</h2>
-            {!reports ? <p style={{ color: '#999' }}>A carregar...</p> : (
+          <div style={S.section}>
+            <h2 style={S.sectionTitle}>Relatórios</h2>
+            {!reports ? <p style={{ color: 'var(--hint)' }}>A carregar...</p> : (
               <div style={{ display: 'flex', flexDirection: 'column', gap: '2rem' }}>
                 <div>
-                  <h3 style={styles.subTitle}>Tempo médio de resposta</h3>
-                  <p style={{ fontSize: '2rem', fontWeight: 700, color: '#25D366' }}>
+                  <h3 style={S.subTitle}>Tempo médio de resposta</h3>
+                  <p style={{ fontSize: '2rem', fontWeight: 700, color: 'var(--accent)', margin: 0 }}>
                     {reports.avgResponse?.avg_minutes ?? '—'} min
                   </p>
                 </div>
                 <div>
-                  <h3 style={styles.subTitle}>Por atendente</h3>
+                  <h3 style={S.subTitle}>Por atendente</h3>
                   {reports.byAttendant.map(a => (
                     <SimpleBar key={a.name} label={a.name} value={a.total}
-                      max={Math.max(...reports.byAttendant.map(x => x.total), 1)} color="#3b82f6" />
+                      max={Math.max(...reports.byAttendant.map(x => x.total), 1)} color="var(--accent)" />
                   ))}
                 </div>
                 <div>
-                  <h3 style={styles.subTitle}>Por hora (últimos 7 dias)</h3>
+                  <h3 style={S.subTitle}>Por hora (últimos 7 dias)</h3>
                   <div style={{ display: 'flex', alignItems: 'flex-end', gap: '4px', height: '80px' }}>
                     {Array.from({ length: 24 }, (_, h) => {
                       const hr = String(h).padStart(2, '0');
@@ -441,23 +430,23 @@ export default function AdminPanel({ socket }) {
                       const pct = found ? (found.total / max) * 100 : 0;
                       return (
                         <div key={h} title={`${hr}h: ${found?.total || 0}`}
-                          style={{ flex: 1, background: pct > 0 ? '#25D366' : '#e5e7eb', height: `${Math.max(pct, 2)}%`, borderRadius: '2px 2px 0 0', minHeight: '2px' }} />
+                          style={{ flex: 1, background: pct > 0 ? 'var(--accent)' : 'var(--accent-l)', height: `${Math.max(pct, 2)}%`, borderRadius: '2px 2px 0 0', minHeight: '2px' }} />
                       );
                     })}
                   </div>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.65rem', color: '#999', marginTop: '2px' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.65rem', color: 'var(--hint)', marginTop: '4px' }}>
                     <span>0h</span><span>6h</span><span>12h</span><span>18h</span><span>23h</span>
                   </div>
                 </div>
                 <div>
-                  <h3 style={styles.subTitle}>Por dia (últimos 30 dias)</h3>
-                  <div style={{ display: 'flex', alignItems: 'flex-end', gap: '3px', height: '80px', flexWrap: 'nowrap', overflowX: 'auto' }}>
+                  <h3 style={S.subTitle}>Por dia (últimos 30 dias)</h3>
+                  <div style={{ display: 'flex', alignItems: 'flex-end', gap: '3px', height: '80px', overflowX: 'auto' }}>
                     {reports.byDay.map(d => {
                       const max = Math.max(...reports.byDay.map(x => x.total), 1);
                       const pct = (d.total / max) * 100;
                       return (
                         <div key={d.day} title={`${d.day}: ${d.total}`}
-                          style={{ minWidth: '8px', flex: 1, background: '#3b82f6', height: `${Math.max(pct, 2)}%`, borderRadius: '2px 2px 0 0' }} />
+                          style={{ minWidth: '8px', flex: 1, background: 'var(--accent)', opacity: 0.7 + pct / 300, height: `${Math.max(pct, 2)}%`, borderRadius: '2px 2px 0 0' }} />
                       );
                     })}
                   </div>
@@ -469,24 +458,24 @@ export default function AdminPanel({ socket }) {
 
         {/* RESPOSTAS RÁPIDAS */}
         {tab === 'quickreplies' && (
-          <div style={styles.section}>
-            <h2 style={styles.sectionTitle}>Respostas Rápidas</h2>
-            <p style={{ color: '#666', fontSize: '0.85rem', marginBottom: '1rem' }}>Os atendentes digitam <strong>/atalho</strong> no chat para usar.</p>
-            <form onSubmit={addQuickReply} style={styles.form}>
-              <input style={{ ...styles.input, width: '120px' }} placeholder="/atalho" value={newQR.shortcut}
+          <div style={S.section}>
+            <h2 style={S.sectionTitle}>Respostas Rápidas</h2>
+            <p style={{ color: 'var(--muted)', fontSize: '0.85rem', marginBottom: '1rem' }}>Os atendentes digitam <strong>/atalho</strong> no chat para usar.</p>
+            <form onSubmit={addQuickReply} style={S.form}>
+              <input style={{ ...S.input, width: '120px' }} placeholder="/atalho" value={newQR.shortcut}
                 onChange={e => setNewQR(p => ({ ...p, shortcut: e.target.value }))} required />
-              <input style={{ ...styles.input, flex: 1 }} placeholder="Texto da resposta" value={newQR.body}
+              <input style={{ ...S.input, flex: 1 }} placeholder="Texto da resposta" value={newQR.body}
                 onChange={e => setNewQR(p => ({ ...p, body: e.target.value }))} required />
-              <button style={styles.addBtn} type="submit">Adicionar</button>
+              <button style={S.addBtn} type="submit">Adicionar</button>
             </form>
-            <table style={styles.table}>
+            <table style={S.table}>
               <thead><tr><th>Atalho</th><th>Mensagem</th><th></th></tr></thead>
               <tbody>
                 {quickReplies.map(qr => (
                   <tr key={qr.id}>
-                    <td><strong style={{ color: '#25D366' }}>/{qr.shortcut}</strong></td>
-                    <td style={{ maxWidth: '400px', wordBreak: 'break-word' }}>{qr.body}</td>
-                    <td><button style={{ ...styles.toggleBtn, color: '#ef4444', borderColor: '#ef4444' }} onClick={() => deleteQuickReply(qr.id)}>Eliminar</button></td>
+                    <td><strong style={{ color: 'var(--accent)' }}>/{qr.shortcut}</strong></td>
+                    <td style={{ maxWidth: '400px', wordBreak: 'break-word', color: 'var(--muted)' }}>{qr.body}</td>
+                    <td><button style={{ ...S.outlineBtn, color: 'var(--danger)', borderColor: 'var(--danger)' }} onClick={() => deleteQuickReply(qr.id)}>Eliminar</button></td>
                   </tr>
                 ))}
               </tbody>
@@ -496,24 +485,25 @@ export default function AdminPanel({ socket }) {
 
         {/* ETIQUETAS */}
         {tab === 'tags' && (
-          <div style={styles.section}>
-            <h2 style={styles.sectionTitle}>Etiquetas</h2>
-            <form onSubmit={addTag} style={styles.form}>
-              <input style={styles.input} placeholder="Nome da etiqueta" value={newTag.name}
+          <div style={S.section}>
+            <h2 style={S.sectionTitle}>Etiquetas</h2>
+            <form onSubmit={addTag} style={S.form}>
+              <input style={S.input} placeholder="Nome da etiqueta" value={newTag.name}
                 onChange={e => setNewTag(p => ({ ...p, name: e.target.value }))} required />
-              <div style={{ display: 'flex', gap: '0.25rem', flexWrap: 'wrap' }}>
+              <div style={{ display: 'flex', gap: '0.3rem', flexWrap: 'wrap', alignItems: 'center' }}>
                 {COLORS.map(c => (
                   <div key={c} onClick={() => setNewTag(p => ({ ...p, color: c }))}
-                    style={{ width: 24, height: 24, background: c, borderRadius: '50%', cursor: 'pointer', border: newTag.color === c ? '3px solid #000' : '3px solid transparent' }} />
+                    style={{ width: 22, height: 22, background: c, borderRadius: '50%', cursor: 'pointer', border: newTag.color === c ? '3px solid var(--text)' : '3px solid transparent', transition: 'border .1s' }} />
                 ))}
               </div>
-              <button style={styles.addBtn} type="submit">Adicionar</button>
+              <button style={S.addBtn} type="submit">Adicionar</button>
             </form>
             <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap', marginTop: '1rem' }}>
               {tags.map(t => (
-                <div key={t.id} style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', background: t.color + '22', border: `1px solid ${t.color}`, borderRadius: '999px', padding: '0.25rem 0.75rem' }}>
-                  <span style={{ color: t.color, fontWeight: 600, fontSize: '0.85rem' }}>{t.name}</span>
-                  <button onClick={() => deleteTag(t.id)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: t.color, fontSize: '0.8rem', padding: 0 }}>✕</button>
+                <div key={t.id} style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', background: t.color + '18', border: `1px solid ${t.color}55`, borderRadius: '999px', padding: '0.3rem 0.75rem' }}>
+                  <span style={{ width: 8, height: 8, borderRadius: '50%', background: t.color, flexShrink: 0 }} />
+                  <span style={{ color: t.color, fontWeight: 600, fontSize: '0.83rem' }}>{t.name}</span>
+                  <button onClick={() => deleteTag(t.id)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: t.color, fontSize: '0.75rem', padding: 0, lineHeight: 1 }}>✕</button>
                 </div>
               ))}
             </div>
@@ -522,26 +512,23 @@ export default function AdminPanel({ socket }) {
 
         {/* AGENDAMENTOS */}
         {tab === 'scheduled' && (
-          <div style={styles.section}>
-            <h2 style={styles.sectionTitle}>Mensagens Agendadas</h2>
+          <div style={S.section}>
+            <h2 style={S.sectionTitle}>Mensagens Agendadas</h2>
             {scheduled.length === 0 ? (
-              <p style={{ color: '#999' }}>Sem mensagens agendadas pendentes.</p>
+              <p style={{ color: 'var(--hint)' }}>Sem mensagens agendadas pendentes.</p>
             ) : (
-              <table style={styles.table}>
+              <table style={S.table}>
                 <thead><tr><th>Contacto</th><th>Mensagem</th><th>Data / Hora</th><th>Agendado por</th><th></th></tr></thead>
                 <tbody>
                   {scheduled.map(s => (
                     <tr key={s.id}>
-                      <td>{s.contact_name || s.phone || s.wa_id}</td>
-                      <td style={{ maxWidth: '260px', wordBreak: 'break-word', fontSize: '0.85rem' }}>{s.body}</td>
+                      <td style={{ fontWeight: 600 }}>{s.contact_name || s.phone || s.wa_id}</td>
+                      <td style={{ maxWidth: '260px', wordBreak: 'break-word', fontSize: '0.85rem', color: 'var(--muted)' }}>{s.body}</td>
                       <td style={{ whiteSpace: 'nowrap', fontSize: '0.85rem' }}>
                         {new Date(s.scheduled_at).toLocaleString('pt-BR', { day:'2-digit', month:'2-digit', year:'numeric', hour:'2-digit', minute:'2-digit' })}
                       </td>
-                      <td style={{ fontSize: '0.85rem' }}>{s.created_by_name || '—'}</td>
-                      <td>
-                        <button style={{ ...styles.toggleBtn, color: '#ef4444', borderColor: '#ef4444' }}
-                          onClick={() => cancelScheduled(s.id)}>Cancelar</button>
-                      </td>
+                      <td style={{ fontSize: '0.85rem', color: 'var(--muted)' }}>{s.created_by_name || '—'}</td>
+                      <td><button style={{ ...S.outlineBtn, color: 'var(--danger)', borderColor: 'var(--danger)' }} onClick={() => cancelScheduled(s.id)}>Cancelar</button></td>
                     </tr>
                   ))}
                 </tbody>
@@ -552,17 +539,17 @@ export default function AdminPanel({ socket }) {
 
         {/* BOT */}
         {tab === 'bot' && (
-          <div style={styles.section}>
-            <h2 style={styles.sectionTitle}>Bot de Triagem</h2>
-            <p style={{ color: '#666', fontSize: '0.85rem', marginBottom: '1.5rem' }}>Envia resposta automática fora do horário de atendimento.</p>
+          <div style={S.section}>
+            <h2 style={S.sectionTitle}>Bot de Triagem</h2>
+            <p style={{ color: 'var(--muted)', fontSize: '0.85rem', marginBottom: '1.5rem' }}>Envia resposta automática fora do horário de atendimento.</p>
             <div style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem', maxWidth: '560px' }}>
-              <label style={styles.settingRow}>
-                <span>Ativar bot</span>
+              <label style={S.settingRow}>
+                <span style={{ fontWeight: 500 }}>Ativar bot</span>
                 <input type="checkbox" checked={settings.bot_enabled === '1'}
                   onChange={e => setSettings(s => ({ ...s, bot_enabled: e.target.checked ? '1' : '0' }))} />
               </label>
               <div>
-                <p style={{ margin: '0 0 0.5rem', fontSize: '0.9rem', fontWeight: 600 }}>Horário por dia</p>
+                <p style={{ margin: '0 0 0.75rem', fontSize: '0.9rem', fontWeight: 600, color: 'var(--text)' }}>Horário por dia</p>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
                   {[['Dom',0],['Seg',1],['Ter',2],['Qua',3],['Qui',4],['Sex',5],['Sáb',6]].map(([label, i]) => {
                     const key = `hours_${i}`;
@@ -571,20 +558,20 @@ export default function AdminPanel({ socket }) {
                     const [start, end] = isOpen ? val.split('-') : ['08:00', '18:00'];
                     return (
                       <div key={i} style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', fontSize: '0.88rem' }}>
-                        <span style={{ width: '36px', fontWeight: 600, color: '#333' }}>{label}</span>
+                        <span style={{ width: '36px', fontWeight: 600, color: 'var(--text)' }}>{label}</span>
                         <input type="checkbox" checked={isOpen} onChange={e => {
                           setSettings(s => ({ ...s, [key]: e.target.checked ? `${start}-${end}` : 'closed' }));
                         }} />
                         {isOpen ? (
                           <>
-                            <input type="time" style={{ ...styles.input, padding: '0.25rem 0.5rem' }} value={start}
+                            <input type="time" style={{ ...S.input, padding: '0.25rem 0.5rem' }} value={start}
                               onChange={e => setSettings(s => ({ ...s, [key]: `${e.target.value}-${end}` }))} />
-                            <span style={{ color: '#888' }}>até</span>
-                            <input type="time" style={{ ...styles.input, padding: '0.25rem 0.5rem' }} value={end}
+                            <span style={{ color: 'var(--hint)' }}>até</span>
+                            <input type="time" style={{ ...S.input, padding: '0.25rem 0.5rem' }} value={end}
                               onChange={e => setSettings(s => ({ ...s, [key]: `${start}-${e.target.value}` }))} />
                           </>
                         ) : (
-                          <span style={{ color: '#aaa', fontSize: '0.8rem' }}>Fechado</span>
+                          <span style={{ color: 'var(--hint)', fontSize: '0.8rem' }}>Fechado</span>
                         )}
                       </div>
                     );
@@ -592,12 +579,12 @@ export default function AdminPanel({ socket }) {
                 </div>
               </div>
               <div>
-                <label style={{ fontSize: '0.85rem', color: '#555', display: 'block', marginBottom: '0.25rem' }}>Mensagem automática</label>
-                <textarea style={{ ...styles.input, width: '100%', resize: 'vertical', minHeight: '80px', boxSizing: 'border-box' }}
+                <label style={{ fontSize: '0.85rem', color: 'var(--muted)', display: 'block', marginBottom: '0.35rem', fontWeight: 600 }}>Mensagem automática</label>
+                <textarea style={{ ...S.input, width: '100%', resize: 'vertical', minHeight: '80px', boxSizing: 'border-box' }}
                   value={settings.bot_message}
                   onChange={e => setSettings(s => ({ ...s, bot_message: e.target.value }))} />
               </div>
-              <button style={{ ...styles.addBtn, alignSelf: 'flex-start' }} onClick={saveSettings}>
+              <button style={{ ...S.addBtn, alignSelf: 'flex-start' }} onClick={saveSettings}>
                 {settingsSaved ? '✓ Guardado' : 'Guardar'}
               </button>
             </div>
@@ -606,13 +593,15 @@ export default function AdminPanel({ socket }) {
 
         {/* WHATSAPP */}
         {tab === 'whatsapp' && (
-          <div style={styles.section}>
-            <h2 style={styles.sectionTitle}>WhatsApp</h2>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', marginBottom: '1.5rem' }}>
-              <div style={{ width: 12, height: 12, borderRadius: '50%', background: whatsappReady ? '#10b981' : '#ef4444' }} />
-              <span>{whatsappReady ? 'Conectado' : 'Desconectado'}</span>
+          <div style={S.section}>
+            <h2 style={S.sectionTitle}>WhatsApp</h2>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', marginBottom: '1.5rem', flexWrap: 'wrap' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', padding: '0.5rem 1rem', background: 'var(--card)', border: '1px solid var(--border)', borderRadius: 'var(--r-md)', boxShadow: 'var(--sh)' }}>
+                <div style={{ width: 10, height: 10, borderRadius: '50%', background: whatsappReady ? 'var(--success)' : 'var(--danger)' }} />
+                <span style={{ fontWeight: 600, fontSize: '0.9rem' }}>{whatsappReady ? 'Conectado' : 'Desconectado'}</span>
+              </div>
               {whatsappReady && (
-                <button style={{ padding: '0.35rem 1rem', background: '#ef4444', color: '#fff', border: 'none', borderRadius: '6px', cursor: 'pointer', fontSize: '0.85rem' }}
+                <button style={{ padding: '0.4rem 1rem', background: 'var(--danger)', color: '#fff', border: 'none', borderRadius: 'var(--r-sm)', cursor: 'pointer', fontSize: '0.85rem', fontWeight: 500 }}
                   disabled={disconnecting}
                   onClick={async () => {
                     if (!confirm('Tens a certeza? O WhatsApp vai desligar e precisas de escanear o QR novamente.')) return;
@@ -620,17 +609,17 @@ export default function AdminPanel({ socket }) {
                     try { await api.post('/whatsapp/disconnect'); } catch (_) {}
                     setDisconnecting(false); setWhatsappReady(false); setQrCode(null);
                   }}>
-                  {disconnecting ? 'A desligar...' : 'Desligar WhatsApp'}
+                  {disconnecting ? 'A desligar...' : 'Desligar'}
                 </button>
               )}
             </div>
             {!whatsappReady && qrCode && (
               <div>
-                <p style={{ marginBottom: '1rem', color: '#555' }}>Escaneia o QR Code com o WhatsApp do número da loja:</p>
-                <img src={qrCode} alt="QR Code" style={{ width: 240, height: 240, border: '1px solid #ddd', borderRadius: '8px' }} />
+                <p style={{ marginBottom: '1rem', color: 'var(--muted)', fontSize: '0.9rem' }}>Escaneia o QR Code com o WhatsApp do número da loja:</p>
+                <img src={qrCode} alt="QR Code" style={{ width: 240, height: 240, border: '1px solid var(--border)', borderRadius: 'var(--r-md)', boxShadow: 'var(--sh-md)' }} />
               </div>
             )}
-            {!whatsappReady && !qrCode && <p style={{ color: '#999' }}>A aguardar QR Code...</p>}
+            {!whatsappReady && !qrCode && <p style={{ color: 'var(--hint)' }}>A aguardar QR Code...</p>}
           </div>
         )}
       </main>
@@ -638,35 +627,41 @@ export default function AdminPanel({ socket }) {
   );
 }
 
-const styles = {
-  shell: { display: 'flex', height: '100vh', overflow: 'hidden' },
-  sidebar: { width: '200px', background: '#1a1a2e', display: 'flex', flexDirection: 'column', justifyContent: 'space-between', padding: '1rem 0', overflowY: 'auto' },
+const S = {
+  shell: { display: 'flex', height: '100vh', overflow: 'hidden', background: 'var(--bg)' },
+  sidebar: { width: '200px', background: 'var(--card)', borderRight: '1px solid var(--border)', display: 'flex', flexDirection: 'column', justifyContent: 'space-between', padding: '1rem 0', overflowY: 'auto', boxShadow: 'var(--sh)' },
   sidebarTop: { display: 'flex', flexDirection: 'column', gap: '1.5rem' },
-  logoArea: { display: 'flex', gap: '0.5rem', alignItems: 'center', padding: '0 1rem' },
-  userName: { margin: 0, color: '#fff', fontSize: '0.8rem', fontWeight: 600 },
-  ownerBadge: { background: '#25D366', color: '#fff', padding: '0.1rem 0.5rem', borderRadius: '999px', fontSize: '0.7rem' },
-  nav: { display: 'flex', flexDirection: 'column' },
-  navBtn: { padding: '0.65rem 1rem', background: 'none', border: 'none', color: '#aaa', cursor: 'pointer', textAlign: 'left', fontSize: '0.85rem' },
-  navActive: { background: '#25D36622', color: '#25D366', fontWeight: 600 },
-  logoutBtn: { margin: '0 1rem', padding: '0.5rem', background: 'none', border: '1px solid #444', color: '#aaa', borderRadius: '6px', cursor: 'pointer' },
+  logoArea: { display: 'flex', gap: '0.6rem', alignItems: 'center', padding: '0 1rem' },
+  logoName: { margin: 0, color: 'var(--text)', fontSize: '0.82rem', fontWeight: 700, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' },
+  ownerBadge: { background: 'var(--accent-l)', color: 'var(--accent)', padding: '0.1rem 0.5rem', borderRadius: '999px', fontSize: '0.7rem', fontWeight: 600 },
+  nav: { display: 'flex', flexDirection: 'column', gap: '1px' },
+  navBtn: { padding: '0.6rem 1rem', background: 'none', border: 'none', color: 'var(--muted)', cursor: 'pointer', textAlign: 'left', fontSize: '0.84rem', fontWeight: 500, transition: 'all .1s' },
+  navActive: { background: 'var(--accent-l)', color: 'var(--accent)', fontWeight: 700, borderLeft: '3px solid var(--accent)', paddingLeft: 'calc(1rem - 3px)' },
+  logoutBtn: { margin: '0 1rem', padding: '0.45rem', background: 'none', border: '1px solid var(--border-m)', color: 'var(--muted)', borderRadius: 'var(--r-sm)', cursor: 'pointer', fontSize: '0.82rem' },
   main: { flex: 1, overflow: 'hidden', display: 'flex', flexDirection: 'column' },
+  mobileHeader: { display: 'flex', alignItems: 'center', gap: '0.75rem', padding: '0.6rem 1rem', background: 'var(--card)', borderBottom: '1px solid var(--border)', flexShrink: 0, boxShadow: 'var(--sh)' },
+  mobileBtn: { background: 'none', border: 'none', color: 'var(--accent)', fontSize: '1.3rem', cursor: 'pointer', padding: 0 },
+  mobileTitle: { color: 'var(--text)', fontWeight: 600, fontSize: '0.95rem' },
   chatLayout: { display: 'flex', height: '100%' },
   listPane: { width: '320px', flexShrink: 0, overflowY: 'auto' },
   chatPane: { flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' },
-  section: { padding: '1.5rem 2rem', overflowY: 'auto', height: '100%' },
-  sectionTitle: { marginTop: 0, marginBottom: '1.5rem', fontSize: '1.2rem' },
-  subTitle: { marginTop: 0, marginBottom: '0.75rem', fontSize: '1rem', color: '#555' },
+  transferBar: { padding: '0.5rem 1rem', background: 'var(--card)', borderBottom: '1px solid var(--border)', display: 'flex', gap: '0.5rem', alignItems: 'center', flexWrap: 'wrap', boxShadow: 'var(--sh)' },
+  section: { padding: '1.75rem 2rem', overflowY: 'auto', height: '100%', boxSizing: 'border-box' },
+  sectionTitle: { marginTop: 0, marginBottom: '1.5rem', fontSize: '1.15rem', fontWeight: 700, color: 'var(--text)' },
+  subTitle: { marginTop: 0, marginBottom: '0.75rem', fontSize: '0.95rem', fontWeight: 600, color: 'var(--muted)' },
   form: { display: 'flex', gap: '0.5rem', marginBottom: '1.5rem', flexWrap: 'wrap', alignItems: 'center' },
-  input: { padding: '0.5rem 0.75rem', border: '1px solid #ddd', borderRadius: '6px', fontSize: '0.9rem' },
-  addBtn: { padding: '0.5rem 1rem', background: '#25D366', color: '#fff', border: 'none', borderRadius: '6px', cursor: 'pointer', fontWeight: 600 },
-  table: { width: '100%', borderCollapse: 'collapse', fontSize: '0.9rem' },
-  toggleBtn: { padding: '0.25rem 0.75rem', border: '1px solid #ddd', borderRadius: '6px', cursor: 'pointer', background: 'none' },
+  input: { padding: '0.5rem 0.75rem', border: '1px solid var(--border-m)', borderRadius: 'var(--r-sm)', fontSize: '0.9rem', background: 'var(--bg)', color: 'var(--text)', outline: 'none' },
+  addBtn: { padding: '0.5rem 1.1rem', background: 'var(--accent)', color: '#fff', border: 'none', borderRadius: 'var(--r-sm)', cursor: 'pointer', fontWeight: 600, fontSize: '0.88rem' },
+  outlineBtn: { padding: '0.25rem 0.75rem', border: '1px solid var(--border-m)', borderRadius: 'var(--r-sm)', cursor: 'pointer', background: 'none', color: 'var(--muted)', fontSize: '0.82rem' },
+  table: { width: '100%', borderCollapse: 'collapse', fontSize: '0.88rem' },
   cards: { display: 'flex', gap: '1rem', flexWrap: 'wrap' },
-  card: { background: '#fff', padding: '1.5rem', borderRadius: '10px', minWidth: '140px', boxShadow: '0 1px 6px rgba(0,0,0,0.07)' },
+  card: { background: 'var(--card)', padding: '1.5rem', borderRadius: 'var(--r-lg)', minWidth: '140px', boxShadow: 'var(--sh-md)', border: '1px solid var(--border)' },
   cardValue: { fontSize: '2rem', fontWeight: 700, margin: 0 },
-  cardLabel: { color: '#888', margin: '0.25rem 0 0', fontSize: '0.9rem' },
-  select: { padding: '0.4rem 0.75rem', border: '1px solid #ddd', borderRadius: '6px', fontSize: '0.85rem' },
-  transferBtn: { padding: '0.4rem 1rem', background: '#3b82f6', color: '#fff', border: 'none', borderRadius: '6px', cursor: 'pointer', fontSize: '0.85rem' },
+  cardLabel: { color: 'var(--muted)', margin: '0.25rem 0 0', fontSize: '0.88rem' },
+  select: { padding: '0.4rem 0.75rem', border: '1px solid var(--border-m)', borderRadius: 'var(--r-sm)', fontSize: '0.85rem', background: 'var(--bg)', color: 'var(--text)' },
+  transferBtn: { padding: '0.4rem 1rem', background: 'var(--accent)', color: '#fff', border: 'none', borderRadius: 'var(--r-sm)', cursor: 'pointer', fontSize: '0.85rem', fontWeight: 600 },
   settingRow: { display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '1rem', fontSize: '0.9rem' },
-  fieldLabel: { display: 'block', fontSize: '0.8rem', color: '#555', marginBottom: '0.2rem', fontWeight: 600 },
+  fieldLabel: { display: 'block', fontSize: '0.8rem', color: 'var(--muted)', marginBottom: '0.2rem', fontWeight: 600 },
+  modalOverlay: { position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.35)', zIndex: 300, display: 'flex', alignItems: 'center', justifyContent: 'center' },
+  modal: { background: 'var(--card)', borderRadius: 'var(--r-lg)', padding: '1.75rem', width: '100%', maxWidth: '420px', boxShadow: '0 8px 32px rgba(0,0,0,0.15)', border: '1px solid var(--border)' },
 };
