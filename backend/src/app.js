@@ -14,6 +14,9 @@ const authRoutes = require('./routes/auth');
 const usersRoutes = require('./routes/users');
 const conversationsRoutes = require('./routes/conversations');
 const messagesRoutes = require('./routes/messages');
+const quickRepliesRoutes = require('./routes/quick-replies');
+const tagsRoutes = require('./routes/tags');
+const settingsRoutes = require('./routes/settings');
 
 const app = express();
 const server = http.createServer(app);
@@ -39,6 +42,9 @@ app.use('/auth', authRoutes);
 app.use('/users', usersRoutes);
 app.use('/conversations', conversationsRoutes);
 app.use('/messages', messagesRoutes);
+app.use('/quick-replies', quickRepliesRoutes);
+app.use('/tags', tagsRoutes);
+app.use('/settings', settingsRoutes);
 
 // WhatsApp status
 app.get('/whatsapp/status', authMiddleware, (req, res) => {

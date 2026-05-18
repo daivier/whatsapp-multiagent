@@ -59,6 +59,36 @@ router.get('/:id/messages', authMiddleware, (req, res) => {
   res.json(messages);
 });
 
+// POST /conversations/:id/notes — nota interna
+router.post('/:id/notes', authMiddleware, (req, res) => {
+  const { body } = req.body;
+  if (!body?.trim()) return res.status(400).json({ error: 'body obrigatório' });
+
+  const conv = db.prepare('SELECT * FROM conversations WHERE id = ?').get(req.params.id);
+  if (!conv) return res.status(404).json({ error: 'Conversa não encontrada' });
+  if (req.user.role === 'attendant' && conv.assigned_to !== req.user.id) return res.status(403).json({ error: 'Sem permissão' });
+
+  const result = db.prepare('INSERT INTO messages (conversation_id, from_me, sender_id, body, is_internal) VALUES (?, 1, ?, ?, 1)')
+    .run(req.params.id, req.user.id, body);
+  const message = db.prepare('SELECT m.*, u.name as sender_name FROM messages m LEFT JOIN users u ON u.id = m.sender_id WHERE m.id = ?').get(result.lastInsertRowid);
+  res.json(message);
+});
+
+// GET /conversations/contact/:phone — histórico de conversas do contacto
+router.get('/contact/:phone', authMiddleware, (req, res) => {
+  const contact = db.prepare('SELECT * FROM contacts WHERE phone = ? OR wa_id LIKE ?').get(req.params.phone, `${req.params.phone}%`);
+  if (!contact) return res.json([]);
+  const convs = db.prepare(`
+    SELECT conv.*, u.name as attendant_name,
+      (SELECT COUNT(*) FROM messages WHERE conversation_id = conv.id) as message_count
+    FROM conversations conv
+    LEFT JOIN users u ON u.id = conv.assigned_to
+    WHERE conv.contact_id = ?
+    ORDER BY conv.created_at DESC
+  `).all(contact.id);
+  res.json(convs);
+});
+
 // POST /conversations/:id/transfer — owner transfere conversa
 router.post('/:id/transfer', authMiddleware, ownerOnly, async (req, res) => {
   const { attendant_id, notify = true } = req.body;
@@ -120,6 +150,48 @@ router.get('/metrics', authMiddleware, ownerOnly, (req, res) => {
     FROM conversations
   `).get();
   res.json(metrics);
+});
+
+// GET /conversations/reports — relatórios detalhados (owner only)
+router.get('/reports', authMiddleware, ownerOnly, (req, res) => {
+  const byAttendant = db.prepare(`
+    SELECT u.name, COUNT(c.id) as total,
+      COUNT(CASE WHEN c.status = 'open' THEN 1 END) as open,
+      COUNT(CASE WHEN c.status = 'closed' THEN 1 END) as closed
+    FROM users u
+    LEFT JOIN conversations c ON c.assigned_to = u.id
+    WHERE u.role = 'attendant'
+    GROUP BY u.id ORDER BY total DESC
+  `).all();
+
+  const byHour = db.prepare(`
+    SELECT strftime('%H', created_at) as hour, COUNT(*) as total
+    FROM conversations
+    WHERE created_at >= datetime('now', '-7 days')
+    GROUP BY hour ORDER BY hour ASC
+  `).all();
+
+  const byDay = db.prepare(`
+    SELECT strftime('%Y-%m-%d', created_at) as day, COUNT(*) as total
+    FROM conversations
+    WHERE created_at >= datetime('now', '-30 days')
+    GROUP BY day ORDER BY day ASC
+  `).all();
+
+  const avgResponse = db.prepare(`
+    SELECT ROUND(AVG(response_seconds) / 60.0, 1) as avg_minutes
+    FROM (
+      SELECT c.id,
+        (strftime('%s', MIN(CASE WHEN m.from_me = 1 THEN m.timestamp END)) -
+         strftime('%s', MIN(CASE WHEN m.from_me = 0 THEN m.timestamp END))) as response_seconds
+      FROM conversations c
+      JOIN messages m ON m.conversation_id = c.id
+      GROUP BY c.id
+      HAVING response_seconds > 0 AND response_seconds < 86400
+    )
+  `).get();
+
+  res.json({ byAttendant, byHour, byDay, avgResponse });
 });
 
 module.exports = router;

@@ -1,13 +1,28 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import Login from './pages/Login';
 import AttendantPanel from './pages/AttendantPanel';
 import AdminPanel from './pages/AdminPanel';
 import { io } from 'socket.io-client';
 
+function playNotificationSound() {
+  try {
+    const ctx = new (window.AudioContext || window.webkitAudioContext)();
+    const o = ctx.createOscillator();
+    const g = ctx.createGain();
+    o.connect(g); g.connect(ctx.destination);
+    o.frequency.value = 880;
+    g.gain.setValueAtTime(0.3, ctx.currentTime);
+    g.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.3);
+    o.start(ctx.currentTime); o.stop(ctx.currentTime + 0.3);
+  } catch (_) {}
+}
+
 function App() {
   const { user, token, loading } = useAuth();
   const [socket, setSocket] = useState(null);
+  const unreadRef = useRef(0);
+  const originalTitle = useRef(document.title);
 
   useEffect(() => {
     if (!token || !user) return;
@@ -15,7 +30,21 @@ function App() {
       auth: { token },
     });
     setSocket(s);
-    return () => s.disconnect();
+
+    s.on('message:new', ({ message }) => {
+      if (message?.from_me) return;
+      if (!document.hidden) return;
+      unreadRef.current += 1;
+      document.title = `(${unreadRef.current}) ${originalTitle.current}`;
+      playNotificationSound();
+    });
+
+    const resetTitle = () => {
+      if (!document.hidden) { unreadRef.current = 0; document.title = originalTitle.current; }
+    };
+    document.addEventListener('visibilitychange', resetTitle);
+
+    return () => { s.disconnect(); document.removeEventListener('visibilitychange', resetTitle); };
   }, [token, user]);
 
   if (loading) {
