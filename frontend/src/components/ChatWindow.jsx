@@ -119,7 +119,7 @@ export default function ChatWindow({ conversation, socket, onClose }) {
       <div style={styles.messages}>
         {messages.map((msg) => (
           <div key={msg.id} style={{ ...styles.bubble, ...(msg.from_me ? styles.mine : styles.theirs) }}>
-            {msg.from_me && msg.sender_name && (
+            {!!msg.from_me && msg.sender_name && (
               <span style={styles.senderName}>{msg.sender_name}</span>
             )}
             <p style={styles.msgText}>{msg.body}{msg.failed ? ' ⚠️' : ''}</p>
