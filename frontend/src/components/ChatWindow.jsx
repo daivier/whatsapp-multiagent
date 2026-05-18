@@ -122,7 +122,7 @@ export default function ChatWindow({ conversation, socket, onClose }) {
 }
 
 const styles = {
-  container: { display: 'flex', flexDirection: 'column', height: '100%', background: '#f0f2f5' },
+  container: { display: 'flex', flexDirection: 'column', flex: 1, minHeight: 0, background: '#f0f2f5' },
   empty: { display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%', color: '#999' },
   header: { display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0.75rem 1rem', background: '#fff', borderBottom: '1px solid #e5e5e5' },
   phone: { display: 'block', fontSize: '0.8rem', color: '#888' },
