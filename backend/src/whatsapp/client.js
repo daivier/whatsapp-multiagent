@@ -1,6 +1,11 @@
 const { Client, LocalAuth } = require('whatsapp-web.js');
 const qrcode = require('qrcode');
 const db = require('../db/schema');
+const fs = require('fs');
+const path = require('path');
+
+const UPLOADS_DIR = path.join(__dirname, '../../../uploads');
+if (!fs.existsSync(UPLOADS_DIR)) fs.mkdirSync(UPLOADS_DIR, { recursive: true });
 
 let io;
 let client;
@@ -44,8 +49,8 @@ function initWhatsApp(socketIO) {
     if (msg.from === 'status@broadcast') return;
     if (msg.from.endsWith('@g.us')) return;
     if (msg.from.endsWith('@newsletter')) return;
-    // Ignora mensagens sem texto (imagens, áudios, stickers, etc.)
-    if (!msg.body || !msg.body.trim()) return;
+    // Ignora mensagens sem texto nem media
+    if (!msg.hasMedia && (!msg.body || !msg.body.trim())) return;
 
     // Guarda o identificador completo (ex: "351912345678@c.us" ou "88244750422224@lid")
     const waId = msg.from;
@@ -97,8 +102,26 @@ function initWhatsApp(socketIO) {
       }
     }
 
+    // Guardar media se existir
+    let mediaUrl = null;
+    let mediaType = null;
+    if (msg.hasMedia) {
+      try {
+        const media = await msg.downloadMedia();
+        if (media) {
+          const ext = media.mimetype.split('/')[1]?.split(';')[0] || 'bin';
+          const filename = `${Date.now()}-${Math.random().toString(36).slice(2)}.${ext}`;
+          fs.writeFileSync(path.join(UPLOADS_DIR, filename), Buffer.from(media.data, 'base64'));
+          mediaUrl = `/uploads/${filename}`;
+          mediaType = media.mimetype;
+        }
+      } catch (err) {
+        console.error('Aviso: não foi possível guardar media:', err.message);
+      }
+    }
+
     // Save message
-    db.prepare('INSERT INTO messages (conversation_id, from_me, body) VALUES (?, 0, ?)').run(conversation.id, body);
+    db.prepare('INSERT INTO messages (conversation_id, from_me, body, media_url, media_type) VALUES (?, 0, ?, ?, ?)').run(conversation.id, body, mediaUrl, mediaType);
     db.prepare('UPDATE conversations SET updated_at = CURRENT_TIMESTAMP WHERE id = ?').run(conversation.id);
 
     const message = db

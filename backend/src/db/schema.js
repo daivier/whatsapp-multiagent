@@ -41,7 +41,9 @@ db.exec(`
     conversation_id INTEGER NOT NULL REFERENCES conversations(id),
     from_me INTEGER NOT NULL DEFAULT 0,
     sender_id INTEGER REFERENCES users(id),
-    body TEXT NOT NULL,
+    body TEXT NOT NULL DEFAULT '',
+    media_url TEXT,
+    media_type TEXT,
     timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
     read INTEGER NOT NULL DEFAULT 0
   );
@@ -50,9 +52,9 @@ db.exec(`
   CREATE INDEX IF NOT EXISTS idx_messages_conversation ON messages(conversation_id);
 `);
 
-// Migration: add preferred_status if not exists
-try {
-  db.exec(`ALTER TABLE users ADD COLUMN preferred_status TEXT NOT NULL DEFAULT 'online'`);
-} catch (_) { /* column already exists */ }
+// Migrations
+try { db.exec(`ALTER TABLE users ADD COLUMN preferred_status TEXT NOT NULL DEFAULT 'online'`); } catch (_) {}
+try { db.exec(`ALTER TABLE messages ADD COLUMN media_url TEXT`); } catch (_) {}
+try { db.exec(`ALTER TABLE messages ADD COLUMN media_type TEXT`); } catch (_) {}
 
 module.exports = db;

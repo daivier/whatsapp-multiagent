@@ -125,7 +125,26 @@ export default function ChatWindow({ conversation, socket, onClose, onDelete }) 
             {!!msg.from_me && msg.sender_name && (
               <span style={styles.senderName}>{msg.sender_name}</span>
             )}
-            <p style={styles.msgText}>{msg.body}{msg.failed ? ' ⚠️' : ''}</p>
+            {msg.media_url && msg.media_type?.startsWith('image/') && (
+              <img
+                src={`${import.meta.env.VITE_API_URL || ''}${msg.media_url}`}
+                alt="imagem"
+                style={{ maxWidth: '100%', maxHeight: '300px', borderRadius: '6px', display: 'block', marginBottom: msg.body ? '0.25rem' : 0 }}
+                onClick={() => window.open(`${import.meta.env.VITE_API_URL || ''}${msg.media_url}`, '_blank')}
+              />
+            )}
+            {msg.media_url && msg.media_type?.startsWith('audio/') && (
+              <audio controls src={`${import.meta.env.VITE_API_URL || ''}${msg.media_url}`} style={{ maxWidth: '100%' }} />
+            )}
+            {msg.media_url && msg.media_type?.startsWith('video/') && (
+              <video controls src={`${import.meta.env.VITE_API_URL || ''}${msg.media_url}`} style={{ maxWidth: '100%', maxHeight: '300px', borderRadius: '6px' }} />
+            )}
+            {msg.media_url && !msg.media_type?.startsWith('image/') && !msg.media_type?.startsWith('audio/') && !msg.media_type?.startsWith('video/') && (
+              <a href={`${import.meta.env.VITE_API_URL || ''}${msg.media_url}`} target="_blank" rel="noreferrer" style={{ fontSize: '0.85rem', color: '#2563eb' }}>📎 Ficheiro</a>
+            )}
+            {(msg.body || msg.failed) && (
+              <p style={styles.msgText}>{msg.body}{msg.failed ? ' ⚠️' : ''}</p>
+            )}
             <span style={styles.time}>{new Date(msg.timestamp).toLocaleTimeString('pt-PT', { hour: '2-digit', minute: '2-digit' })}</span>
           </div>
         ))}
