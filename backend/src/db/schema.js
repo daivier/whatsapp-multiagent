@@ -87,9 +87,13 @@ try { db.exec(`ALTER TABLE conversations ADD COLUMN tags TEXT`); } catch (_) {}
 const settingsDefaults = [
   ['bot_enabled', '0'],
   ['bot_message', 'Olá! No momento estamos fora do horário de atendimento. Retornaremos em breve!'],
-  ['business_hours_start', '08:00'],
-  ['business_hours_end', '18:00'],
-  ['business_days', '1,2,3,4,5'],
+  ['hours_0', 'closed'],          // Domingo
+  ['hours_1', '08:00-18:00'],     // Segunda
+  ['hours_2', '08:00-18:00'],     // Terça
+  ['hours_3', '08:00-18:00'],     // Quarta
+  ['hours_4', '08:00-18:00'],     // Quinta
+  ['hours_5', '08:00-18:00'],     // Sexta
+  ['hours_6', '09:00-13:00'],     // Sábado
 ];
 const insertSetting = db.prepare(`INSERT OR IGNORE INTO settings (key, value) VALUES (?, ?)`);
 for (const [key, value] of settingsDefaults) insertSetting.run(key, value);

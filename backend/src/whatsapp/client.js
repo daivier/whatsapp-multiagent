@@ -79,13 +79,13 @@ function initWhatsApp(socketIO) {
     function shouldSendBotReply() {
       const enabled = db.prepare(`SELECT value FROM settings WHERE key = 'bot_enabled'`).get()?.value;
       if (enabled !== '1') return false;
-      const start = db.prepare(`SELECT value FROM settings WHERE key = 'business_hours_start'`).get()?.value || '08:00';
-      const end = db.prepare(`SELECT value FROM settings WHERE key = 'business_hours_end'`).get()?.value || '18:00';
-      const days = (db.prepare(`SELECT value FROM settings WHERE key = 'business_days'`).get()?.value || '1,2,3,4,5').split(',').map(Number);
       const now = new Date();
-      const dayOfWeek = now.getDay();
+      const dayKey = `hours_${now.getDay()}`;
+      const dayHours = db.prepare(`SELECT value FROM settings WHERE key = ?`).get(dayKey)?.value;
+      if (!dayHours || dayHours === 'closed') return true;
+      const [start, end] = dayHours.split('-');
       const currentTime = `${String(now.getHours()).padStart(2,'0')}:${String(now.getMinutes()).padStart(2,'0')}`;
-      return !days.includes(dayOfWeek) || currentTime < start || currentTime >= end;
+      return currentTime < start || currentTime >= end;
     }
 
     // Find open conversation or create new one

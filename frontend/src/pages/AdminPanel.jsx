@@ -45,8 +45,10 @@ export default function AdminPanel({ socket }) {
 
   // Settings / Bot
   const [settings, setSettings] = useState({
-    bot_enabled: '0', bot_message: '', business_hours_start: '08:00',
-    business_hours_end: '18:00', business_days: '1,2,3,4,5',
+    bot_enabled: '0', bot_message: '',
+    hours_0: 'closed', hours_1: '08:00-18:00', hours_2: '08:00-18:00',
+    hours_3: '08:00-18:00', hours_4: '08:00-18:00', hours_5: '08:00-18:00',
+    hours_6: '09:00-13:00',
   });
   const [settingsSaved, setSettingsSaved] = useState(false);
 
@@ -365,38 +367,41 @@ export default function AdminPanel({ socket }) {
         {tab === 'bot' && (
           <div style={styles.section}>
             <h2 style={styles.sectionTitle}>Bot de Triagem</h2>
-            <p style={{ color: '#666', fontSize: '0.85rem', marginBottom: '1.5rem' }}>Envia resposta automática fora do horário ou quando todos estão offline.</p>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem', maxWidth: '500px' }}>
+            <p style={{ color: '#666', fontSize: '0.85rem', marginBottom: '1.5rem' }}>Envia resposta automática fora do horário de atendimento.</p>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem', maxWidth: '560px' }}>
               <label style={styles.settingRow}>
                 <span>Ativar bot</span>
                 <input type="checkbox" checked={settings.bot_enabled === '1'}
                   onChange={e => setSettings(s => ({ ...s, bot_enabled: e.target.checked ? '1' : '0' }))} />
               </label>
-              <label style={styles.settingRow}>
-                <span>Dias de trabalho</span>
-                <div style={{ display: 'flex', gap: '0.25rem' }}>
-                  {[['Dom','0'],['Seg','1'],['Ter','2'],['Qua','3'],['Qui','4'],['Sex','5'],['Sáb','6']].map(([label, val]) => {
-                    const active = settings.business_days.split(',').includes(val);
+              <div>
+                <p style={{ margin: '0 0 0.5rem', fontSize: '0.9rem', fontWeight: 600 }}>Horário por dia</p>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+                  {[['Dom',0],['Seg',1],['Ter',2],['Qua',3],['Qui',4],['Sex',5],['Sáb',6]].map(([label, i]) => {
+                    const key = `hours_${i}`;
+                    const val = settings[key] || 'closed';
+                    const isOpen = val !== 'closed';
+                    const [start, end] = isOpen ? val.split('-') : ['08:00', '18:00'];
                     return (
-                      <button key={val} onClick={() => {
-                        const days = settings.business_days.split(',').filter(Boolean);
-                        const next = active ? days.filter(d => d !== val) : [...days, val];
-                        setSettings(s => ({ ...s, business_days: next.sort().join(',') }));
-                      }} style={{ padding: '0.2rem 0.4rem', borderRadius: '4px', border: '1px solid #ddd', background: active ? '#25D366' : 'none', color: active ? '#fff' : '#555', cursor: 'pointer', fontSize: '0.75rem' }}>
-                        {label}
-                      </button>
+                      <div key={i} style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', fontSize: '0.88rem' }}>
+                        <span style={{ width: '36px', fontWeight: 600, color: '#333' }}>{label}</span>
+                        <input type="checkbox" checked={isOpen} onChange={e => {
+                          setSettings(s => ({ ...s, [key]: e.target.checked ? `${start}-${end}` : 'closed' }));
+                        }} />
+                        {isOpen ? (
+                          <>
+                            <input type="time" style={{ ...styles.input, padding: '0.25rem 0.5rem' }} value={start}
+                              onChange={e => setSettings(s => ({ ...s, [key]: `${e.target.value}-${end}` }))} />
+                            <span style={{ color: '#888' }}>até</span>
+                            <input type="time" style={{ ...styles.input, padding: '0.25rem 0.5rem' }} value={end}
+                              onChange={e => setSettings(s => ({ ...s, [key]: `${start}-${e.target.value}` }))} />
+                          </>
+                        ) : (
+                          <span style={{ color: '#aaa', fontSize: '0.8rem' }}>Fechado</span>
+                        )}
+                      </div>
                     );
                   })}
-                </div>
-              </label>
-              <div style={styles.settingRow}>
-                <span>Horário</span>
-                <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
-                  <input type="time" style={styles.input} value={settings.business_hours_start}
-                    onChange={e => setSettings(s => ({ ...s, business_hours_start: e.target.value }))} />
-                  <span>até</span>
-                  <input type="time" style={styles.input} value={settings.business_hours_end}
-                    onChange={e => setSettings(s => ({ ...s, business_hours_end: e.target.value }))} />
                 </div>
               </div>
               <div>
