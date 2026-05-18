@@ -102,9 +102,28 @@ function initWhatsApp(socketIO) {
 
 async function sendMessage(phone, body) {
   if (!isReady) throw new Error('WhatsApp não está conectado');
-  // Normaliza o número — remove sufixos e adiciona @c.us
+
   const cleanPhone = phone.replace(/@c\.us$/, '').replace(/@lid$/, '');
-  await client.sendMessage(`${cleanPhone}@c.us`, body);
+
+  // Tenta @c.us primeiro; se falhar com "No LID", tenta com o número via getContactById
+  try {
+    await client.sendMessage(`${cleanPhone}@c.us`, body);
+  } catch (err) {
+    if (err.message && err.message.includes('No LID')) {
+      // Para contas novas que usam o sistema LID do WhatsApp
+      const contacts = await client.getContacts();
+      const match = contacts.find(c =>
+        c.number === cleanPhone || c.id?.user === cleanPhone
+      );
+      if (match) {
+        await client.sendMessage(match.id._serialized, body);
+      } else {
+        throw new Error(`Contacto não encontrado para o número ${cleanPhone}`);
+      }
+    } else {
+      throw err;
+    }
+  }
 }
 
 function getStatus() {
