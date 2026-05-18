@@ -12,6 +12,7 @@ export default function AdminPanel({ socket }) {
   const [metrics, setMetrics] = useState(null);
   const [qrCode, setQrCode] = useState(null);
   const [whatsappReady, setWhatsappReady] = useState(false);
+  const [disconnecting, setDisconnecting] = useState(false);
   const [newUser, setNewUser] = useState({ name: '', email: '', password: '' });
   const [transferTo, setTransferTo] = useState('');
   const [userStatuses, setUserStatuses] = useState({});
@@ -183,9 +184,25 @@ export default function AdminPanel({ socket }) {
         {tab === 'whatsapp' && (
           <div style={styles.section}>
             <h2 style={styles.sectionTitle}>WhatsApp</h2>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginBottom: '1.5rem' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', marginBottom: '1.5rem' }}>
               <div style={{ width: 12, height: 12, borderRadius: '50%', background: whatsappReady ? '#10b981' : '#ef4444' }} />
               <span>{whatsappReady ? 'Conectado' : 'Desconectado'}</span>
+              {whatsappReady && (
+                <button
+                  style={{ padding: '0.35rem 1rem', background: '#ef4444', color: '#fff', border: 'none', borderRadius: '6px', cursor: 'pointer', fontSize: '0.85rem' }}
+                  disabled={disconnecting}
+                  onClick={async () => {
+                    if (!confirm('Tens a certeza? O WhatsApp vai desligar e precisas de escanear o QR novamente.')) return;
+                    setDisconnecting(true);
+                    try { await api.post('/whatsapp/disconnect'); } catch (_) {}
+                    setDisconnecting(false);
+                    setWhatsappReady(false);
+                    setQrCode(null);
+                  }}
+                >
+                  {disconnecting ? 'A desligar...' : 'Desligar WhatsApp'}
+                </button>
+              )}
             </div>
             {!whatsappReady && qrCode && (
               <div>

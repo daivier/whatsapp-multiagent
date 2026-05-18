@@ -110,6 +110,15 @@ function initWhatsApp(socketIO) {
   client.initialize();
 }
 
+async function disconnectWhatsApp() {
+  isReady = false;
+  qrCodeData = null;
+  try { await client.logout(); } catch (_) {}
+  try { await client.destroy(); } catch (_) {}
+  // Reinicializa para gerar novo QR
+  initWhatsApp(io);
+}
+
 async function sendMessage(phone, body) {
   if (!isReady) throw new Error('WhatsApp não está conectado');
 
@@ -151,4 +160,4 @@ function getConversationWithContact(conversationId) {
     .get(conversationId);
 }
 
-module.exports = { initWhatsApp, sendMessage, getStatus };
+module.exports = { initWhatsApp, sendMessage, getStatus, disconnectWhatsApp };

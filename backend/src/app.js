@@ -6,7 +6,7 @@ const cors = require('cors');
 const bcrypt = require('bcryptjs');
 
 const db = require('./db/schema');
-const { initWhatsApp, getStatus } = require('./whatsapp/client');
+const { initWhatsApp, getStatus, disconnectWhatsApp } = require('./whatsapp/client');
 const { initSocket } = require('./socket/handlers');
 const { authMiddleware, ownerOnly } = require('./middleware/auth');
 
@@ -42,6 +42,12 @@ app.use('/messages', messagesRoutes);
 // WhatsApp status
 app.get('/whatsapp/status', authMiddleware, (req, res) => {
   res.json(getStatus());
+});
+
+// WhatsApp disconnect (owner only)
+app.post('/whatsapp/disconnect', authMiddleware, ownerOnly, async (req, res) => {
+  await disconnectWhatsApp();
+  res.json({ ok: true });
 });
 
 // Socket.io
