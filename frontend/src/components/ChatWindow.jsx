@@ -62,18 +62,24 @@ export default function ChatWindow({ conversation, socket, onClose, onDelete }) 
   const [showHistory, setShowHistory] = useState(false);
   const [history, setHistory] = useState([]);
   const [isInternal, setIsInternal] = useState(false);
+  const [allTags, setAllTags] = useState([]);
+  const [convTags, setConvTags] = useState([]);
+  const [showTagPicker, setShowTagPicker] = useState(false);
   const typingTimer = useRef(null);
   const bottomRef = useRef(null);
 
   useEffect(() => {
     api.get('/quick-replies').then(r => setQuickReplies(Array.isArray(r.data) ? r.data : []));
+    api.get('/tags').then(r => setAllTags(Array.isArray(r.data) ? r.data : []));
   }, []);
 
   useEffect(() => {
     if (!conversation) return;
     api.get(`/conversations/${conversation.id}/messages`).then(r => setMessages(Array.isArray(r.data) ? r.data : []));
+    api.get(`/tags/conversations/${conversation.id}`).then(r => setConvTags(Array.isArray(r.data) ? r.data : []));
     socket?.emit('conv:join', { conversation_id: conversation.id });
     setIsInternal(false);
+    setShowTagPicker(false);
     return () => socket?.emit('conv:leave', { conversation_id: conversation.id });
   }, [conversation]);
 
@@ -160,6 +166,17 @@ export default function ChatWindow({ conversation, socket, onClose, onDelete }) 
     setQrSuggestions([]);
   }
 
+  async function toggleTag(tag) {
+    const has = convTags.some(t => t.id === tag.id);
+    if (has) {
+      await api.delete(`/tags/conversations/${conversation.id}/${tag.id}`);
+      setConvTags(prev => prev.filter(t => t.id !== tag.id));
+    } else {
+      await api.post(`/tags/conversations/${conversation.id}`, { tag_id: tag.id });
+      setConvTags(prev => [...prev, tag]);
+    }
+  }
+
   function handleKey(e) {
     if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send(); }
     if (e.key === 'Escape') setQrSuggestions([]);
@@ -174,14 +191,37 @@ export default function ChatWindow({ conversation, socket, onClose, onDelete }) 
   return (
     <div style={styles.container}>
       <div style={styles.header}>
-        <div>
-          <strong>{conversation.contact_name || conversation.phone}</strong>
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flexWrap: 'wrap' }}>
+            <strong>{conversation.contact_name || conversation.phone}</strong>
+            {convTags.map(t => (
+              <span key={t.id} style={{ background: t.color + '22', border: `1px solid ${t.color}`, color: t.color, borderRadius: '999px', padding: '0.1rem 0.5rem', fontSize: '0.72rem', fontWeight: 600 }}>{t.name}</span>
+            ))}
+          </div>
           <span style={styles.phone}>{conversation.phone}</span>
         </div>
         <div style={styles.headerActions}>
           {user.role === 'owner' && (
             <span style={styles.badge}>{conversation.attendant_name || 'Sem atendente'}</span>
           )}
+          <div style={{ position: 'relative' }}>
+            <button style={styles.historyBtn} onClick={() => setShowTagPicker(v => !v)} title="Etiquetas">🏷️</button>
+            {showTagPicker && (
+              <div style={styles.tagPicker}>
+                {allTags.length === 0 && <p style={{ margin: 0, color: '#999', fontSize: '0.8rem' }}>Sem etiquetas criadas</p>}
+                {allTags.map(t => {
+                  const active = convTags.some(ct => ct.id === t.id);
+                  return (
+                    <div key={t.id} onClick={() => toggleTag(t)} style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', padding: '0.35rem 0.5rem', cursor: 'pointer', borderRadius: '6px', background: active ? t.color + '15' : 'none' }}>
+                      <span style={{ width: 10, height: 10, borderRadius: '50%', background: t.color, flexShrink: 0 }} />
+                      <span style={{ fontSize: '0.85rem', flex: 1 }}>{t.name}</span>
+                      {active && <span style={{ color: t.color, fontWeight: 700, fontSize: '0.9rem' }}>✓</span>}
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
           <button style={styles.historyBtn} onClick={loadHistory} title="Histórico de conversas">🕐</button>
           {onDelete && <button style={styles.deleteBtn} onClick={onDelete}>Eliminar</button>}
           <button style={styles.closeBtn} onClick={onClose}>Fechar</button>
@@ -280,6 +320,7 @@ const styles = {
   headerActions: { display: 'flex', gap: '0.5rem', alignItems: 'center' },
   badge: { background: '#e8f5e9', color: '#2e7d32', padding: '0.25rem 0.75rem', borderRadius: '999px', fontSize: '0.8rem' },
   historyBtn: { background: 'none', border: '1px solid #ddd', padding: '0.25rem 0.5rem', borderRadius: '6px', cursor: 'pointer', fontSize: '1rem' },
+  tagPicker: { position: 'absolute', right: 0, top: '110%', background: '#fff', border: '1px solid #e5e5e5', borderRadius: '8px', boxShadow: '0 4px 16px rgba(0,0,0,0.12)', padding: '0.5rem', minWidth: '160px', zIndex: 100 },
   deleteBtn: { background: 'none', border: '1px solid #ef4444', color: '#ef4444', padding: '0.25rem 0.75rem', borderRadius: '6px', cursor: 'pointer', fontSize: '0.85rem' },
   closeBtn: { background: 'none', border: '1px solid #ddd', padding: '0.25rem 0.75rem', borderRadius: '6px', cursor: 'pointer' },
   historyPanel: { background: '#fffbeb', borderBottom: '1px solid #fde68a', padding: '0.75rem 1rem', maxHeight: '160px', overflowY: 'auto' },
