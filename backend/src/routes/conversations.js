@@ -1,12 +1,13 @@
 const express = require('express');
 const db = require('../db/schema');
 const { authMiddleware, ownerOnly } = require('../middleware/auth');
+const { sendMessage } = require('../whatsapp/client');
 
 const router = express.Router();
 
 function conversationQuery(extraWhere = '') {
   return `
-    SELECT conv.*, con.phone, con.name as contact_name, u.name as attendant_name
+    SELECT conv.*, con.phone, con.wa_id, con.name as contact_name, u.name as attendant_name
     FROM conversations conv
     JOIN contacts con ON con.id = conv.contact_id
     LEFT JOIN users u ON u.id = conv.assigned_to
@@ -59,17 +60,29 @@ router.get('/:id/messages', authMiddleware, (req, res) => {
 });
 
 // POST /conversations/:id/transfer — owner transfere conversa
-router.post('/:id/transfer', authMiddleware, ownerOnly, (req, res) => {
-  const { attendant_id } = req.body;
+router.post('/:id/transfer', authMiddleware, ownerOnly, async (req, res) => {
+  const { attendant_id, notify = true } = req.body;
   if (!attendant_id) return res.status(400).json({ error: 'attendant_id obrigatório' });
 
-  const attendant = db.prepare('SELECT id FROM users WHERE id = ? AND role = ? AND active = 1').get(attendant_id, 'attendant');
+  const attendant = db.prepare('SELECT id, name FROM users WHERE id = ? AND role = ? AND active = 1').get(attendant_id, 'attendant');
   if (!attendant) return res.status(404).json({ error: 'Atendente não encontrado' });
 
   db.prepare(`UPDATE conversations SET assigned_to = ?, status = 'open', updated_at = CURRENT_TIMESTAMP WHERE id = ?`)
     .run(attendant_id, req.params.id);
 
   const conv = db.prepare(conversationQuery('WHERE conv.id = ?')).get(req.params.id);
+
+  // Envia mensagem automática ao cliente
+  if (notify) {
+    const notifyText = `Olá! O seu atendimento foi transferido para *${attendant.name}*, que irá continuar a ajudá-lo em breve. 😊`;
+    try {
+      await sendMessage(conv.wa_id || conv.phone, notifyText);
+      db.prepare('INSERT INTO messages (conversation_id, from_me, body) VALUES (?, 1, ?)').run(conv.id, notifyText);
+    } catch (err) {
+      console.error('Aviso: não foi possível enviar notificação de transferência:', err.message);
+    }
+  }
+
   res.json(conv);
 });
 
