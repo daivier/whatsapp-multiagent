@@ -24,6 +24,14 @@ export default function AdminPanel({ socket }) {
   const { user, logout } = useAuth();
   const [tab, setTab] = useState('conversations');
   const [selectedConv, setSelectedConv] = useState(null);
+  const [isMobile, setIsMobile] = useState(window.innerWidth < 768);
+  const [showSidebar, setShowSidebar] = useState(false);
+
+  useEffect(() => {
+    const handler = () => setIsMobile(window.innerWidth < 768);
+    window.addEventListener('resize', handler);
+    return () => window.removeEventListener('resize', handler);
+  }, []);
   const [attendants, setAttendants] = useState([]);
   const [metrics, setMetrics] = useState(null);
   const [reports, setReports] = useState(null);
@@ -160,9 +168,23 @@ export default function AdminPanel({ socket }) {
     ['bot','Bot'],['whatsapp','WhatsApp'],
   ];
 
+  function selectTab(key) {
+    setTab(key);
+    setShowSidebar(false);
+    if (key !== 'conversations') setSelectedConv(null);
+  }
+
+  const showList = tab === 'conversations' && (!isMobile || !selectedConv);
+  const showChat = tab === 'conversations' && (!isMobile || !!selectedConv);
+
   return (
     <div style={styles.shell}>
-      <aside style={styles.sidebar}>
+      {/* Overlay para fechar sidebar no mobile */}
+      {isMobile && showSidebar && (
+        <div onClick={() => setShowSidebar(false)} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.4)', zIndex: 150 }} />
+      )}
+
+      <aside style={{ ...styles.sidebar, ...(isMobile ? { position: 'fixed', left: showSidebar ? 0 : '-220px', top: 0, bottom: 0, zIndex: 200, transition: 'left 0.25s ease' } : {}) }}>
         <div style={styles.sidebarTop}>
           <div style={styles.logoArea}>
             <span style={{ fontSize: '1.5rem' }}>💬</span>
@@ -173,22 +195,36 @@ export default function AdminPanel({ socket }) {
           </div>
           <nav style={styles.nav}>
             {TABS.map(([key, label]) => (
-              <button key={key} style={{ ...styles.navBtn, ...(tab === key ? styles.navActive : {}) }} onClick={() => setTab(key)}>{label}</button>
+              <button key={key} style={{ ...styles.navBtn, ...(tab === key ? styles.navActive : {}) }} onClick={() => selectTab(key)}>{label}</button>
             ))}
           </nav>
         </div>
         <button style={styles.logoutBtn} onClick={logout}>Sair</button>
       </aside>
 
-      <main style={styles.main}>
+      <main style={{ ...styles.main, ...(isMobile ? { marginLeft: 0 } : {}) }}>
+
+        {/* Header mobile */}
+        {isMobile && (
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', padding: '0.6rem 1rem', background: '#1a1a2e', flexShrink: 0 }}>
+            {tab === 'conversations' && selectedConv ? (
+              <button onClick={() => setSelectedConv(null)} style={{ background: 'none', border: 'none', color: '#fff', fontSize: '1.3rem', cursor: 'pointer', padding: 0 }}>←</button>
+            ) : (
+              <button onClick={() => setShowSidebar(v => !v)} style={{ background: 'none', border: 'none', color: '#fff', fontSize: '1.4rem', cursor: 'pointer', padding: 0 }}>☰</button>
+            )}
+            <span style={{ color: '#fff', fontWeight: 600, fontSize: '0.95rem' }}>
+              {tab === 'conversations' && selectedConv ? (selectedConv.contact_name || selectedConv.phone) : TABS.find(([k]) => k === tab)?.[1] || ''}
+            </span>
+          </div>
+        )}
 
         {/* CONVERSAS */}
         {tab === 'conversations' && (
-          <div style={styles.chatLayout}>
-            <div style={styles.listPane}>
+          <div style={{ ...styles.chatLayout, flex: 1, overflow: 'hidden' }}>
+            {showList && <div style={{ ...(isMobile ? { flex: 1, overflowY: 'auto' } : styles.listPane) }}>
               <ConversationList key={listKey} socket={socket} selected={selectedConv} onSelect={setSelectedConv} />
-            </div>
-            <div style={styles.chatPane}>
+            </div>}
+            <div style={{ ...styles.chatPane, ...(!showChat ? { display: 'none' } : {}) }}>
               {selectedConv && (
                 <div style={{ padding: '0.5rem 1rem', background: '#fff', borderBottom: '1px solid #eee', display: 'flex', gap: '0.5rem', alignItems: 'center', flexWrap: 'wrap' }}>
                   {activeAttendants.length === 0 ? (

@@ -17,8 +17,14 @@ export default function AttendantPanel({ socket }) {
     const s = user.status;
     return (s && s !== 'offline') ? s : 'online';
   });
+  const [isMobile, setIsMobile] = useState(window.innerWidth < 640);
 
-  // Quando o socket liga, o backend emite user:status com o preferred_status restaurado
+  useEffect(() => {
+    const handler = () => setIsMobile(window.innerWidth < 640);
+    window.addEventListener('resize', handler);
+    return () => window.removeEventListener('resize', handler);
+  }, []);
+
   useEffect(() => {
     if (!socket) return;
     function onUserStatus({ userId, status: s }) {
@@ -36,22 +42,34 @@ export default function AttendantPanel({ socket }) {
 
   const currentStatus = STATUS_OPTIONS.find(s => s.value === status);
 
+  const showList = !isMobile || !selectedConv;
+  const showChat = !isMobile || !!selectedConv;
+
   return (
     <div style={styles.shell}>
       <header style={styles.header}>
         <div style={styles.logoArea}>
+          {isMobile && selectedConv && (
+            <button onClick={() => setSelectedConv(null)} style={styles.backBtn}>←</button>
+          )}
           <span style={{ fontSize: '1.4rem' }}>💬</span>
-          <strong style={{ color: '#fff' }}>{import.meta.env.VITE_TENANT_NAME || 'WhatsApp Multi-Atendente'}</strong>
+          {!isMobile && <strong style={{ color: '#fff' }}>{import.meta.env.VITE_TENANT_NAME || 'WhatsApp Multi-Atendente'}</strong>}
+          {isMobile && selectedConv && (
+            <strong style={{ color: '#fff', fontSize: '0.95rem', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: '160px' }}>
+              {selectedConv.contact_name || selectedConv.phone}
+            </strong>
+          )}
+          {isMobile && !selectedConv && <strong style={{ color: '#fff', fontSize: '0.95rem' }}>{import.meta.env.VITE_TENANT_NAME || 'Atendimento'}</strong>}
         </div>
         <div style={styles.headerRight}>
-          <span style={styles.userName}>{user.name}</span>
+          {!isMobile && <span style={styles.userName}>{user.name}</span>}
           <select
             value={status}
             onChange={e => changeStatus(e.target.value)}
             style={{ ...styles.statusSelect, borderColor: currentStatus?.color }}
           >
             {STATUS_OPTIONS.map(s => (
-              <option key={s.value} value={s.value}>{s.label}</option>
+              <option key={s.value} value={s.value}>{isMobile ? s.label.slice(0,3) : s.label}</option>
             ))}
           </select>
           <button style={styles.logoutBtn} onClick={logout}>Sair</button>
@@ -59,12 +77,16 @@ export default function AttendantPanel({ socket }) {
       </header>
 
       <div style={styles.body}>
-        <div style={styles.listPane}>
-          <ConversationList socket={socket} selected={selectedConv} onSelect={setSelectedConv} />
-        </div>
-        <div style={styles.chatPane}>
-          <ChatWindow conversation={selectedConv} socket={socket} onClose={() => setSelectedConv(null)} />
-        </div>
+        {showList && (
+          <div style={{ ...(isMobile ? { flex: 1 } : styles.listPane) }}>
+            <ConversationList socket={socket} selected={selectedConv} onSelect={setSelectedConv} />
+          </div>
+        )}
+        {showChat && (
+          <div style={{ ...(isMobile ? { flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' } : styles.chatPane) }}>
+            <ChatWindow conversation={selectedConv} socket={socket} onClose={() => setSelectedConv(null)} />
+          </div>
+        )}
       </div>
     </div>
   );
@@ -72,12 +94,13 @@ export default function AttendantPanel({ socket }) {
 
 const styles = {
   shell: { display: 'flex', flexDirection: 'column', height: '100vh' },
-  header: { display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0 1.5rem', height: '56px', background: '#1a1a2e', flexShrink: 0 },
-  logoArea: { display: 'flex', gap: '0.5rem', alignItems: 'center' },
-  headerRight: { display: 'flex', gap: '0.75rem', alignItems: 'center' },
+  header: { display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0 1rem', height: '52px', background: '#1a1a2e', flexShrink: 0 },
+  logoArea: { display: 'flex', gap: '0.5rem', alignItems: 'center', minWidth: 0 },
+  headerRight: { display: 'flex', gap: '0.5rem', alignItems: 'center', flexShrink: 0 },
   userName: { color: '#ccc', fontSize: '0.9rem' },
-  statusSelect: { padding: '0.3rem 0.5rem', borderRadius: '6px', border: '2px solid', background: '#2a2a4e', color: '#fff', cursor: 'pointer', fontSize: '0.85rem' },
-  logoutBtn: { padding: '0.3rem 0.75rem', background: 'none', border: '1px solid #555', color: '#aaa', borderRadius: '6px', cursor: 'pointer' },
+  statusSelect: { padding: '0.3rem 0.4rem', borderRadius: '6px', border: '2px solid', background: '#2a2a4e', color: '#fff', cursor: 'pointer', fontSize: '0.8rem' },
+  logoutBtn: { padding: '0.3rem 0.6rem', background: 'none', border: '1px solid #555', color: '#aaa', borderRadius: '6px', cursor: 'pointer', fontSize: '0.8rem' },
+  backBtn: { background: 'none', border: 'none', color: '#fff', fontSize: '1.3rem', cursor: 'pointer', padding: '0 0.25rem', lineHeight: 1 },
   body: { display: 'flex', flex: 1, overflow: 'hidden' },
   listPane: { width: '320px', flexShrink: 0, overflowY: 'auto' },
   chatPane: { flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' },
