@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useLayoutEffect, useRef } from 'react';
 import api from '../api';
 import { useAuth } from '../context/AuthContext';
 
@@ -10,7 +10,7 @@ function parseVcard(vcf) {
   return { fn, tel };
 }
 
-function MessageContent({ msg }) {
+function MessageContent({ msg, onMediaLoad }) {
   if (msg.media_type === 'vcard') {
     const { fn, tel } = parseVcard(msg.body || '');
     return (
@@ -28,6 +28,7 @@ function MessageContent({ msg }) {
       <>
         <img src={`${API}${msg.media_url}`} alt="imagem"
           style={{ maxWidth: '100%', maxHeight: '300px', borderRadius: '6px', display: 'block', cursor: 'pointer', marginBottom: msg.body ? '0.25rem' : 0 }}
+          onLoad={onMediaLoad}
           onClick={() => window.open(`${API}${msg.media_url}`, '_blank')} />
         {msg.body && <p style={{ margin: '0.25rem 0 0', fontSize: '0.9rem' }}>{msg.body}</p>}
       </>
@@ -39,7 +40,7 @@ function MessageContent({ msg }) {
   if (msg.media_url && msg.media_type?.startsWith('video/')) {
     return (
       <>
-        <video controls src={`${API}${msg.media_url}`} style={{ maxWidth: '100%', maxHeight: '300px', borderRadius: '6px', display: 'block' }} />
+        <video controls src={`${API}${msg.media_url}`} style={{ maxWidth: '100%', maxHeight: '300px', borderRadius: '6px', display: 'block' }} onLoadedMetadata={onMediaLoad} />
         {msg.body && <p style={{ margin: '0.25rem 0 0', fontSize: '0.9rem' }}>{msg.body}</p>}
       </>
     );
@@ -107,13 +108,13 @@ export default function ChatWindow({ conversation, socket, onClose, onDelete }) 
     return () => { socket.off('message:new', onMessage); socket.off('typing:update', onTyping); };
   }, [socket, conversation]);
 
-  useEffect(() => {
-    // Aguarda o browser terminar o paint antes de scrollar
-    requestAnimationFrame(() => {
-      if (!messagesRef.current) return;
+  function scrollToBottom() {
+    if (messagesRef.current) {
       messagesRef.current.scrollTop = messagesRef.current.scrollHeight;
-    });
-  }, [messages]);
+    }
+  }
+
+  useLayoutEffect(() => { scrollToBottom(); }, [messages]);
 
   async function loadHistory() {
     if (!conversation) return;
@@ -297,7 +298,7 @@ export default function ChatWindow({ conversation, socket, onClose, onDelete }) 
             {!!msg.from_me && msg.sender_name && (
               <span style={S.senderName}>{msg.sender_name}{msg.is_internal ? ' · nota interna' : ''}</span>
             )}
-            <MessageContent msg={msg} />
+            <MessageContent msg={msg} onMediaLoad={scrollToBottom} />
             {msg.failed && <span style={{ color: 'var(--danger)', fontSize: '0.78rem' }}> ⚠️</span>}
             <span style={S.time}>{new Date(msg.timestamp).toLocaleTimeString('pt-PT', { hour: '2-digit', minute: '2-digit' })}</span>
           </div>
