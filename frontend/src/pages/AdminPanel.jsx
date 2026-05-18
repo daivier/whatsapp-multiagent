@@ -130,6 +130,18 @@ export default function AdminPanel({ socket }) {
     setEditingContact(null);
     loadContacts(contactSearch);
   }
+  async function deleteContact(id, name) {
+    if (!confirm(`Eliminar contacto "${name}"? Todas as conversas e mensagens deste contacto serão apagadas.`)) return;
+    await api.delete(`/contacts/${id}`);
+    setEditingContact(null);
+    loadContacts(contactSearch);
+  }
+  async function cleanupInvalidContacts() {
+    if (!confirm('Remover todos os contactos inválidos (grupos, broadcasts, newsletters) sem conversas?')) return;
+    const { data } = await api.delete('/contacts/cleanup/invalid');
+    alert(`${data.deleted} contacto(s) removido(s).`);
+    loadContacts(contactSearch);
+  }
 
   async function loadScheduled() {
     const { data } = await api.get('/scheduled-messages');
@@ -313,7 +325,12 @@ export default function AdminPanel({ socket }) {
         {/* CONTACTOS */}
         {tab === 'contacts' && (
           <div style={styles.section}>
-            <h2 style={styles.sectionTitle}>Contactos</h2>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', marginBottom: '1.5rem' }}>
+              <h2 style={{ margin: 0, fontSize: '1.2rem' }}>Contactos</h2>
+              <button style={{ ...styles.toggleBtn, color: '#ef4444', borderColor: '#ef4444', fontSize: '0.8rem' }} onClick={cleanupInvalidContacts}>
+                🧹 Limpar inválidos
+              </button>
+            </div>
 
             {/* Modal de edição */}
             {editingContact && (
@@ -331,9 +348,15 @@ export default function AdminPanel({ socket }) {
                   <textarea style={{ ...styles.input, width: '100%', boxSizing: 'border-box', resize: 'vertical', minHeight: '80px', marginBottom: '1rem' }}
                     placeholder="Ex: Cliente VIP, prefere contacto à tarde..."
                     value={editingContact.notes || ''} onChange={e => setEditingContact(p => ({ ...p, notes: e.target.value }))} />
-                  <div style={{ display: 'flex', gap: '0.5rem', justifyContent: 'flex-end' }}>
-                    <button style={{ ...styles.toggleBtn }} onClick={() => setEditingContact(null)}>Cancelar</button>
-                    <button style={styles.addBtn} onClick={saveContact}>Guardar</button>
+                  <div style={{ display: 'flex', gap: '0.5rem', justifyContent: 'space-between' }}>
+                    <button style={{ ...styles.toggleBtn, color: '#ef4444', borderColor: '#ef4444' }}
+                      onClick={() => deleteContact(editingContact.id, editingContact.name || editingContact.phone)}>
+                      Eliminar
+                    </button>
+                    <div style={{ display: 'flex', gap: '0.5rem' }}>
+                      <button style={styles.toggleBtn} onClick={() => setEditingContact(null)}>Cancelar</button>
+                      <button style={styles.addBtn} onClick={saveContact}>Guardar</button>
+                    </div>
                   </div>
                 </div>
               </div>

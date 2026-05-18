@@ -23,6 +23,48 @@ router.get('/', (req, res) => {
   res.json(rows);
 });
 
+// Eliminar contacto (e todas as suas conversas e mensagens)
+router.delete('/:id', (req, res) => {
+  const id = req.params.id;
+  // Apagar mensagens de todas as conversas deste contacto
+  db.prepare(`
+    DELETE FROM messages WHERE conversation_id IN (
+      SELECT id FROM conversations WHERE contact_id = ?
+    )
+  `).run(id);
+  // Apagar tags das conversas
+  db.prepare(`
+    DELETE FROM conversation_tags WHERE conversation_id IN (
+      SELECT id FROM conversations WHERE contact_id = ?
+    )
+  `).run(id);
+  // Apagar mensagens agendadas
+  db.prepare(`
+    DELETE FROM scheduled_messages WHERE conversation_id IN (
+      SELECT id FROM conversations WHERE contact_id = ?
+    )
+  `).run(id);
+  db.prepare('DELETE FROM conversations WHERE contact_id = ?').run(id);
+  db.prepare('DELETE FROM contacts WHERE id = ?').run(id);
+  res.json({ ok: true });
+});
+
+// Limpar contactos inválidos (grupos, broadcast, newsletter) sem conversas
+router.delete('/cleanup/invalid', (req, res) => {
+  const result = db.prepare(`
+    DELETE FROM contacts
+    WHERE (
+      wa_id LIKE '%@g.us' OR
+      wa_id LIKE '%@newsletter' OR
+      wa_id = 'status@broadcast' OR
+      phone LIKE '%@g.us' OR
+      phone LIKE '%@newsletter' OR
+      phone = 'status@broadcast'
+    ) AND id NOT IN (SELECT contact_id FROM conversations)
+  `).run();
+  res.json({ deleted: result.changes });
+});
+
 // Actualizar contacto (nome, notas, email)
 router.patch('/:id', (req, res) => {
   const { name, notes, email } = req.body;
