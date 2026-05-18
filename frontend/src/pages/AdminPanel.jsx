@@ -23,9 +23,9 @@ function SimpleBar({ label, value, max, color }) {
 
 export default function AdminPanel({ socket }) {
   const { user, logout } = useAuth();
-  useNotifications(socket, selectedConv);
   const [tab, setTab] = useState('conversations');
   const [selectedConv, setSelectedConv] = useState(null);
+  useNotifications(socket, selectedConv);
   const [isMobile, setIsMobile] = useState(window.innerWidth < 768);
   const [showSidebar, setShowSidebar] = useState(false);
 
