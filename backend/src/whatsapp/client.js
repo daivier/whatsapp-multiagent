@@ -213,7 +213,8 @@ function initWhatsApp(socketIO) {
 
     // Save message — body pode ser null em media com caption (usar '' como fallback)
     const safeBody = (msg._data?.caption) || body || '';
-    db.prepare('INSERT INTO messages (conversation_id, from_me, body, media_url, media_type, reply_to_id) VALUES (?, 0, ?, ?, ?, ?)').run(conversation.id, safeBody, mediaUrl, mediaType, replyToId);
+    const incomingWaId = msg.id?._serialized || null;
+    db.prepare('INSERT INTO messages (conversation_id, from_me, body, media_url, media_type, reply_to_id, wa_message_id) VALUES (?, 0, ?, ?, ?, ?, ?)').run(conversation.id, safeBody, mediaUrl, mediaType, replyToId, incomingWaId);
     db.prepare('UPDATE conversations SET updated_at = CURRENT_TIMESTAMP WHERE id = ?').run(conversation.id);
 
     const message = db
