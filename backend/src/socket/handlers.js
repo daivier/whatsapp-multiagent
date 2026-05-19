@@ -1,7 +1,7 @@
 const jwt = require('jsonwebtoken');
 const db = require('../db/schema');
 const { SECRET } = require('../middleware/auth');
-const { sendMessage } = require('../whatsapp/client');
+const { sendMessage, getStatus } = require('../whatsapp/client');
 
 function initSocket(io) {
   io.use((socket, next) => {
@@ -22,6 +22,14 @@ function initSocket(io) {
     const { user } = socket;
     socket.join(`user:${user.id}`);
     if (user.role === 'owner') socket.join('owners');
+
+    // Envia estado actual do WhatsApp para este socket (evita perder evento após restart)
+    const waStatus = getStatus();
+    if (waStatus.isReady) {
+      socket.emit('whatsapp:ready');
+    } else if (waStatus.hasQr) {
+      socket.emit('whatsapp:qr', waStatus.qrCode);
+    }
 
     // Restaura o preferred_status (último status escolhido pelo utilizador, nunca 'offline')
     const row = db.prepare('SELECT preferred_status FROM users WHERE id = ?').get(user.id);
