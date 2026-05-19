@@ -107,9 +107,13 @@ router.get('/:id/messages', authMiddleware, (req, res) => {
 
   const messages = db
     .prepare(`
-      SELECT m.*, u.name as sender_name
+      SELECT m.*, u.name as sender_name,
+        q.body as quoted_body, q.from_me as quoted_from_me,
+        qu.name as quoted_sender_name, q.media_type as quoted_media_type
       FROM messages m
       LEFT JOIN users u ON u.id = m.sender_id
+      LEFT JOIN messages q ON q.id = m.reply_to_id
+      LEFT JOIN users qu ON qu.id = q.sender_id
       WHERE m.conversation_id = ?
       ORDER BY m.timestamp ASC
     `)

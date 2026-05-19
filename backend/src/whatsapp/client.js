@@ -198,9 +198,22 @@ function initWhatsApp(socketIO) {
       }
     }
 
+    // Resolver reply_to_id se a mensagem for uma resposta a outra
+    let replyToId = null;
+    if (msg.hasQuotedMsg) {
+      try {
+        const quotedMsg = await msg.getQuotedMessage();
+        const quotedWaId = quotedMsg?.id?._serialized;
+        if (quotedWaId) {
+          const quotedInDb = db.prepare('SELECT id FROM messages WHERE wa_message_id = ?').get(quotedWaId);
+          replyToId = quotedInDb?.id || null;
+        }
+      } catch (_) {}
+    }
+
     // Save message — body pode ser null em media com caption (usar '' como fallback)
     const safeBody = (msg._data?.caption) || body || '';
-    db.prepare('INSERT INTO messages (conversation_id, from_me, body, media_url, media_type) VALUES (?, 0, ?, ?, ?)').run(conversation.id, safeBody, mediaUrl, mediaType);
+    db.prepare('INSERT INTO messages (conversation_id, from_me, body, media_url, media_type, reply_to_id) VALUES (?, 0, ?, ?, ?, ?)').run(conversation.id, safeBody, mediaUrl, mediaType, replyToId);
     db.prepare('UPDATE conversations SET updated_at = CURRENT_TIMESTAMP WHERE id = ?').run(conversation.id);
 
     const message = db
@@ -245,7 +258,7 @@ async function disconnectWhatsApp() {
   initWhatsApp(io);
 }
 
-async function sendMessage(phone, body) {
+async function sendMessage(phone, body, { quotedWaId } = {}) {
   if (!isReady) throw new Error('WhatsApp não está conectado');
 
   // Se phone já tem sufixo (@lid ou @c.us), usa directamente
@@ -257,22 +270,23 @@ async function sendMessage(phone, body) {
     waId = `${phone}@c.us`;
   }
 
+  const opts = {};
+  if (quotedWaId) opts.quotedMessageId = quotedWaId;
+
   try {
-    const msg = await client.sendMessage(waId, body);
+    const msg = await client.sendMessage(waId, body, opts);
     return msg?.id?._serialized || null;
   } catch (err) {
     const isLidError = err.message && (err.message.includes('No LID') || err.message === 't');
     if (waId.endsWith('@c.us') && isLidError) {
-      // Tenta encontrar o LID real guardado na BD para este contacto
       const phoneNum = waId.replace('@c.us', '');
       const contact = db.prepare(`SELECT wa_id FROM contacts WHERE (phone = ? OR phone = ?) AND wa_id LIKE '%@lid'`)
                         .get(phoneNum, phoneNum.replace(/^55/, ''));
       if (contact?.wa_id) {
         console.log(`[sendMessage] Usando LID guardado ${contact.wa_id} para ${phoneNum}`);
-        const msg = await client.sendMessage(contact.wa_id, body);
+        const msg = await client.sendMessage(contact.wa_id, body, opts);
         return msg?.id?._serialized || null;
       }
-      // Sem LID conhecido — sem fallback inválido
       throw new Error(`Não foi possível entregar a mensagem (No LID). O contacto precisa de enviar uma mensagem primeiro.`);
     }
     throw err;

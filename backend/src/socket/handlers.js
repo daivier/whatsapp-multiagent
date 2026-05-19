@@ -38,7 +38,7 @@ function initSocket(io) {
     io.emit('user:status', { userId: user.id, status: connectStatus });
 
     // Atendente envia mensagem via socket
-    socket.on('message:send', async ({ conversation_id, body }, callback) => {
+    socket.on('message:send', async ({ conversation_id, body, reply_to_id }, callback) => {
       const conv = db
         .prepare('SELECT conv.*, con.phone, con.wa_id FROM conversations conv JOIN contacts con ON con.id = conv.contact_id WHERE conv.id = ?')
         .get(conversation_id);
@@ -48,8 +48,8 @@ function initSocket(io) {
 
       // Guarda na BD primeiro — a mensagem aparece sempre na UI
       const result = db
-        .prepare('INSERT INTO messages (conversation_id, from_me, sender_id, body) VALUES (?, 1, ?, ?)')
-        .run(conversation_id, user.id, body);
+        .prepare('INSERT INTO messages (conversation_id, from_me, sender_id, body, reply_to_id) VALUES (?, 1, ?, ?, ?)')
+        .run(conversation_id, user.id, body, reply_to_id || null);
       db.prepare('UPDATE conversations SET updated_at = CURRENT_TIMESTAMP WHERE id = ?').run(conversation_id);
       const message = db.prepare('SELECT * FROM messages WHERE id = ?').get(result.lastInsertRowid);
       const fullConversation = db.prepare(`
@@ -64,9 +64,16 @@ function initSocket(io) {
       io.emit('message:new', { message, conversation: fullConversation });
       callback?.({ ok: true, message });
 
+      // Obter wa_message_id da mensagem citada (se existir)
+      let quotedWaId = null;
+      if (reply_to_id) {
+        const quoted = db.prepare('SELECT wa_message_id FROM messages WHERE id = ?').get(reply_to_id);
+        quotedWaId = quoted?.wa_message_id || null;
+      }
+
       // Usa wa_id (ex: @lid) se disponível, senão usa phone; guarda wa_message_id para edição futura
       try {
-        const waMessageId = await sendMessage(conv.wa_id || conv.phone, body);
+        const waMessageId = await sendMessage(conv.wa_id || conv.phone, body, { quotedWaId });
         if (waMessageId) {
           db.prepare('UPDATE messages SET wa_message_id = ? WHERE id = ?').run(waMessageId, result.lastInsertRowid);
         }

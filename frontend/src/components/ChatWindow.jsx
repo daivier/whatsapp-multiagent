@@ -89,6 +89,8 @@ export default function ChatWindow({ conversation: convProp, socket, onClose, on
   const [scheduleAt, setScheduleAt] = useState('');
   const [scheduleSaving, setScheduleSaving] = useState(false);
   const [uploadingFile, setUploadingFile] = useState(false);
+  // Reply to message
+  const [replyTo, setReplyTo] = useState(null); // { id, body, from_me, sender_name }
   // Edit message
   const [editingMsg, setEditingMsg] = useState(null); // { id, body }
   const [editBody, setEditBody] = useState('');
@@ -237,13 +239,15 @@ export default function ChatWindow({ conversation: convProp, socket, onClose, on
     }
 
     const tempId = `temp-${Date.now()}`;
-    const tempMsg = { id: tempId, conversation_id: conversation.id, from_me: 1, body, timestamp: new Date().toISOString(), sender_name: user.name };
+    const replyToId = replyTo?.id || null;
+    const tempMsg = { id: tempId, conversation_id: conversation.id, from_me: 1, body, timestamp: new Date().toISOString(), sender_name: user.name, reply_to_id: replyToId, quoted_body: replyTo?.body, quoted_from_me: replyTo?.from_me, quoted_sender_name: replyTo?.sender_name };
     setMessages(prev => [...prev, tempMsg]);
+    setReplyTo(null);
 
-    socket.emit('message:send', { conversation_id: conversation.id, body }, (res) => {
+    socket.emit('message:send', { conversation_id: conversation.id, body, reply_to_id: replyToId }, (res) => {
       setSending(false);
       if (res?.message) {
-        setMessages(prev => prev.map(m => m.id === tempId ? res.message : m));
+        setMessages(prev => prev.map(m => m.id === tempId ? { ...res.message, quoted_body: tempMsg.quoted_body, quoted_from_me: tempMsg.quoted_from_me, quoted_sender_name: tempMsg.quoted_sender_name } : m));
       } else if (res?.error) {
         setWarning(res.error);
         setMessages(prev => prev.map(m => m.id === tempId ? { ...m, failed: true } : m));
@@ -525,12 +529,30 @@ export default function ChatWindow({ conversation: convProp, socket, onClose, on
         {messages.map((msg) => {
           const isEditing = editingMsg?.id === msg.id;
           const canEdit = !!msg.from_me && !msg.is_internal && (Date.now() - utc(msg.timestamp).getTime()) < 15 * 60 * 1000;
+          const hasQuote = !!msg.quoted_body || msg.quoted_media_type;
           return (
             <div key={msg.id} style={{ ...S.bubble, ...(msg.from_me ? S.mine : S.theirs), ...(msg.is_internal ? S.internal : {}), position: 'relative' }}
-              onMouseEnter={e => { if (canEdit) e.currentTarget.querySelector('.edit-btn')?.style && (e.currentTarget.querySelector('.edit-btn').style.opacity = '1'); }}
-              onMouseLeave={e => { e.currentTarget.querySelector('.edit-btn')?.style && (e.currentTarget.querySelector('.edit-btn').style.opacity = '0'); }}>
+              onMouseEnter={e => {
+                e.currentTarget.querySelector('.reply-btn').style.opacity = '1';
+                if (canEdit) e.currentTarget.querySelector('.edit-btn')?.style && (e.currentTarget.querySelector('.edit-btn').style.opacity = '1');
+              }}
+              onMouseLeave={e => {
+                e.currentTarget.querySelector('.reply-btn').style.opacity = '0';
+                e.currentTarget.querySelector('.edit-btn')?.style && (e.currentTarget.querySelector('.edit-btn').style.opacity = '0');
+              }}>
               {!!msg.from_me && msg.sender_name && (
                 <span style={S.senderName}>{msg.sender_name}{msg.is_internal ? ' · nota interna' : ''}</span>
+              )}
+              {/* Citação (reply) */}
+              {hasQuote && (
+                <div style={{ borderLeft: '3px solid var(--accent)', background: msg.from_me ? 'rgba(255,255,255,0.15)' : 'var(--accent-l)', borderRadius: '3px', padding: '0.25rem 0.5rem', marginBottom: '0.3rem', maxWidth: '100%', overflow: 'hidden' }}>
+                  <span style={{ fontSize: '0.72rem', fontWeight: 600, color: 'var(--accent)', display: 'block' }}>
+                    {msg.quoted_from_me ? (msg.quoted_sender_name || 'Eu') : 'Cliente'}
+                  </span>
+                  <span style={{ fontSize: '0.78rem', color: 'var(--muted)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', display: 'block' }}>
+                    {msg.quoted_media_type ? '📎 Ficheiro' : msg.quoted_body}
+                  </span>
+                </div>
               )}
               {isEditing ? (
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '0.3rem', minWidth: '180px' }}>
@@ -568,6 +590,11 @@ export default function ChatWindow({ conversation: convProp, socket, onClose, on
                 {msg.edited_at && <span style={{ fontSize: '0.65rem', opacity: 0.7 }}>editada · </span>}
                 {utc(msg.timestamp).toLocaleTimeString('pt-PT', { hour: '2-digit', minute: '2-digit' })}
               </span>
+              {/* Botão reply — sempre presente (visível no hover) */}
+              <button className="reply-btn" onClick={() => !msg.is_internal && setReplyTo({ id: msg.id, body: msg.body, from_me: msg.from_me, sender_name: msg.sender_name, quoted_media_type: msg.media_type })}
+                style={{ opacity: 0, transition: 'opacity .15s', position: 'absolute', top: '4px', left: msg.from_me ? '-52px' : 'auto', right: msg.from_me ? 'auto' : '-52px', background: 'var(--card)', border: '1px solid var(--border-m)', borderRadius: '50%', width: 22, height: 22, cursor: 'pointer', fontSize: '0.7rem', display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: 'var(--sh)' }}>
+                ↩️
+              </button>
               {canEdit && !isEditing && (
                 <button className="edit-btn" onClick={() => { setEditingMsg(msg); setEditBody(msg.body); }}
                   style={{ opacity: 0, transition: 'opacity .15s', position: 'absolute', top: '4px', left: msg.from_me ? '-28px' : 'auto', right: msg.from_me ? 'auto' : '-28px', background: 'var(--card)', border: '1px solid var(--border-m)', borderRadius: '50%', width: 22, height: 22, cursor: 'pointer', fontSize: '0.7rem', display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: 'var(--sh)' }}>
@@ -669,6 +696,21 @@ export default function ChatWindow({ conversation: convProp, socket, onClose, on
         </div>
       ) : (
         <div style={S.inputArea}>
+          {/* Reply preview bar */}
+          {replyTo && (
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', background: 'var(--accent-l)', borderLeft: '3px solid var(--accent)', borderRadius: '4px', padding: '0.35rem 0.6rem', margin: '0 0 0.3rem', fontSize: '0.8rem' }}>
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <span style={{ fontWeight: 600, color: 'var(--accent)', display: 'block' }}>
+                  ↩️ {replyTo.from_me ? (replyTo.sender_name || 'Eu') : 'Cliente'}
+                </span>
+                <span style={{ color: 'var(--muted)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', display: 'block' }}>
+                  {replyTo.quoted_media_type ? '📎 Ficheiro' : replyTo.body}
+                </span>
+              </div>
+              <button onClick={() => setReplyTo(null)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--hint)', fontSize: '0.85rem', flexShrink: 0 }}>✕</button>
+            </div>
+          )}
+
           {/* Hidden file input */}
           <input ref={fileInputRef} type="file" style={{ display: 'none' }}
             accept="image/*,video/*,audio/*,.pdf,.doc,.docx,.xls,.xlsx,.zip"

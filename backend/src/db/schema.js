@@ -122,6 +122,7 @@ try { db.exec(`ALTER TABLE conversations ADD COLUMN sla_alerted_at DATETIME`); }
 try { db.exec(`ALTER TABLE messages ADD COLUMN wa_message_id TEXT`); } catch (_) {}
 try { db.exec(`ALTER TABLE messages ADD COLUMN edited_at DATETIME`); } catch (_) {}
 try { db.exec(`ALTER TABLE messages ADD COLUMN failed INTEGER NOT NULL DEFAULT 0`); } catch (_) {}
+try { db.exec(`ALTER TABLE messages ADD COLUMN reply_to_id INTEGER`); } catch (_) {}
 
 // Seed default settings
 const settingsDefaults = [
