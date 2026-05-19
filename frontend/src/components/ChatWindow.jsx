@@ -4,6 +4,17 @@ import { useAuth } from '../context/AuthContext';
 
 const API = import.meta.env.VITE_API_URL || '';
 
+// SQLite guarda UTC sem 'Z' — forçar interpretação correta
+function utc(str) {
+  if (!str) return new Date(str);
+  // Já tem indicador de fuso (Z ou +HH:MM)
+  if (/[Z+]/.test(str.slice(-6))) return new Date(str);
+  // Formato ISO com T → adicionar Z
+  if (str.includes('T')) return new Date(str + 'Z');
+  // Formato SQLite "YYYY-MM-DD HH:MM:SS" → converter para ISO UTC
+  return new Date(str.replace(' ', 'T') + 'Z');
+}
+
 function parseVcard(vcf) {
   const fn = vcf.match(/FN[^:]*:(.+)/)?.[1]?.trim() || 'Contacto';
   const tel = vcf.match(/TEL[^:]*:(.+)/)?.[1]?.trim() || '';
@@ -440,7 +451,7 @@ export default function ChatWindow({ conversation: convProp, socket, onClose, on
             ? <p style={{ fontSize: '0.8rem', color: 'var(--hint)', margin: 0 }}>Sem conversas anteriores</p>
             : history.map(c => (
               <div key={c.id} style={S.historyItem}>
-                <span style={{ fontSize: '0.78rem', color: 'var(--muted)' }}>{new Date(c.created_at).toLocaleDateString('pt-PT')}</span>
+                <span style={{ fontSize: '0.78rem', color: 'var(--muted)' }}>{utc(c.created_at).toLocaleDateString('pt-PT')}</span>
                 <span style={{ fontSize: '0.78rem', color: 'var(--text)', marginLeft: '0.5rem' }}>{c.attendant_name || 'Sem atendente'} · {c.message_count} msgs</span>
                 <span style={{ fontSize: '0.72rem', color: c.status === 'closed' ? 'var(--hint)' : 'var(--success)', marginLeft: 'auto' }}>{c.status}</span>
               </div>
@@ -457,7 +468,7 @@ export default function ChatWindow({ conversation: convProp, socket, onClose, on
             )}
             <MessageContent msg={msg} onMediaLoad={scrollToBottom} />
             {msg.failed && <span style={{ color: 'var(--danger)', fontSize: '0.78rem' }}> ⚠️</span>}
-            <span style={S.time}>{new Date(msg.timestamp).toLocaleTimeString('pt-PT', { hour: '2-digit', minute: '2-digit' })}</span>
+            <span style={S.time}>{utc(msg.timestamp).toLocaleTimeString('pt-PT', { hour: '2-digit', minute: '2-digit' })}</span>
           </div>
         ))}
         <div ref={bottomRef} />

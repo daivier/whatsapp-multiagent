@@ -7,9 +7,17 @@ const STATUS_LABEL = { waiting: 'Aguarda', open: 'Aberta', closed: 'Fechada' };
 const STATUS_COLOR = { waiting: 'var(--warn)', open: 'var(--success)', closed: 'var(--hint)' };
 const STATUS_BG    = { waiting: 'var(--warn-l)', open: 'var(--success-l)', closed: '#f3f4f6' };
 
+// SQLite guarda UTC sem 'Z' — forçar interpretação correta
+function utc(str) {
+  if (!str) return new Date(str);
+  if (/[Z+]/.test(str.slice(-6))) return new Date(str);
+  if (str.includes('T')) return new Date(str + 'Z');
+  return new Date(str.replace(' ', 'T') + 'Z');
+}
+
 function formatWait(dateStr) {
   if (!dateStr) return null;
-  const diff = Math.floor((Date.now() - new Date(dateStr).getTime()) / 1000);
+  const diff = Math.floor((Date.now() - utc(dateStr).getTime()) / 1000);
   if (diff < 60) return { label: `${diff}s`, level: 'ok' };
   if (diff < 3600) { const m = Math.floor(diff / 60); return { label: `${m}min`, level: m < 10 ? 'ok' : m < 30 ? 'warn' : 'danger' }; }
   if (diff < 86400) { const h = Math.floor(diff / 3600); return { label: `${h}h`, level: 'danger' }; }
@@ -201,9 +209,9 @@ export default function ConversationList({ socket, selected, onSelect }) {
                     )}
                     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                       <span style={S.phone}>{conv.phone}</span>
-                      {conv.snoozed_until && new Date(conv.snoozed_until) > new Date() ? (
+                      {conv.snoozed_until && utc(conv.snoozed_until) > new Date() ? (
                         <span style={{ fontSize: '0.68rem', fontWeight: 600, background: '#e0e7ff', color: '#4338ca', borderRadius: '4px', padding: '0 4px' }}>
-                          💤 {new Date(conv.snoozed_until).toLocaleTimeString('pt-PT', { hour: '2-digit', minute: '2-digit' })}
+                          💤 {utc(conv.snoozed_until).toLocaleTimeString('pt-PT', { hour: '2-digit', minute: '2-digit' })}
                         </span>
                       ) : wait ? (
                         <span style={{ fontSize: '0.68rem', fontWeight: 600, background: WAIT_BGS[wait.level], color: WAIT_COLORS[wait.level], borderRadius: '4px', padding: '0 4px' }}>
