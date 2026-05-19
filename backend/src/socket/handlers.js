@@ -1,7 +1,7 @@
 const jwt = require('jsonwebtoken');
 const db = require('../db/schema');
 const { SECRET } = require('../middleware/auth');
-const { sendMessage, getStatus } = require('../whatsapp/client');
+const { sendMessage, getStatus, editMessage } = require('../whatsapp/client');
 
 function initSocket(io) {
   io.use((socket, next) => {
@@ -64,9 +64,12 @@ function initSocket(io) {
       io.emit('message:new', { message, conversation: fullConversation });
       callback?.({ ok: true, message });
 
-      // Usa wa_id (ex: @lid) se disponível, senão usa phone
+      // Usa wa_id (ex: @lid) se disponível, senão usa phone; guarda wa_message_id para edição futura
       try {
-        await sendMessage(conv.wa_id || conv.phone, body);
+        const waMessageId = await sendMessage(conv.wa_id || conv.phone, body);
+        if (waMessageId) {
+          db.prepare('UPDATE messages SET wa_message_id = ? WHERE id = ?').run(waMessageId, result.lastInsertRowid);
+        }
       } catch (err) {
         console.error('Aviso: mensagem guardada mas não enviada pelo WhatsApp:', err.message);
       }

@@ -89,6 +89,9 @@ export default function ChatWindow({ conversation: convProp, socket, onClose, on
   const [scheduleAt, setScheduleAt] = useState('');
   const [scheduleSaving, setScheduleSaving] = useState(false);
   const [uploadingFile, setUploadingFile] = useState(false);
+  // Edit message
+  const [editingMsg, setEditingMsg] = useState(null); // { id, body }
+  const [editBody, setEditBody] = useState('');
   // Priority
   const [showPriorityPicker, setShowPriorityPicker] = useState(false);
   // Snooze
@@ -134,9 +137,14 @@ export default function ChatWindow({ conversation: convProp, socket, onClose, on
       if (conversation_id !== conversation.id) return;
       setTypers(prev => { const next = { ...prev }; if (typing) next[userId] = name; else delete next[userId]; return next; });
     }
+    function onEdited(msg) {
+      if (msg.conversation_id !== conversation.id) return;
+      setMessages(prev => prev.map(m => m.id === msg.id ? msg : m));
+    }
     socket.on('message:new', onMessage);
     socket.on('typing:update', onTyping);
-    return () => { socket.off('message:new', onMessage); socket.off('typing:update', onTyping); };
+    socket.on('message:edited', onEdited);
+    return () => { socket.off('message:new', onMessage); socket.off('typing:update', onTyping); socket.off('message:edited', onEdited); };
   }, [socket, conversation]);
 
   function scrollToBottom() {
@@ -152,6 +160,18 @@ export default function ChatWindow({ conversation: convProp, socket, onClose, on
     const r = await api.get(`/conversations/contact/${conversation.phone}`);
     setHistory(Array.isArray(r.data) ? r.data.filter(c => c.id !== conversation.id) : []);
     setShowHistory(true);
+  }
+
+  async function saveEdit() {
+    if (!editBody.trim() || !editingMsg) return;
+    try {
+      const { data } = await api.patch(`/messages/${editingMsg.id}`, { body: editBody.trim() });
+      setMessages(prev => prev.map(m => m.id === data.id ? data : m));
+      setEditingMsg(null);
+      setEditBody('');
+    } catch (err) {
+      alert(err.response?.data?.error || 'Erro ao editar mensagem');
+    }
   }
 
   async function closeConversation() {
@@ -461,16 +481,49 @@ export default function ChatWindow({ conversation: convProp, socket, onClose, on
 
       {/* Messages */}
       <div ref={messagesRef} style={S.messages}>
-        {messages.map((msg) => (
-          <div key={msg.id} style={{ ...S.bubble, ...(msg.from_me ? S.mine : S.theirs), ...(msg.is_internal ? S.internal : {}) }}>
-            {!!msg.from_me && msg.sender_name && (
-              <span style={S.senderName}>{msg.sender_name}{msg.is_internal ? ' · nota interna' : ''}</span>
-            )}
-            <MessageContent msg={msg} onMediaLoad={scrollToBottom} />
-            {msg.failed && <span style={{ color: 'var(--danger)', fontSize: '0.78rem' }}> ⚠️</span>}
-            <span style={S.time}>{utc(msg.timestamp).toLocaleTimeString('pt-PT', { hour: '2-digit', minute: '2-digit' })}</span>
-          </div>
-        ))}
+        {messages.map((msg) => {
+          const isEditing = editingMsg?.id === msg.id;
+          const canEdit = !!msg.from_me && !msg.is_internal && (Date.now() - utc(msg.timestamp).getTime()) < 15 * 60 * 1000;
+          return (
+            <div key={msg.id} style={{ ...S.bubble, ...(msg.from_me ? S.mine : S.theirs), ...(msg.is_internal ? S.internal : {}), position: 'relative' }}
+              onMouseEnter={e => { if (canEdit) e.currentTarget.querySelector('.edit-btn')?.style && (e.currentTarget.querySelector('.edit-btn').style.opacity = '1'); }}
+              onMouseLeave={e => { e.currentTarget.querySelector('.edit-btn')?.style && (e.currentTarget.querySelector('.edit-btn').style.opacity = '0'); }}>
+              {!!msg.from_me && msg.sender_name && (
+                <span style={S.senderName}>{msg.sender_name}{msg.is_internal ? ' · nota interna' : ''}</span>
+              )}
+              {isEditing ? (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.3rem', minWidth: '180px' }}>
+                  <textarea
+                    autoFocus
+                    value={editBody}
+                    onChange={e => setEditBody(e.target.value)}
+                    onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); saveEdit(); } if (e.key === 'Escape') { setEditingMsg(null); } }}
+                    style={{ fontSize: '0.88rem', padding: '0.25rem', borderRadius: '4px', border: '1px solid var(--accent)', resize: 'none', minHeight: '60px', background: 'var(--bg)', color: 'var(--text)' }}
+                  />
+                  <div style={{ display: 'flex', gap: '0.4rem', justifyContent: 'flex-end' }}>
+                    <button onClick={() => setEditingMsg(null)} style={{ fontSize: '0.75rem', padding: '2px 8px', border: '1px solid var(--border-m)', background: 'none', borderRadius: '4px', cursor: 'pointer', color: 'var(--muted)' }}>Cancelar</button>
+                    <button onClick={saveEdit} style={{ fontSize: '0.75rem', padding: '2px 8px', background: 'var(--accent)', color: '#fff', border: 'none', borderRadius: '4px', cursor: 'pointer' }}>Guardar</button>
+                  </div>
+                </div>
+              ) : (
+                <>
+                  <MessageContent msg={msg} onMediaLoad={scrollToBottom} />
+                  {msg.failed && <span style={{ color: 'var(--danger)', fontSize: '0.78rem' }}> ⚠️</span>}
+                </>
+              )}
+              <span style={S.time}>
+                {msg.edited_at && <span style={{ fontSize: '0.65rem', opacity: 0.7 }}>editada · </span>}
+                {utc(msg.timestamp).toLocaleTimeString('pt-PT', { hour: '2-digit', minute: '2-digit' })}
+              </span>
+              {canEdit && !isEditing && (
+                <button className="edit-btn" onClick={() => { setEditingMsg(msg); setEditBody(msg.body); }}
+                  style={{ opacity: 0, transition: 'opacity .15s', position: 'absolute', top: '4px', left: msg.from_me ? '-28px' : 'auto', right: msg.from_me ? 'auto' : '-28px', background: 'var(--card)', border: '1px solid var(--border-m)', borderRadius: '50%', width: 22, height: 22, cursor: 'pointer', fontSize: '0.7rem', display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: 'var(--sh)' }}>
+                  ✏️
+                </button>
+              )}
+            </div>
+          );
+        })}
         <div ref={bottomRef} />
       </div>
 

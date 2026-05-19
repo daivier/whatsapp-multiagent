@@ -1,7 +1,7 @@
 const express = require('express');
 const db = require('../db/schema');
 const { authMiddleware } = require('../middleware/auth');
-const { sendMessage } = require('../whatsapp/client');
+const { sendMessage, editMessage } = require('../whatsapp/client');
 
 const router = express.Router();
 
@@ -38,6 +38,40 @@ router.post('/', authMiddleware, async (req, res) => {
 
   const message = db.prepare('SELECT * FROM messages WHERE id = ?').get(result.lastInsertRowid);
   res.status(201).json(message);
+});
+
+// PATCH /messages/:id — editar mensagem enviada (máx. 15 min)
+router.patch('/:id', authMiddleware, async (req, res) => {
+  const { body } = req.body;
+  if (!body?.trim()) return res.status(400).json({ error: 'body obrigatório' });
+
+  const msg = db.prepare('SELECT * FROM messages WHERE id = ?').get(req.params.id);
+  if (!msg) return res.status(404).json({ error: 'Mensagem não encontrada' });
+  if (!msg.from_me) return res.status(400).json({ error: 'Só é possível editar mensagens enviadas' });
+  if (msg.is_internal) return res.status(400).json({ error: 'Notas internas não podem ser editadas via WhatsApp' });
+
+  // Verificar que não passou mais de 15 minutos
+  const age = Date.now() - new Date(msg.timestamp.replace(' ', 'T') + 'Z').getTime();
+  if (age > 15 * 60 * 1000) return res.status(400).json({ error: 'Só é possível editar mensagens enviadas nos últimos 15 minutos' });
+
+  // Editar no WhatsApp se houver wa_message_id
+  if (msg.wa_message_id) {
+    try {
+      await editMessage(msg.wa_message_id, body.trim());
+    } catch (err) {
+      console.error('Erro ao editar no WhatsApp:', err.message);
+      // Continua mesmo se o WhatsApp falhar — actualiza BD
+    }
+  }
+
+  db.prepare('UPDATE messages SET body = ?, edited_at = CURRENT_TIMESTAMP WHERE id = ?').run(body.trim(), msg.id);
+  const updated = db.prepare('SELECT * FROM messages WHERE id = ?').get(msg.id);
+
+  // Emitir via socket para todos os clientes actualizarem a mensagem
+  const ioInstance = require('../io-instance').get();
+  ioInstance?.to(`conv:${msg.conversation_id}`).emit('message:edited', updated);
+
+  res.json(updated);
 });
 
 module.exports = router;

@@ -219,16 +219,25 @@ async function sendMessage(phone, body) {
   }
 
   try {
-    await client.sendMessage(waId, body);
+    const msg = await client.sendMessage(waId, body);
+    return msg?.id?._serialized || null;
   } catch (err) {
     // Se @c.us falhar com LID error, tenta @lid
     if (waId.endsWith('@c.us') && err.message && (err.message.includes('No LID') || err.message === 't')) {
       const lidId = waId.replace('@c.us', '@lid');
-      await client.sendMessage(lidId, body);
+      const msg = await client.sendMessage(lidId, body);
+      return msg?.id?._serialized || null;
     } else {
       throw err;
     }
   }
+}
+
+async function editMessage(waMessageId, newBody) {
+  if (!isReady) throw new Error('WhatsApp não está conectado');
+  const msg = await client.getMessageById(waMessageId);
+  if (!msg) throw new Error('Mensagem não encontrada no WhatsApp');
+  await msg.edit(newBody);
 }
 
 async function sendMedia(phone, filePath, filename, caption) {
@@ -264,4 +273,4 @@ function getConversationWithContact(conversationId) {
     .get(conversationId);
 }
 
-module.exports = { initWhatsApp, sendMessage, sendMedia, getStatus, disconnectWhatsApp };
+module.exports = { initWhatsApp, sendMessage, sendMedia, editMessage, getStatus, disconnectWhatsApp };

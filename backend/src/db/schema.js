@@ -119,6 +119,8 @@ try { db.exec(`ALTER TABLE conversations ADD COLUMN snoozed_until DATETIME`); } 
 try { db.exec(`ALTER TABLE quick_replies ADD COLUMN category TEXT`); } catch (_) {}
 try { db.exec(`ALTER TABLE users ADD COLUMN on_shift INTEGER NOT NULL DEFAULT 0`); } catch (_) {}
 try { db.exec(`ALTER TABLE conversations ADD COLUMN sla_alerted_at DATETIME`); } catch (_) {}
+try { db.exec(`ALTER TABLE messages ADD COLUMN wa_message_id TEXT`); } catch (_) {}
+try { db.exec(`ALTER TABLE messages ADD COLUMN edited_at DATETIME`); } catch (_) {}
 
 // Seed default settings
 const settingsDefaults = [
