@@ -244,14 +244,21 @@ async function sendMessage(phone, body) {
     const msg = await client.sendMessage(waId, body);
     return msg?.id?._serialized || null;
   } catch (err) {
-    // Se @c.us falhar com LID error, tenta @lid
-    if (waId.endsWith('@c.us') && err.message && (err.message.includes('No LID') || err.message === 't')) {
-      const lidId = waId.replace('@c.us', '@lid');
-      const msg = await client.sendMessage(lidId, body);
-      return msg?.id?._serialized || null;
-    } else {
-      throw err;
+    const isLidError = err.message && (err.message.includes('No LID') || err.message === 't');
+    if (waId.endsWith('@c.us') && isLidError) {
+      // Tenta encontrar o LID real guardado na BD para este contacto
+      const phoneNum = waId.replace('@c.us', '');
+      const contact = db.prepare(`SELECT wa_id FROM contacts WHERE (phone = ? OR phone = ?) AND wa_id LIKE '%@lid'`)
+                        .get(phoneNum, phoneNum.replace(/^55/, ''));
+      if (contact?.wa_id) {
+        console.log(`[sendMessage] Usando LID guardado ${contact.wa_id} para ${phoneNum}`);
+        const msg = await client.sendMessage(contact.wa_id, body);
+        return msg?.id?._serialized || null;
+      }
+      // Sem LID conhecido — sem fallback inválido
+      throw new Error(`Não foi possível entregar a mensagem (No LID). O contacto precisa de enviar uma mensagem primeiro.`);
     }
+    throw err;
   }
 }
 

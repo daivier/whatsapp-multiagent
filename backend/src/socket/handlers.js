@@ -72,6 +72,10 @@ function initSocket(io) {
         }
       } catch (err) {
         console.error('Aviso: mensagem guardada mas não enviada pelo WhatsApp:', err.message);
+        // Marcar como falhada e notificar o frontend
+        db.prepare('UPDATE messages SET failed = 1 WHERE id = ?').run(result.lastInsertRowid);
+        const failedMsg = db.prepare('SELECT * FROM messages WHERE id = ?').get(result.lastInsertRowid);
+        io.to(`conv:${conversation_id}`).emit('message:failed', { message: failedMsg, error: err.message });
       }
     });
 

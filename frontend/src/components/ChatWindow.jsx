@@ -144,10 +144,15 @@ export default function ChatWindow({ conversation: convProp, socket, onClose, on
       if (msg.conversation_id !== conversation.id) return;
       setMessages(prev => prev.map(m => m.id === msg.id ? msg : m));
     }
+    function onFailed({ message: msg }) {
+      if (msg.conversation_id !== conversation.id) return;
+      setMessages(prev => prev.map(m => m.id === msg.id ? { ...m, failed: msg.failed } : m));
+    }
     socket.on('message:new', onMessage);
     socket.on('typing:update', onTyping);
     socket.on('message:edited', onEdited);
-    return () => { socket.off('message:new', onMessage); socket.off('typing:update', onTyping); socket.off('message:edited', onEdited); };
+    socket.on('message:failed', onFailed);
+    return () => { socket.off('message:new', onMessage); socket.off('typing:update', onTyping); socket.off('message:edited', onEdited); socket.off('message:failed', onFailed); };
   }, [socket, conversation]);
 
   function scrollToBottom() {
@@ -544,7 +549,19 @@ export default function ChatWindow({ conversation: convProp, socket, onClose, on
               ) : (
                 <>
                   <MessageContent msg={msg} onMediaLoad={scrollToBottom} />
-                  {msg.failed && <span style={{ color: 'var(--danger)', fontSize: '0.78rem' }}> ⚠️</span>}
+                  {msg.failed ? (
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', marginTop: '0.25rem' }}>
+                      <span style={{ color: 'var(--danger)', fontSize: '0.75rem' }}>⚠️ Não entregue</span>
+                      <button onClick={async () => {
+                        try {
+                          const { data } = await api.post(`/messages/${msg.id}/retry`);
+                          setMessages(prev => prev.map(m => m.id === data.id ? data : m));
+                        } catch (e) { alert(e.response?.data?.error || 'Erro ao reenviar'); }
+                      }} style={{ fontSize: '0.72rem', padding: '1px 7px', background: 'var(--danger)', color: '#fff', border: 'none', borderRadius: '4px', cursor: 'pointer' }}>
+                        ↻ Reenviar
+                      </button>
+                    </div>
+                  ) : null}
                 </>
               )}
               <span style={S.time}>

@@ -40,6 +40,24 @@ router.post('/', authMiddleware, async (req, res) => {
   res.status(201).json(message);
 });
 
+// POST /messages/:id/retry — reenviar mensagem falhada
+router.post('/:id/retry', authMiddleware, async (req, res) => {
+  const msg = db.prepare('SELECT m.*, c.phone, c.wa_id FROM messages m JOIN conversations conv ON conv.id = m.conversation_id JOIN contacts c ON c.id = conv.contact_id WHERE m.id = ?').get(req.params.id);
+  if (!msg) return res.status(404).json({ error: 'Mensagem não encontrada' });
+  if (!msg.from_me) return res.status(400).json({ error: 'Só é possível reenviar mensagens enviadas' });
+
+  try {
+    const waMessageId = await sendMessage(msg.wa_id || msg.phone, msg.body);
+    db.prepare('UPDATE messages SET failed = 0, wa_message_id = COALESCE(?, wa_message_id) WHERE id = ?').run(waMessageId, msg.id);
+    const updated = db.prepare('SELECT * FROM messages WHERE id = ?').get(msg.id);
+    const ioInstance = require('../io-instance').get();
+    ioInstance?.to(`conv:${msg.conversation_id}`).emit('message:failed', { message: updated, error: null });
+    res.json(updated);
+  } catch (err) {
+    res.status(503).json({ error: err.message });
+  }
+});
+
 // PATCH /messages/:id — editar mensagem enviada (máx. 15 min)
 router.patch('/:id', authMiddleware, async (req, res) => {
   const { body } = req.body;
