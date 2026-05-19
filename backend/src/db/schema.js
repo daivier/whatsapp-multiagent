@@ -106,6 +106,9 @@ try { db.exec(`ALTER TABLE messages ADD COLUMN media_url TEXT`); } catch (_) {}
 try { db.exec(`ALTER TABLE messages ADD COLUMN media_type TEXT`); } catch (_) {}
 try { db.exec(`ALTER TABLE messages ADD COLUMN is_internal INTEGER NOT NULL DEFAULT 0`); } catch (_) {}
 try { db.exec(`ALTER TABLE conversations ADD COLUMN tags TEXT`); } catch (_) {}
+try { db.exec(`ALTER TABLE conversations ADD COLUMN priority TEXT NOT NULL DEFAULT 'normal'`); } catch (_) {}
+try { db.exec(`ALTER TABLE conversations ADD COLUMN snoozed_until DATETIME`); } catch (_) {}
+try { db.exec(`ALTER TABLE quick_replies ADD COLUMN category TEXT`); } catch (_) {}
 
 // Seed default settings
 const settingsDefaults = [

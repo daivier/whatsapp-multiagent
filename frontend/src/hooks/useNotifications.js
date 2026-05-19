@@ -52,11 +52,25 @@ export function useNotifications(socket, selectedConv) {
       }
     }
 
+    function onMentionNew({ message, conversation, mentioned_by }) {
+      playNotificationSound();
+      if (Notification.permission === 'granted') {
+        const n = new Notification(`📌 ${mentioned_by} mencionou-te`, {
+          body: `Em "${conversation?.contact_name || conversation?.phone}": ${(message?.body || '').slice(0, 80)}`,
+          icon: '/favicon.ico',
+          tag: `mention-${message?.id}`,
+        });
+        n.onclick = () => { window.focus(); n.close(); };
+      }
+    }
+
     socket.on('message:new', onNewMessage);
     socket.on('message:incoming', onNewMessage);
+    socket.on('mention:new', onMentionNew);
     return () => {
       socket.off('message:new', onNewMessage);
       socket.off('message:incoming', onNewMessage);
+      socket.off('mention:new', onMentionNew);
     };
   }, [socket, selectedConv?.id]);
 }

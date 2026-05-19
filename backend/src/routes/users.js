@@ -5,6 +5,12 @@ const { authMiddleware, ownerOnly } = require('../middleware/auth');
 
 const router = express.Router();
 
+// GET /users/team — lista básica para @menções (qualquer utilizador autenticado)
+router.get('/team', authMiddleware, (req, res) => {
+  const users = db.prepare('SELECT id, name FROM users WHERE active = 1 ORDER BY name ASC').all();
+  res.json(users);
+});
+
 // GET /users — listar atendentes (owner only)
 router.get('/', authMiddleware, ownerOnly, (req, res) => {
   const users = db

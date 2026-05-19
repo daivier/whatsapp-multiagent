@@ -92,7 +92,7 @@ export default function ConversationList({ socket, selected, onSelect }) {
 
   function clearSearch() { setSearchQ(''); setSearchResults(null); setSearching(false); }
 
-  const FILTERS = [['open','Abertas'],['waiting','Aguarda'],['closed','Fechadas'],['','Todas']];
+  const FILTERS = [['open','Abertas'],['waiting','Aguarda'],['closed','Fechadas'],['snoozed','💤 Snooze'],['','Todas']];
 
   const isSearching = searchResults !== null;
 
@@ -166,8 +166,9 @@ export default function ConversationList({ socket, selected, onSelect }) {
               const initial = (conv.contact_name || conv.phone || '?')[0].toUpperCase();
               const unread = conv.unread_count || 0;
               const wait = (conv.status !== 'closed') ? formatWait(conv.last_client_at) : null;
+              const priorityColor = conv.priority === 'urgent' ? '#ef4444' : conv.priority === 'low' ? '#3b82f6' : null;
               return (
-                <div key={conv.id} style={{ ...S.item, ...(isSelected ? S.itemActive : {}) }} onClick={() => onSelect(conv)}>
+                <div key={conv.id} style={{ ...S.item, ...(isSelected ? S.itemActive : {}), ...(priorityColor ? { boxShadow: `inset 3px 0 0 ${priorityColor}` } : {}) }} onClick={() => onSelect(conv)}>
                   <div style={{ position: 'relative', flexShrink: 0 }}>
                     <div style={{ ...S.avatar, background: isSelected ? 'var(--accent)' : 'var(--accent-l)', color: isSelected ? '#fff' : 'var(--accent)' }}>
                       {initial}
@@ -190,11 +191,15 @@ export default function ConversationList({ socket, selected, onSelect }) {
                     )}
                     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                       <span style={S.phone}>{conv.phone}</span>
-                      {wait && (
+                      {conv.snoozed_until && new Date(conv.snoozed_until) > new Date() ? (
+                        <span style={{ fontSize: '0.68rem', fontWeight: 600, background: '#e0e7ff', color: '#4338ca', borderRadius: '4px', padding: '0 4px' }}>
+                          💤 {new Date(conv.snoozed_until).toLocaleTimeString('pt-PT', { hour: '2-digit', minute: '2-digit' })}
+                        </span>
+                      ) : wait ? (
                         <span style={{ fontSize: '0.68rem', fontWeight: 600, background: WAIT_BGS[wait.level], color: WAIT_COLORS[wait.level], borderRadius: '4px', padding: '0 4px' }}>
                           ⏱ {wait.label}
                         </span>
-                      )}
+                      ) : null}
                     </div>
                   </div>
                 </div>

@@ -78,6 +78,14 @@ export default function ChatWindow({ conversation: convProp, socket, onClose, on
   const [scheduleAt, setScheduleAt] = useState('');
   const [scheduleSaving, setScheduleSaving] = useState(false);
   const [uploadingFile, setUploadingFile] = useState(false);
+  // Priority
+  const [showPriorityPicker, setShowPriorityPicker] = useState(false);
+  // Snooze
+  const [showSnooze, setShowSnooze] = useState(false);
+  // @mention autocomplete
+  const [teamUsers, setTeamUsers] = useState([]);
+  const [mentionActive, setMentionActive] = useState(false);
+  const [mentionSearch, setMentionSearch] = useState('');
   const fileInputRef = useRef(null);
   const typingTimer = useRef(null);
   const messagesRef = useRef(null);
@@ -89,6 +97,7 @@ export default function ChatWindow({ conversation: convProp, socket, onClose, on
   useEffect(() => {
     api.get('/quick-replies').then(r => setQuickReplies(Array.isArray(r.data) ? r.data : []));
     api.get('/tags').then(r => setAllTags(Array.isArray(r.data) ? r.data : []));
+    api.get('/users/team').then(r => setTeamUsers(Array.isArray(r.data) ? r.data : [])).catch(() => {});
   }, []);
 
   useEffect(() => {
@@ -210,12 +219,29 @@ export default function ChatWindow({ conversation: convProp, socket, onClose, on
   function handleTyping(e) {
     const val = e.target.value;
     setText(val);
+
+    // Quick replies trigger
     if (val.startsWith('/')) {
       const q = val.slice(1).toLowerCase();
       setQrSuggestions(quickReplies.filter(r => r.shortcut.toLowerCase().includes(q) || r.body.toLowerCase().includes(q)));
     } else {
       setQrSuggestions([]);
     }
+
+    // @mention trigger (only in internal notes)
+    if (isInternal) {
+      const atMatch = val.match(/@(\S*)$/);
+      if (atMatch) {
+        const q = atMatch[1].toLowerCase();
+        setMentionSearch(q);
+        setMentionActive(true);
+      } else {
+        setMentionActive(false);
+      }
+    } else {
+      setMentionActive(false);
+    }
+
     if (!socket || !conversation || isInternal) return;
     socket.emit('typing:start', { conversation_id: conversation.id });
     clearTimeout(typingTimer.current);
@@ -223,6 +249,46 @@ export default function ChatWindow({ conversation: convProp, socket, onClose, on
   }
 
   function applyQuickReply(qr) { setText(qr.body); setQrSuggestions([]); }
+
+  async function changePriority(priority) {
+    try {
+      const { data } = await api.patch(`/conversations/${conversation.id}/priority`, { priority });
+      setConversation(data);
+      onConversationChange?.(data);
+    } catch (err) {
+      setWarning(err.response?.data?.error || 'Erro ao alterar prioridade');
+    }
+    setShowPriorityPicker(false);
+  }
+
+  async function snoozeConversation(minutes) {
+    const until = new Date(Date.now() + minutes * 60 * 1000).toISOString();
+    try {
+      const { data } = await api.patch(`/conversations/${conversation.id}/snooze`, { snoozed_until: until });
+      setConversation(data);
+      onConversationChange?.(data);
+      setShowSnooze(false);
+    } catch (err) {
+      setWarning(err.response?.data?.error || 'Erro ao adiar');
+    }
+  }
+
+  async function unsnoozeConversation() {
+    try {
+      const { data } = await api.patch(`/conversations/${conversation.id}/snooze`, { snoozed_until: null });
+      setConversation(data);
+      onConversationChange?.(data);
+    } catch (err) {
+      setWarning(err.response?.data?.error || 'Erro ao reativar');
+    }
+  }
+
+  function applyMention(teamUser) {
+    const newText = text.replace(/@\S*$/, `@${teamUser.name} `);
+    setText(newText);
+    setMentionActive(false);
+    setMentionSearch('');
+  }
 
   async function saveSchedule() {
     if (!scheduleBody.trim() || !scheduleAt) return;
@@ -255,12 +321,32 @@ export default function ChatWindow({ conversation: convProp, socket, onClose, on
   }
 
   function handleKey(e) {
-    if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send(); }
-    if (e.key === 'Escape') setQrSuggestions([]);
+    if (e.key === 'Escape') { setQrSuggestions([]); setMentionActive(false); return; }
+    if (e.key === 'Enter' && !e.shiftKey && !mentionActive) { e.preventDefault(); send(); }
   }
 
   const typerNames = Object.values(typers).filter(Boolean);
   const isClosed = conversation?.status === 'closed';
+  const isSnoozed = conversation?.snoozed_until && new Date(conversation.snoozed_until) > new Date();
+
+  const PRIORITY_OPTIONS = [
+    { value: 'urgent', label: '🔴 Urgente', color: '#ef4444' },
+    { value: 'normal', label: '⚪ Normal', color: 'var(--muted)' },
+    { value: 'low',    label: '🔵 Baixa',   color: '#3b82f6' },
+  ];
+  const currentPriority = PRIORITY_OPTIONS.find(p => p.value === (conversation?.priority || 'normal'));
+
+  const mentionFiltered = mentionActive
+    ? teamUsers.filter(u => u.name.toLowerCase().includes(mentionSearch))
+    : [];
+
+  // Group quick replies by category for the dropdown
+  const qrGrouped = qrSuggestions.reduce((acc, qr) => {
+    const cat = qr.category || '';
+    if (!acc[cat]) acc[cat] = [];
+    acc[cat].push(qr);
+    return acc;
+  }, {});
 
   if (!conversation) {
     return (
@@ -281,6 +367,7 @@ export default function ChatWindow({ conversation: convProp, socket, onClose, on
           <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flexWrap: 'wrap' }}>
             <strong style={{ fontSize: '0.9rem', color: 'var(--text)' }}>{conversation.contact_name || conversation.phone}</strong>
             {isClosed && <span style={{ background: '#f3f4f6', color: 'var(--hint)', borderRadius: '999px', padding: '0.1rem 0.55rem', fontSize: '0.7rem', fontWeight: 600 }}>Fechada</span>}
+            {isSnoozed && <span style={{ background: '#e0e7ff', color: '#4338ca', borderRadius: '999px', padding: '0.1rem 0.55rem', fontSize: '0.7rem', fontWeight: 600 }}>💤 Adiada</span>}
             {convTags.map(t => (
               <span key={t.id} style={{ background: t.color + '18', border: `1px solid ${t.color}55`, color: t.color, borderRadius: '999px', padding: '0.1rem 0.5rem', fontSize: '0.7rem', fontWeight: 600 }}>{t.name}</span>
             ))}
@@ -291,6 +378,27 @@ export default function ChatWindow({ conversation: convProp, socket, onClose, on
           {user.role === 'owner' && (
             <span style={S.attendantBadge}>{conversation.attendant_name || 'Sem atendente'}</span>
           )}
+
+          {/* Prioridade */}
+          <div style={{ position: 'relative' }}>
+            <button style={{ ...S.iconBtn, color: currentPriority.color, borderColor: currentPriority.color + '66' }}
+              onClick={() => setShowPriorityPicker(v => !v)} title="Prioridade">
+              {currentPriority.label.split(' ')[0]}
+            </button>
+            {showPriorityPicker && (
+              <div style={{ ...S.tagPicker, minWidth: '130px' }}>
+                {PRIORITY_OPTIONS.map(p => (
+                  <div key={p.value} onClick={() => changePriority(p.value)}
+                    style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', padding: '0.35rem 0.5rem', cursor: 'pointer', borderRadius: 'var(--r-sm)', background: conversation.priority === p.value ? p.color + '15' : 'none' }}>
+                    <span style={{ fontSize: '0.85rem', color: p.color, flex: 1, fontWeight: conversation.priority === p.value ? 700 : 400 }}>{p.label}</span>
+                    {conversation.priority === p.value && <span style={{ color: p.color, fontWeight: 700, fontSize: '0.85rem' }}>✓</span>}
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {/* Etiquetas */}
           <div style={{ position: 'relative' }}>
             <button style={S.iconBtn} onClick={() => setShowTagPicker(v => !v)} title="Etiquetas">🏷️</button>
             {showTagPicker && (
@@ -309,6 +417,7 @@ export default function ChatWindow({ conversation: convProp, socket, onClose, on
               </div>
             )}
           </div>
+
           <button style={S.iconBtn} onClick={loadHistory} title="Histórico">🕐</button>
           {isClosed ? (
             <button style={{ ...S.iconBtn, color: 'var(--success)', borderColor: 'var(--success)' }} onClick={reopenConversation}>Reabrir</button>
@@ -365,12 +474,55 @@ export default function ChatWindow({ conversation: convProp, socket, onClose, on
 
       {qrSuggestions.length > 0 && (
         <div style={S.qrDropdown}>
-          {qrSuggestions.map(qr => (
-            <div key={qr.id} style={S.qrItem} onClick={() => applyQuickReply(qr)}>
-              <strong style={{ color: 'var(--accent)', fontSize: '0.85rem' }}>/{qr.shortcut}</strong>
-              <span style={{ color: 'var(--muted)', marginLeft: '0.5rem', fontSize: '0.85rem' }}>{qr.body}</span>
+          {Object.entries(qrGrouped).map(([cat, items]) => (
+            <div key={cat}>
+              {cat && <div style={{ padding: '0.25rem 1rem', fontSize: '0.7rem', fontWeight: 700, color: 'var(--accent)', background: 'var(--accent-l)', textTransform: 'uppercase', letterSpacing: '0.04em' }}>{cat}</div>}
+              {items.map(qr => (
+                <div key={qr.id} style={S.qrItem} onClick={() => applyQuickReply(qr)}>
+                  <strong style={{ color: 'var(--accent)', fontSize: '0.85rem' }}>/{qr.shortcut}</strong>
+                  <span style={{ color: 'var(--muted)', marginLeft: '0.5rem', fontSize: '0.85rem' }}>{qr.body}</span>
+                </div>
+              ))}
             </div>
           ))}
+        </div>
+      )}
+
+      {/* @mention dropdown */}
+      {mentionActive && mentionFiltered.length > 0 && (
+        <div style={{ ...S.qrDropdown, maxHeight: '140px' }}>
+          <div style={{ padding: '0.25rem 1rem', fontSize: '0.7rem', fontWeight: 700, color: 'var(--muted)' }}>Mencionar atendente</div>
+          {mentionFiltered.map(u => (
+            <div key={u.id} style={S.qrItem} onClick={() => applyMention(u)}>
+              <span style={{ width: 24, height: 24, borderRadius: '50%', background: 'var(--accent-l)', color: 'var(--accent)', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', fontWeight: 700, fontSize: '0.75rem', marginRight: '0.5rem', flexShrink: 0 }}>{u.name[0].toUpperCase()}</span>
+              <span style={{ fontSize: '0.85rem', color: 'var(--text)' }}>@{u.name}</span>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* Snooze panel */}
+      {showSnooze && (
+        <div style={S.schedulePanel}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem' }}>
+            <strong style={{ fontSize: '0.85rem', color: 'var(--text)' }}>💤 Adiar conversa</strong>
+            <button onClick={() => setShowSnooze(false)} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: '1rem', color: 'var(--muted)' }}>✕</button>
+          </div>
+          <div style={{ display: 'flex', gap: '0.4rem', flexWrap: 'wrap' }}>
+            {[
+              { label: '1 hora', mins: 60 },
+              { label: '3 horas', mins: 180 },
+              { label: '8 horas', mins: 480 },
+              { label: 'Amanhã 9h', mins: (() => { const t = new Date(); t.setDate(t.getDate() + 1); t.setHours(9, 0, 0, 0); return Math.round((t - Date.now()) / 60000); })() },
+            ].map(({ label, mins }) => (
+              <button key={label} style={{ padding: '0.3rem 0.7rem', background: 'var(--card)', border: '1px solid var(--border-m)', borderRadius: 'var(--r-sm)', cursor: 'pointer', fontSize: '0.82rem', color: 'var(--text)', fontWeight: 500 }}
+                onClick={() => snoozeConversation(mins)}>{label}</button>
+            ))}
+          </div>
+          {isSnoozed && (
+            <button style={{ marginTop: '0.5rem', padding: '0.25rem 0.6rem', background: 'none', border: '1px solid var(--danger)', borderRadius: 'var(--r-sm)', cursor: 'pointer', fontSize: '0.8rem', color: 'var(--danger)' }}
+              onClick={unsnoozeConversation}>Cancelar snooze</button>
+          )}
         </div>
       )}
 
@@ -410,7 +562,7 @@ export default function ChatWindow({ conversation: convProp, socket, onClose, on
               <button style={{ ...S.modeBtn, ...(isInternal ? S.modeBtnInternal : {}) }} onClick={() => setIsInternal(v => !v)}>
                 {isInternal ? '🔒 Nota' : '💬 Mensagem'}
               </button>
-              <span style={{ fontSize: '0.72rem', color: 'var(--hint)' }}>/ para respostas rápidas</span>
+              <span style={{ fontSize: '0.72rem', color: 'var(--hint)' }}>{isInternal ? '@ para mencionar atendente' : '/ para respostas rápidas'}</span>
             </div>
             <textarea
               style={{ ...S.textarea, ...(isInternal ? S.textareaInternal : {}) }}
@@ -426,6 +578,7 @@ export default function ChatWindow({ conversation: convProp, socket, onClose, on
               {uploadingFile ? '⏳' : '📎'}
             </button>
             <button style={S.schedIconBtn} onClick={() => setShowSchedule(v => !v)} title="Agendar mensagem">📅</button>
+            <button style={{ ...S.schedIconBtn, ...(isSnoozed ? { background: '#e0e7ff', borderColor: '#4338ca' } : {}) }} onClick={() => setShowSnooze(v => !v)} title="Adiar conversa">💤</button>
             <button style={S.sendBtn} onClick={send} disabled={sending || !text.trim()}>▶</button>
           </div>
         </div>

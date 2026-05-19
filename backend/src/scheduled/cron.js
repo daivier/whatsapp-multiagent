@@ -3,6 +3,26 @@ const { sendMessage } = require('../whatsapp/client');
 
 function startScheduledMessagesCron(io) {
   setInterval(async () => {
+
+    // Acordar conversas em snooze expirado
+    const snoozedDone = db.prepare(`
+      SELECT conv.id FROM conversations conv
+      WHERE conv.snoozed_until IS NOT NULL AND conv.snoozed_until <= CURRENT_TIMESTAMP
+    `).all();
+    for (const { id } of snoozedDone) {
+      db.prepare('UPDATE conversations SET snoozed_until = NULL, updated_at = CURRENT_TIMESTAMP WHERE id = ?').run(id);
+      const conv = db.prepare(`
+        SELECT conv.*, con.phone, con.name as contact_name, u.name as attendant_name,
+          (SELECT COUNT(*) FROM messages WHERE conversation_id = conv.id AND from_me = 0 AND read = 0) as unread_count,
+          (SELECT MAX(timestamp) FROM messages WHERE conversation_id = conv.id AND from_me = 0) as last_client_at
+        FROM conversations conv
+        JOIN contacts con ON con.id = conv.contact_id
+        LEFT JOIN users u ON u.id = conv.assigned_to
+        WHERE conv.id = ?
+      `).get(id);
+      io.emit('conversation:updated', conv);
+    }
+
     const now = new Date().toISOString().slice(0, 16); // "YYYY-MM-DDTHH:MM"
     const pending = db.prepare(`
       SELECT * FROM scheduled_messages

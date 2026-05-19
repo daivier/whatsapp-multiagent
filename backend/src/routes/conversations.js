@@ -35,17 +35,22 @@ function conversationQuery(extraWhere = '') {
 // GET /conversations
 router.get('/', authMiddleware, (req, res) => {
   const { status } = req.query;
-  let where = '';
+  const conditions = [];
   const params = [];
 
   if (req.user.role === 'attendant') {
-    where = 'WHERE conv.assigned_to = ?';
+    conditions.push('conv.assigned_to = ?');
     params.push(req.user.id);
-    if (status) { where += ' AND conv.status = ?'; params.push(status); }
-  } else {
-    if (status) { where = 'WHERE conv.status = ?'; params.push(status); }
   }
 
+  if (status === 'snoozed') {
+    conditions.push("conv.snoozed_until IS NOT NULL AND conv.snoozed_until > CURRENT_TIMESTAMP");
+  } else {
+    conditions.push("(conv.snoozed_until IS NULL OR conv.snoozed_until <= CURRENT_TIMESTAMP)");
+    if (status) { conditions.push('conv.status = ?'); params.push(status); }
+  }
+
+  const where = conditions.length ? 'WHERE ' + conditions.join(' AND ') : '';
   const conversations = db.prepare(conversationQuery(where)).all(...params);
   res.json(conversations);
 });
@@ -80,13 +85,26 @@ router.post('/:id/notes', authMiddleware, (req, res) => {
   const { body } = req.body;
   if (!body?.trim()) return res.status(400).json({ error: 'body obrigatório' });
 
-  const conv = db.prepare('SELECT * FROM conversations WHERE id = ?').get(req.params.id);
+  const conv = db.prepare('SELECT conv.*, con.name as contact_name, con.phone FROM conversations conv JOIN contacts con ON con.id = conv.contact_id WHERE conv.id = ?').get(req.params.id);
   if (!conv) return res.status(404).json({ error: 'Conversa não encontrada' });
   if (req.user.role === 'attendant' && conv.assigned_to !== req.user.id) return res.status(403).json({ error: 'Sem permissão' });
 
   const result = db.prepare('INSERT INTO messages (conversation_id, from_me, sender_id, body, is_internal) VALUES (?, 1, ?, ?, 1)')
     .run(req.params.id, req.user.id, body);
   const message = db.prepare('SELECT m.*, u.name as sender_name FROM messages m LEFT JOIN users u ON u.id = m.sender_id WHERE m.id = ?').get(result.lastInsertRowid);
+
+  // Processar @menções: emitir mention:new para cada utilizador mencionado
+  const allUsers = db.prepare('SELECT id, name FROM users WHERE active = 1').all();
+  for (const u of allUsers) {
+    if (u.id !== req.user.id && body.includes(`@${u.name}`)) {
+      ioInstance.get()?.to(`user:${u.id}`).emit('mention:new', {
+        message,
+        conversation: { id: conv.id, contact_name: conv.contact_name || conv.phone },
+        mentioned_by: req.user.name,
+      });
+    }
+  }
+
   res.json(message);
 });
 
@@ -185,6 +203,35 @@ router.patch('/:id/reopen', authMiddleware, (req, res) => {
   if (req.user.role === 'attendant' && conv.assigned_to !== req.user.id) return res.status(403).json({ error: 'Sem permissão' });
 
   db.prepare(`UPDATE conversations SET status = 'open', updated_at = CURRENT_TIMESTAMP WHERE id = ?`).run(req.params.id);
+  const updated = db.prepare(conversationQuery('WHERE conv.id = ?')).get(req.params.id);
+  ioInstance.get()?.emit('conversation:updated', updated);
+  res.json(updated);
+});
+
+// PATCH /conversations/:id/priority
+router.patch('/:id/priority', authMiddleware, (req, res) => {
+  const { priority } = req.body;
+  if (!['urgent', 'normal', 'low'].includes(priority)) return res.status(400).json({ error: 'priority deve ser urgent, normal ou low' });
+
+  const conv = db.prepare('SELECT * FROM conversations WHERE id = ?').get(req.params.id);
+  if (!conv) return res.status(404).json({ error: 'Conversa não encontrada' });
+  if (req.user.role === 'attendant' && conv.assigned_to !== req.user.id) return res.status(403).json({ error: 'Sem permissão' });
+
+  db.prepare('UPDATE conversations SET priority = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?').run(priority, req.params.id);
+  const updated = db.prepare(conversationQuery('WHERE conv.id = ?')).get(req.params.id);
+  ioInstance.get()?.emit('conversation:updated', updated);
+  res.json(updated);
+});
+
+// PATCH /conversations/:id/snooze
+router.patch('/:id/snooze', authMiddleware, (req, res) => {
+  const { snoozed_until } = req.body; // ISO string or null to unsnooze
+
+  const conv = db.prepare('SELECT * FROM conversations WHERE id = ?').get(req.params.id);
+  if (!conv) return res.status(404).json({ error: 'Conversa não encontrada' });
+  if (req.user.role === 'attendant' && conv.assigned_to !== req.user.id) return res.status(403).json({ error: 'Sem permissão' });
+
+  db.prepare('UPDATE conversations SET snoozed_until = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?').run(snoozed_until || null, req.params.id);
   const updated = db.prepare(conversationQuery('WHERE conv.id = ?')).get(req.params.id);
   ioInstance.get()?.emit('conversation:updated', updated);
   res.json(updated);

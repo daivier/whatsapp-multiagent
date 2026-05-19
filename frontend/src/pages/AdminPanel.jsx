@@ -47,7 +47,7 @@ export default function AdminPanel({ socket }) {
   const [listKey, setListKey] = useState(0);
 
   const [quickReplies, setQuickReplies] = useState([]);
-  const [newQR, setNewQR] = useState({ shortcut: '', body: '' });
+  const [newQR, setNewQR] = useState({ shortcut: '', body: '', category: '' });
 
   const [tags, setTags] = useState([]);
   const [newTag, setNewTag] = useState({ name: '', color: '#25D366' });
@@ -186,7 +186,7 @@ export default function AdminPanel({ socket }) {
     e.preventDefault();
     if (!newQR.shortcut || !newQR.body) return;
     await api.post('/quick-replies', newQR);
-    setNewQR({ shortcut: '', body: '' }); loadQuickReplies();
+    setNewQR({ shortcut: '', body: '', category: '' }); loadQuickReplies();
   }
   async function deleteQuickReply(id) {
     await api.delete(`/quick-replies/${id}`); loadQuickReplies();
@@ -476,21 +476,28 @@ export default function AdminPanel({ socket }) {
         {tab === 'quickreplies' && (
           <div style={S.section}>
             <h2 style={S.sectionTitle}>Respostas Rápidas</h2>
-            <p style={{ color: 'var(--muted)', fontSize: '0.85rem', marginBottom: '1rem' }}>Os atendentes digitam <strong>/atalho</strong> no chat para usar.</p>
-            <form onSubmit={addQuickReply} style={S.form}>
-              <input style={{ ...S.input, width: '120px' }} placeholder="/atalho" value={newQR.shortcut}
+            <p style={{ color: 'var(--muted)', fontSize: '0.85rem', marginBottom: '1rem' }}>Os atendentes digitam <strong>/atalho</strong> no chat para usar. A categoria agrupa as sugestões.</p>
+            <form onSubmit={addQuickReply} style={{ ...S.form, flexWrap: 'wrap' }}>
+              <input style={{ ...S.input, width: '110px' }} placeholder="/atalho" value={newQR.shortcut}
                 onChange={e => setNewQR(p => ({ ...p, shortcut: e.target.value }))} required />
-              <input style={{ ...S.input, flex: 1 }} placeholder="Texto da resposta" value={newQR.body}
+              <input style={{ ...S.input, flex: 1, minWidth: '180px' }} placeholder="Texto da resposta" value={newQR.body}
                 onChange={e => setNewQR(p => ({ ...p, body: e.target.value }))} required />
+              <input style={{ ...S.input, width: '120px' }} placeholder="Categoria (opcional)" value={newQR.category}
+                onChange={e => setNewQR(p => ({ ...p, category: e.target.value }))} />
               <button style={S.addBtn} type="submit">Adicionar</button>
             </form>
             <table style={S.table}>
-              <thead><tr><th>Atalho</th><th>Mensagem</th><th></th></tr></thead>
+              <thead><tr><th>Atalho</th><th>Mensagem</th><th>Categoria</th><th></th></tr></thead>
               <tbody>
                 {quickReplies.map(qr => (
                   <tr key={qr.id}>
                     <td><strong style={{ color: 'var(--accent)' }}>/{qr.shortcut}</strong></td>
-                    <td style={{ maxWidth: '400px', wordBreak: 'break-word', color: 'var(--muted)' }}>{qr.body}</td>
+                    <td style={{ maxWidth: '350px', wordBreak: 'break-word', color: 'var(--muted)' }}>{qr.body}</td>
+                    <td>
+                      {qr.category
+                        ? <span style={{ background: 'var(--accent-l)', color: 'var(--accent)', padding: '1px 8px', borderRadius: '999px', fontSize: '0.75rem', fontWeight: 600 }}>{qr.category}</span>
+                        : <span style={{ color: 'var(--hint)', fontSize: '0.78rem' }}>—</span>}
+                    </td>
                     <td><button style={{ ...S.outlineBtn, color: 'var(--danger)', borderColor: 'var(--danger)' }} onClick={() => deleteQuickReply(qr.id)}>Eliminar</button></td>
                   </tr>
                 ))}
