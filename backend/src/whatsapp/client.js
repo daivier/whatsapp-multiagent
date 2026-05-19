@@ -110,41 +110,57 @@ function initWhatsApp(socketIO) {
       return currentTime < start || currentTime >= end;
     }
 
-    // Find open conversation or create new one
+    // Find open/waiting conversation OR reopen the most recent closed one
     let conversation = db
       .prepare(`SELECT * FROM conversations WHERE contact_id = ? AND status != 'closed' ORDER BY id DESC LIMIT 1`)
       .get(contact.id);
 
+    let reopened = false;
     if (!conversation) {
-      db.prepare(`INSERT INTO conversations (contact_id, status) VALUES (?, 'waiting')`).run(contact.id);
-      conversation = db
-        .prepare(`SELECT * FROM conversations WHERE contact_id = ? ORDER BY id DESC LIMIT 1`)
+      // Verifica se há uma conversa fechada recente (últimas 24h) para reabrir
+      const recentClosed = db
+        .prepare(`SELECT * FROM conversations WHERE contact_id = ? AND status = 'closed' AND updated_at >= datetime('now', '-24 hours') ORDER BY id DESC LIMIT 1`)
         .get(contact.id);
 
-      // Auto-assign: prefere atendentes em turno; fallback para qualquer online
-      let attendant = db
-        .prepare(`
-          SELECT u.id, COUNT(c.id) as load FROM users u
-          LEFT JOIN conversations c ON c.assigned_to = u.id AND c.status = 'open'
-          WHERE u.role = 'attendant' AND u.status != 'offline' AND u.active = 1 AND u.on_shift = 1
-          GROUP BY u.id ORDER BY load ASC LIMIT 1
-        `)
-        .get();
-      if (!attendant) {
-        attendant = db
+      if (recentClosed) {
+        // Reabrir conversa fechada recente em vez de criar nova
+        db.prepare(`UPDATE conversations SET status = 'waiting', snoozed_until = NULL, updated_at = CURRENT_TIMESTAMP WHERE id = ?`)
+          .run(recentClosed.id);
+        conversation = db.prepare('SELECT * FROM conversations WHERE id = ?').get(recentClosed.id);
+        reopened = true;
+        console.log(`[conv] Conversa ${conversation.id} reaberta por nova mensagem do contacto`);
+      } else {
+        db.prepare(`INSERT INTO conversations (contact_id, status) VALUES (?, 'waiting')`).run(contact.id);
+        conversation = db
+          .prepare(`SELECT * FROM conversations WHERE contact_id = ? ORDER BY id DESC LIMIT 1`)
+          .get(contact.id);
+      }
+
+      // Auto-assign: só para conversas novas ou reabertas sem atendente
+      if (!reopened || !conversation.assigned_to) {
+        let attendant = db
           .prepare(`
             SELECT u.id, COUNT(c.id) as load FROM users u
             LEFT JOIN conversations c ON c.assigned_to = u.id AND c.status = 'open'
-            WHERE u.role = 'attendant' AND u.status != 'offline' AND u.active = 1
+            WHERE u.role = 'attendant' AND u.status != 'offline' AND u.active = 1 AND u.on_shift = 1
             GROUP BY u.id ORDER BY load ASC LIMIT 1
           `)
           .get();
-      }
-
-      if (attendant) {
-        db.prepare(`UPDATE conversations SET assigned_to = ?, status = 'open', updated_at = CURRENT_TIMESTAMP WHERE id = ?`)
-          .run(attendant.id, conversation.id);
-        conversation = db.prepare('SELECT * FROM conversations WHERE id = ?').get(conversation.id);
+        if (!attendant) {
+          attendant = db
+            .prepare(`
+              SELECT u.id, COUNT(c.id) as load FROM users u
+              LEFT JOIN conversations c ON c.assigned_to = u.id AND c.status = 'open'
+              WHERE u.role = 'attendant' AND u.status != 'offline' AND u.active = 1
+              GROUP BY u.id ORDER BY load ASC LIMIT 1
+            `)
+            .get();
+        }
+        if (attendant) {
+          db.prepare(`UPDATE conversations SET assigned_to = ?, status = 'open', updated_at = CURRENT_TIMESTAMP WHERE id = ?`)
+            .run(attendant.id, conversation.id);
+          conversation = db.prepare('SELECT * FROM conversations WHERE id = ?').get(conversation.id);
+        }
       }
     }
 
@@ -182,8 +198,9 @@ function initWhatsApp(socketIO) {
       }
     }
 
-    // Save message
-    db.prepare('INSERT INTO messages (conversation_id, from_me, body, media_url, media_type) VALUES (?, 0, ?, ?, ?)').run(conversation.id, body, mediaUrl, mediaType);
+    // Save message — body pode ser null em media com caption (usar '' como fallback)
+    const safeBody = (msg._data?.caption) || body || '';
+    db.prepare('INSERT INTO messages (conversation_id, from_me, body, media_url, media_type) VALUES (?, 0, ?, ?, ?)').run(conversation.id, safeBody, mediaUrl, mediaType);
     db.prepare('UPDATE conversations SET updated_at = CURRENT_TIMESTAMP WHERE id = ?').run(conversation.id);
 
     const message = db
