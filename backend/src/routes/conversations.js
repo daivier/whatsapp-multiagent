@@ -55,6 +55,47 @@ router.get('/', authMiddleware, (req, res) => {
   res.json(conversations);
 });
 
+// POST /conversations/outbound — iniciar conversa sainte
+router.post('/outbound', authMiddleware, async (req, res) => {
+  const { phone, message } = req.body;
+  if (!phone?.trim()) return res.status(400).json({ error: 'phone obrigatório' });
+  if (!message?.trim()) return res.status(400).json({ error: 'message obrigatório' });
+
+  // Normaliza o número: remove espaços, traços, parênteses
+  const cleanPhone = phone.trim().replace(/[\s\-().]/g, '');
+
+  // Upsert contacto
+  let contact = db.prepare('SELECT * FROM contacts WHERE phone = ? OR wa_id LIKE ?').get(cleanPhone, `${cleanPhone}%`);
+  if (!contact) {
+    db.prepare('INSERT INTO contacts (phone, name) VALUES (?, ?)').run(cleanPhone, cleanPhone);
+    contact = db.prepare('SELECT * FROM contacts WHERE phone = ?').get(cleanPhone);
+  }
+
+  // Cria conversa (ou reabre a última fechada)
+  let conversation = db.prepare(`SELECT * FROM conversations WHERE contact_id = ? AND status != 'closed' ORDER BY id DESC LIMIT 1`).get(contact.id);
+  if (!conversation) {
+    db.prepare(`INSERT INTO conversations (contact_id, assigned_to, status) VALUES (?, ?, 'open')`).run(contact.id, req.user.id);
+    conversation = db.prepare('SELECT * FROM conversations WHERE contact_id = ? ORDER BY id DESC LIMIT 1').get(contact.id);
+  }
+
+  // Envia mensagem pelo WhatsApp
+  try {
+    await sendMessage(contact.wa_id || cleanPhone, message);
+  } catch (err) {
+    return res.status(500).json({ error: 'Erro ao enviar: ' + err.message });
+  }
+
+  // Guarda mensagem
+  db.prepare('INSERT INTO messages (conversation_id, from_me, sender_id, body) VALUES (?, 1, ?, ?)').run(conversation.id, req.user.id, message);
+  db.prepare('UPDATE conversations SET updated_at = CURRENT_TIMESTAMP, assigned_to = ?, status = ? WHERE id = ?').run(req.user.id, 'open', conversation.id);
+
+  const fullConv = db.prepare(conversationQuery('WHERE conv.id = ?')).get(conversation.id);
+  const msg = db.prepare('SELECT m.*, u.name as sender_name FROM messages m LEFT JOIN users u ON u.id = m.sender_id WHERE m.conversation_id = ? ORDER BY m.id DESC LIMIT 1').get(conversation.id);
+
+  ioInstance.get()?.emit('message:new', { message: msg, conversation: fullConv });
+  res.json(fullConv);
+});
+
 // GET /conversations/:id/messages
 router.get('/:id/messages', authMiddleware, (req, res) => {
   const conv = db.prepare('SELECT * FROM conversations WHERE id = ?').get(req.params.id);

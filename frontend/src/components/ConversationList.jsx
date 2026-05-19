@@ -1,6 +1,7 @@
 import { useEffect, useState, useRef } from 'react';
 import api from '../api';
 import { useAuth } from '../context/AuthContext';
+import NewConversationModal from './NewConversationModal';
 
 const STATUS_LABEL = { waiting: 'Aguarda', open: 'Aberta', closed: 'Fechada' };
 const STATUS_COLOR = { waiting: 'var(--warn)', open: 'var(--success)', closed: 'var(--hint)' };
@@ -25,6 +26,7 @@ export default function ConversationList({ socket, selected, onSelect }) {
   const [searchQ, setSearchQ] = useState('');
   const [searchResults, setSearchResults] = useState(null); // null = not searching
   const [searching, setSearching] = useState(false);
+  const [showNewModal, setShowNewModal] = useState(false);
   const searchTimer = useRef(null);
 
   useEffect(() => { load(); }, [filter]);
@@ -110,11 +112,19 @@ export default function ConversationList({ socket, selected, onSelect }) {
         {searchQ && <button onClick={clearSearch} style={S.searchClear}>✕</button>}
       </div>
 
+      {showNewModal && (
+        <NewConversationModal
+          onClose={() => setShowNewModal(false)}
+          onCreated={conv => { setShowNewModal(false); onSelect(conv); load(); }}
+        />
+      )}
+
       {!isSearching && (
         <>
           <div style={S.header}>
             <span style={S.headerTitle}>Conversas</span>
             <span style={S.count}>{conversations.length}</span>
+            <button onClick={() => setShowNewModal(true)} style={S.newBtn} title="Nova conversa">✏️</button>
           </div>
           <div style={S.filters}>
             {FILTERS.map(([val, label]) => (
@@ -221,6 +231,7 @@ const S = {
   header: { display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0.75rem 1rem 0.25rem', gap: '0.5rem' },
   headerTitle: { fontWeight: 700, fontSize: '0.95rem', color: 'var(--text)' },
   count: { background: 'var(--accent-l)', color: 'var(--accent)', borderRadius: '20px', padding: '1px 8px', fontSize: '0.75rem', fontWeight: 600 },
+  newBtn: { marginLeft: 'auto', background: 'var(--accent)', color: '#fff', border: 'none', borderRadius: 'var(--r-sm)', width: 28, height: 28, cursor: 'pointer', fontSize: '0.85rem', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 },
   filters: { display: 'flex', gap: '0.25rem', padding: '0.4rem 1rem 0.6rem', flexWrap: 'wrap' },
   filterBtn: { padding: '0.25rem 0.65rem', borderRadius: '20px', border: '1px solid var(--border-m)', background: 'none', cursor: 'pointer', fontSize: '0.75rem', color: 'var(--muted)', fontWeight: 500 },
   filterActive: { background: 'var(--accent)', color: '#fff', border: '1px solid var(--accent)' },
