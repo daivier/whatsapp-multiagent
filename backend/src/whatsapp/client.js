@@ -55,24 +55,46 @@ function initWhatsApp(socketIO) {
 
     // Guarda o identificador completo (ex: "351912345678@c.us" ou "88244750422224@lid")
     const waId = msg.from;
-    // Número limpo para display
-    const phone = waId.replace(/@c\.us$/, '').replace(/@lid$/, '');
+    const isLid = waId.endsWith('@lid');
     const body = msg.body;
 
-    // Upsert contact — procura pelo waId completo
+    // Upsert contact
     let contact = db.prepare('SELECT * FROM contacts WHERE wa_id = ?').get(waId);
+    let phone = waId.replace(/@c\.us$/, '').replace(/@lid$/, '');
+
     if (!contact) {
-      // Tenta também pelo número simples (migração de dados antigos)
-      contact = db.prepare('SELECT * FROM contacts WHERE phone = ?').get(phone);
-    }
-    if (!contact) {
-      const info = await msg.getContact();
-      const name = info.pushname || info.name || phone;
-      db.prepare('INSERT INTO contacts (phone, name, wa_id) VALUES (?, ?, ?)').run(phone, name, waId);
-      contact = db.prepare('SELECT * FROM contacts WHERE wa_id = ?').get(waId);
-    } else if (!contact.wa_id) {
-      // Actualiza contactos antigos sem wa_id
-      db.prepare('UPDATE contacts SET wa_id = ? WHERE id = ?').run(waId, contact.id);
+      // Para @lid: obter o número real via getContact() ANTES de criar duplicado
+      let info;
+      try { info = await msg.getContact(); } catch (_) {}
+
+      if (isLid && info) {
+        // info.number é o número real (ex: "5596...")
+        const realPhone = info.number || info.id?.user || phone;
+        phone = realPhone;
+        // Verifica se já existe contacto com esse número
+        contact = db.prepare('SELECT * FROM contacts WHERE phone = ?').get(realPhone)
+               || db.prepare('SELECT * FROM contacts WHERE phone = ?').get(realPhone.replace(/^55/, ''));
+        if (contact) {
+          // Associa este @lid ao contacto existente para mensagens futuras
+          db.prepare('UPDATE contacts SET wa_id = ? WHERE id = ?').run(waId, contact.id);
+          console.log(`[LID] Associado ${waId} ao contacto existente ${contact.phone} (id ${contact.id})`);
+        } else {
+          // Cria novo contacto com o número real (não com o LID)
+          const name = info.pushname || info.name || realPhone;
+          db.prepare('INSERT INTO contacts (phone, name, wa_id) VALUES (?, ?, ?)').run(realPhone, name, waId);
+          contact = db.prepare('SELECT * FROM contacts WHERE wa_id = ?').get(waId);
+        }
+      } else {
+        // @c.us ou fallback: tenta pelo número primeiro
+        contact = db.prepare('SELECT * FROM contacts WHERE phone = ?').get(phone);
+        if (!contact) {
+          const name = info?.pushname || info?.name || phone;
+          db.prepare('INSERT INTO contacts (phone, name, wa_id) VALUES (?, ?, ?)').run(phone, name, waId);
+          contact = db.prepare('SELECT * FROM contacts WHERE wa_id = ?').get(waId);
+        } else if (!contact.wa_id) {
+          db.prepare('UPDATE contacts SET wa_id = ? WHERE id = ?').run(waId, contact.id);
+        }
+      }
     }
 
     // Verificar bot de triagem
