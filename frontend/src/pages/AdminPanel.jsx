@@ -441,11 +441,21 @@ export default function AdminPanel({ socket }) {
           <div style={S.section}>
             <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', marginBottom: '1.5rem', flexWrap: 'wrap' }}>
               <h2 style={{ margin: 0, fontSize: '1.15rem', fontWeight: 700, color: 'var(--text)' }}>Relatórios</h2>
-              <a href={`${import.meta.env.VITE_API_URL || ''}/conversations/export`}
-                style={{ ...S.addBtn, textDecoration: 'none', fontSize: '0.82rem', padding: '0.35rem 0.9rem' }}
-                download>
+              <button
+                style={{ ...S.addBtn, fontSize: '0.82rem', padding: '0.35rem 0.9rem' }}
+                onClick={async () => {
+                  try {
+                    const { data } = await api.get('/conversations/export', { responseType: 'blob' });
+                    const url = URL.createObjectURL(new Blob([data], { type: 'text/csv' }));
+                    const a = document.createElement('a');
+                    a.href = url;
+                    a.download = `conversas_${new Date().toISOString().slice(0,10)}.csv`;
+                    a.click();
+                    URL.revokeObjectURL(url);
+                  } catch (e) { alert('Erro ao exportar'); }
+                }}>
                 📤 Exportar CSV
-              </a>
+              </button>
             </div>
             {!reports ? <p style={{ color: 'var(--hint)' }}>A carregar...</p> : (
               <div style={{ display: 'flex', flexDirection: 'column', gap: '2rem' }}>
