@@ -92,6 +92,9 @@ export default function ChatWindow({ conversation: convProp, socket, onClose, on
   // Edit message
   const [editingMsg, setEditingMsg] = useState(null); // { id, body }
   const [editBody, setEditBody] = useState('');
+  // Merge conversations
+  const [showMerge, setShowMerge] = useState(false);
+  const [mergeTargetId, setMergeTargetId] = useState('');
   // Priority
   const [showPriorityPicker, setShowPriorityPicker] = useState(false);
   // Snooze
@@ -160,6 +163,20 @@ export default function ChatWindow({ conversation: convProp, socket, onClose, on
     const r = await api.get(`/conversations/contact/${conversation.phone}`);
     setHistory(Array.isArray(r.data) ? r.data.filter(c => c.id !== conversation.id) : []);
     setShowHistory(true);
+  }
+
+  async function mergeConversation() {
+    const targetId = parseInt(mergeTargetId.trim());
+    if (!targetId) return alert('Introduz o ID da conversa de destino');
+    if (!confirm(`Fundir esta conversa (ID ${conversation.id}) na conversa ID ${targetId}?\nTodas as mensagens serão movidas e esta conversa eliminada.`)) return;
+    try {
+      await api.post(`/conversations/${conversation.id}/merge`, { into_id: targetId });
+      setShowMerge(false);
+      setMergeTargetId('');
+      onClose?.();
+    } catch (err) {
+      alert(err.response?.data?.error || 'Erro ao fundir conversas');
+    }
   }
 
   async function saveEdit() {
@@ -455,10 +472,29 @@ export default function ChatWindow({ conversation: convProp, socket, onClose, on
           ) : (
             <button style={{ ...S.iconBtn, color: 'var(--warn)', borderColor: 'var(--warn)' }} onClick={closeConversation}>Fechar</button>
           )}
+          {user.role === 'owner' && (
+            <button style={{ ...S.iconBtn, fontSize: '0.75rem' }} title="Fundir com outra conversa" onClick={() => setShowMerge(v => !v)}>🔗 Fundir</button>
+          )}
           {onDelete && <button style={S.dangerBtn} onClick={onDelete}>Eliminar</button>}
           <button style={S.closeBtn} onClick={onClose}>✕</button>
         </div>
       </div>
+
+      {/* Painel Fundir */}
+      {showMerge && (
+        <div style={{ background: '#fef9c3', borderBottom: '1px solid #fde68a', padding: '0.6rem 1rem', display: 'flex', alignItems: 'center', gap: '0.5rem', flexWrap: 'wrap', fontSize: '0.83rem' }}>
+          <span style={{ fontWeight: 600, color: '#92400e' }}>🔗 Fundir esta conversa (ID {conversation.id}) na:</span>
+          <input
+            placeholder="ID da conversa de destino"
+            value={mergeTargetId}
+            onChange={e => setMergeTargetId(e.target.value)}
+            style={{ padding: '0.25rem 0.5rem', border: '1px solid #fbbf24', borderRadius: '4px', width: '160px', fontSize: '0.83rem' }}
+          />
+          <button onClick={mergeConversation} style={{ padding: '0.25rem 0.75rem', background: '#d97706', color: '#fff', border: 'none', borderRadius: '4px', cursor: 'pointer', fontWeight: 600, fontSize: '0.83rem' }}>Confirmar</button>
+          <button onClick={() => { setShowMerge(false); setMergeTargetId(''); }} style={{ padding: '0.25rem 0.6rem', background: 'none', border: '1px solid #fbbf24', borderRadius: '4px', cursor: 'pointer', fontSize: '0.83rem', color: '#92400e' }}>Cancelar</button>
+          <span style={{ color: '#78350f', fontSize: '0.75rem' }}>As mensagens desta conversa passarão para a conversa de destino e esta será eliminada.</span>
+        </div>
+      )}
 
       {/* Histórico */}
       {showHistory && (

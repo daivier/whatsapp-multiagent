@@ -279,6 +279,46 @@ router.patch('/:id/snooze', authMiddleware, (req, res) => {
 });
 
 // DELETE /conversations/:id
+// POST /conversations/:id/merge — fundir com outra conversa (owner only)
+// Body: { into_id } — todas as mensagens de :id são movidas para into_id, e :id é eliminada
+router.post('/:id/merge', authMiddleware, ownerOnly, (req, res) => {
+  const { into_id } = req.body;
+  if (!into_id) return res.status(400).json({ error: 'into_id obrigatório' });
+
+  const src = db.prepare('SELECT id FROM conversations WHERE id = ?').get(req.params.id);
+  const dst = db.prepare('SELECT id FROM conversations WHERE id = ?').get(into_id);
+  if (!src || !dst) return res.status(404).json({ error: 'Conversa não encontrada' });
+  if (src.id === dst.id) return res.status(400).json({ error: 'Não é possível fundir uma conversa consigo própria' });
+
+  const merge = db.transaction(() => {
+    // Mover mensagens e notas
+    db.prepare('UPDATE messages SET conversation_id = ? WHERE conversation_id = ?').run(into_id, src.id);
+    // Mover tags (ignorar duplicados)
+    db.prepare(`INSERT OR IGNORE INTO conversation_tags (conversation_id, tag_id)
+                SELECT ?, tag_id FROM conversation_tags WHERE conversation_id = ?`).run(into_id, src.id);
+    // Eliminar conversa de origem
+    db.prepare('DELETE FROM conversation_tags WHERE conversation_id = ?').run(src.id);
+    db.prepare('DELETE FROM conversations WHERE id = ?').run(src.id);
+    // Actualizar updated_at da destino
+    db.prepare('UPDATE conversations SET updated_at = CURRENT_TIMESTAMP WHERE id = ?').run(into_id);
+  });
+  merge();
+
+  const io = ioInstance.get();
+  io?.emit('conversation:deleted', { id: src.id });
+
+  const result = db.prepare(`
+    SELECT conv.*, con.phone, con.wa_id, con.name as contact_name, u.name as attendant_name
+    FROM conversations conv
+    JOIN contacts con ON con.id = conv.contact_id
+    LEFT JOIN users u ON u.id = conv.assigned_to
+    WHERE conv.id = ?
+  `).get(into_id);
+  io?.emit('conversation:updated', result);
+
+  res.json(result);
+});
+
 router.delete('/:id', authMiddleware, ownerOnly, (req, res) => {
   const conv = db.prepare('SELECT id FROM conversations WHERE id = ?').get(req.params.id);
   if (!conv) return res.status(404).json({ error: 'Conversa não encontrada' });

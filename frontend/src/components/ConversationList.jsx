@@ -66,13 +66,19 @@ export default function ConversationList({ socket, selected, onSelect }) {
       });
     }
 
+    function onConversationDeleted({ id }) {
+      setConversations(prev => prev.filter(c => c.id !== id));
+    }
+
     socket.on('message:new', onNewMessage);
     socket.on('message:incoming', onNewMessage);
     socket.on('conversation:updated', onConversationUpdated);
+    socket.on('conversation:deleted', onConversationDeleted);
     return () => {
       socket.off('message:new', onNewMessage);
       socket.off('message:incoming', onNewMessage);
       socket.off('conversation:updated', onConversationUpdated);
+      socket.off('conversation:deleted', onConversationDeleted);
     };
   }, [socket, selected]);
 
