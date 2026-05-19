@@ -9,7 +9,7 @@ function authMiddleware(req, res, next) {
 
   try {
     const payload = jwt.verify(token, SECRET);
-    const user = db.prepare('SELECT id, name, email, role, status, active FROM users WHERE id = ?').get(payload.id);
+    const user = db.prepare('SELECT id, name, email, role, status, active, on_shift FROM users WHERE id = ?').get(payload.id);
     if (!user || !user.active) return res.status(401).json({ error: 'Utilizador inativo' });
     req.user = user;
     next();

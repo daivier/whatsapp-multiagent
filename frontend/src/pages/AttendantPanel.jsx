@@ -19,8 +19,13 @@ export default function AttendantPanel({ socket }) {
     const s = user.status;
     return (s && s !== 'offline') ? s : 'online';
   });
-  const [onShift, setOnShift] = useState(user.on_shift === 1 || user.on_shift === true);
+  const [onShift, setOnShift] = useState(!!(user.on_shift));
   const [isMobile, setIsMobile] = useState(window.innerWidth < 640);
+
+  // Re-sincroniza o turno ao montar (garante que está actualizado após re-login)
+  useEffect(() => {
+    api.get('/auth/me').then(r => setOnShift(!!(r.data?.user?.on_shift))).catch(() => {});
+  }, []);
 
   useEffect(() => {
     const handler = () => setIsMobile(window.innerWidth < 640);
