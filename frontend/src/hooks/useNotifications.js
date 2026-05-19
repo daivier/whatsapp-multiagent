@@ -52,6 +52,18 @@ export function useNotifications(socket, selectedConv) {
       }
     }
 
+    function onSlaAlert({ contact_name, sla_minutes, conversation_id }) {
+      playNotificationSound();
+      if (Notification.permission === 'granted') {
+        const n = new Notification(`⏰ SLA ultrapassado — ${contact_name}`, {
+          body: `Sem resposta há mais de ${sla_minutes} minutos.`,
+          icon: '/favicon.ico',
+          tag: `sla-${conversation_id}`,
+        });
+        n.onclick = () => { window.focus(); n.close(); };
+      }
+    }
+
     function onMentionNew({ message, conversation, mentioned_by }) {
       playNotificationSound();
       if (Notification.permission === 'granted') {
@@ -67,10 +79,12 @@ export function useNotifications(socket, selectedConv) {
     socket.on('message:new', onNewMessage);
     socket.on('message:incoming', onNewMessage);
     socket.on('mention:new', onMentionNew);
+    socket.on('sla:alert', onSlaAlert);
     return () => {
       socket.off('message:new', onNewMessage);
       socket.off('message:incoming', onNewMessage);
       socket.off('mention:new', onMentionNew);
+      socket.off('sla:alert', onSlaAlert);
     };
   }, [socket, selectedConv?.id]);
 }

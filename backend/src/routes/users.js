@@ -14,7 +14,7 @@ router.get('/team', authMiddleware, (req, res) => {
 // GET /users — listar atendentes (owner only)
 router.get('/', authMiddleware, ownerOnly, (req, res) => {
   const users = db
-    .prepare('SELECT id, name, email, role, status, active, created_at FROM users ORDER BY role DESC, name ASC')
+    .prepare('SELECT id, name, email, role, status, active, on_shift, created_at FROM users ORDER BY role DESC, name ASC')
     .all();
   res.json(users);
 });
@@ -49,6 +49,28 @@ router.patch('/:id', authMiddleware, ownerOnly, (req, res) => {
   const user = db.prepare('SELECT id, name, email, role, status, active FROM users WHERE id = ?').get(id);
   if (!user) return res.status(404).json({ error: 'Utilizador não encontrado' });
 
+  res.json(user);
+});
+
+// PATCH /users/me/shift — atendente togla o próprio turno
+router.patch('/me/shift', authMiddleware, (req, res) => {
+  const { on_shift } = req.body;
+  db.prepare('UPDATE users SET on_shift = ? WHERE id = ?').run(on_shift ? 1 : 0, req.user.id);
+  const user = db.prepare('SELECT id, name, email, role, status, active, on_shift FROM users WHERE id = ?').get(req.user.id);
+  // Notifica todos via io-instance (para admin ver em tempo real)
+  const ioInstance = require('../io-instance');
+  ioInstance.get()?.emit('user:shift', { userId: req.user.id, on_shift: user.on_shift });
+  res.json(user);
+});
+
+// PATCH /users/:id/shift — owner pode alterar turno de qualquer utilizador
+router.patch('/:id/shift', authMiddleware, ownerOnly, (req, res) => {
+  const { on_shift } = req.body;
+  db.prepare('UPDATE users SET on_shift = ? WHERE id = ?').run(on_shift ? 1 : 0, req.params.id);
+  const user = db.prepare('SELECT id, name, email, role, status, active, on_shift FROM users WHERE id = ?').get(req.params.id);
+  if (!user) return res.status(404).json({ error: 'Utilizador não encontrado' });
+  const ioInstance = require('../io-instance');
+  ioInstance.get()?.emit('user:shift', { userId: user.id, on_shift: user.on_shift });
   res.json(user);
 });
 

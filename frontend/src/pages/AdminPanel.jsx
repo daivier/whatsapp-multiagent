@@ -58,6 +58,8 @@ export default function AdminPanel({ socket }) {
 
   const [scheduled, setScheduled] = useState([]);
   const [transferLogs, setTransferLogs] = useState([]);
+  const [keywordRules, setKeywordRules] = useState([]);
+  const [newKR, setNewKR] = useState({ keyword: '', response: '' });
 
   const [settings, setSettings] = useState({
     bot_enabled: '0', bot_message: '',
@@ -77,6 +79,7 @@ export default function AdminPanel({ socket }) {
     if (tab === 'scheduled') loadScheduled();
     if (tab === 'contacts') loadContacts();
     if (tab === 'transfers') loadTransferLogs();
+    if (tab === 'automation') { loadKeywordRules(); loadAttendants(); }
   }, [tab]);
 
   useEffect(() => {
@@ -85,9 +88,11 @@ export default function AdminPanel({ socket }) {
     socket.on('whatsapp:ready', () => { setWhatsappReady(true); setQrCode(null); });
     socket.on('whatsapp:disconnected', () => setWhatsappReady(false));
     socket.on('user:status', ({ userId, status }) => setUserStatuses(prev => ({ ...prev, [userId]: status })));
+    socket.on('user:shift', () => loadAttendants());
     return () => {
       socket.off('whatsapp:qr'); socket.off('whatsapp:ready');
       socket.off('whatsapp:disconnected'); socket.off('user:status');
+      socket.off('user:shift');
     };
   }, [socket]);
 
@@ -204,13 +209,34 @@ export default function AdminPanel({ socket }) {
     await api.patch('/settings', settings);
     setSettingsSaved(true); setTimeout(() => setSettingsSaved(false), 2000);
   }
+  async function loadKeywordRules() {
+    const { data } = await api.get('/keyword-rules');
+    setKeywordRules(Array.isArray(data) ? data : []);
+  }
+  async function addKeywordRule(e) {
+    e.preventDefault();
+    if (!newKR.keyword || !newKR.response) return;
+    await api.post('/keyword-rules', newKR);
+    setNewKR({ keyword: '', response: '' }); loadKeywordRules();
+  }
+  async function toggleKeywordRule(id, active) {
+    await api.patch(`/keyword-rules/${id}`, { active: !active });
+    loadKeywordRules();
+  }
+  async function deleteKeywordRule(id) {
+    await api.delete(`/keyword-rules/${id}`); loadKeywordRules();
+  }
+  async function toggleAttendantShift(id, on_shift) {
+    await api.patch(`/users/${id}/shift`, { on_shift: !on_shift });
+    loadAttendants();
+  }
 
   const activeAttendants = attendants.filter(a => a.active);
   const TABS = [
     ['conversations','Conversas'],['attendants','Atendentes'],['contacts','Contactos'],
     ['metrics','Métricas'],['reports','Relatórios'],['scheduled','Agendamentos'],
     ['transfers','Transferências'],['quickreplies','Respostas Rápidas'],
-    ['tags','Etiquetas'],['bot','Bot'],['whatsapp','WhatsApp'],
+    ['tags','Etiquetas'],['automation','🤖 Automação'],['bot','Bot'],['whatsapp','WhatsApp'],
   ];
 
   function selectTab(key) {
@@ -584,6 +610,87 @@ export default function AdminPanel({ socket }) {
                 </tbody>
               </table>
             )}
+          </div>
+        )}
+
+        {/* AUTOMAÇÃO */}
+        {tab === 'automation' && (
+          <div style={S.section}>
+            <h2 style={S.sectionTitle}>Automação</h2>
+
+            {/* --- Bot por palavra-chave --- */}
+            <h3 style={S.subTitle}>🤖 Bot por palavra-chave</h3>
+            <p style={{ color: 'var(--muted)', fontSize: '0.85rem', marginBottom: '1rem' }}>
+              Quando uma mensagem contém a palavra-chave, o bot responde automaticamente.
+            </p>
+            <form onSubmit={addKeywordRule} style={{ ...S.form, flexWrap: 'wrap', marginBottom: '1rem' }}>
+              <input style={{ ...S.input, width: '140px' }} placeholder="Palavra-chave" value={newKR.keyword}
+                onChange={e => setNewKR(p => ({ ...p, keyword: e.target.value }))} required />
+              <input style={{ ...S.input, flex: 1, minWidth: '200px' }} placeholder="Resposta automática" value={newKR.response}
+                onChange={e => setNewKR(p => ({ ...p, response: e.target.value }))} required />
+              <button style={S.addBtn} type="submit">Adicionar</button>
+            </form>
+            <table style={S.table}>
+              <thead><tr><th>Palavra-chave</th><th>Resposta</th><th>Ativa</th><th></th></tr></thead>
+              <tbody>
+                {keywordRules.map(r => (
+                  <tr key={r.id}>
+                    <td><strong style={{ color: 'var(--accent)' }}>{r.keyword}</strong></td>
+                    <td style={{ maxWidth: '350px', wordBreak: 'break-word', color: 'var(--muted)', fontSize: '0.85rem' }}>{r.response}</td>
+                    <td>
+                      <button onClick={() => toggleKeywordRule(r.id, r.active)}
+                        style={{ padding: '0.2rem 0.6rem', borderRadius: '999px', border: 'none', cursor: 'pointer', fontSize: '0.78rem', fontWeight: 600, background: r.active ? 'var(--success)' : 'var(--border)', color: r.active ? '#fff' : 'var(--muted)' }}>
+                        {r.active ? 'Ativa' : 'Inativa'}
+                      </button>
+                    </td>
+                    <td><button style={{ ...S.outlineBtn, color: 'var(--danger)', borderColor: 'var(--danger)' }} onClick={() => deleteKeywordRule(r.id)}>Eliminar</button></td>
+                  </tr>
+                ))}
+                {keywordRules.length === 0 && <tr><td colSpan={4} style={{ color: 'var(--hint)', textAlign: 'center', padding: '1rem' }}>Sem regras criadas</td></tr>}
+              </tbody>
+            </table>
+
+            {/* --- Turnos --- */}
+            <h3 style={{ ...S.subTitle, marginTop: '2rem' }}>📋 Turnos dos atendentes</h3>
+            <p style={{ color: 'var(--muted)', fontSize: '0.85rem', marginBottom: '1rem' }}>
+              Novas conversas são atribuídas prioritariamente a atendentes em turno. Os atendentes podem activar/desactivar o próprio turno no painel deles.
+            </p>
+            <table style={S.table}>
+              <thead><tr><th>Atendente</th><th>Estado</th><th>Turno</th><th></th></tr></thead>
+              <tbody>
+                {attendants.map(a => (
+                  <tr key={a.id}>
+                    <td style={{ fontWeight: 600 }}>{a.name}</td>
+                    <td><span style={{ color: a.status === 'online' ? 'var(--success)' : a.status === 'busy' ? 'var(--warn)' : 'var(--hint)', fontSize: '0.85rem', fontWeight: 500 }}>{a.status}</span></td>
+                    <td>
+                      <span style={{ padding: '0.2rem 0.65rem', borderRadius: '999px', fontSize: '0.78rem', fontWeight: 600, background: a.on_shift ? 'var(--success)' : 'var(--border)', color: a.on_shift ? '#fff' : 'var(--muted)' }}>
+                        {a.on_shift ? '🟢 Em turno' : '⚪ Fora'}
+                      </span>
+                    </td>
+                    <td>
+                      <button style={S.outlineBtn} onClick={() => toggleAttendantShift(a.id, a.on_shift)}>
+                        {a.on_shift ? 'Retirar do turno' : 'Colocar em turno'}
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+
+            {/* --- SLA --- */}
+            <h3 style={{ ...S.subTitle, marginTop: '2rem' }}>🔔 Alerta de SLA</h3>
+            <p style={{ color: 'var(--muted)', fontSize: '0.85rem', marginBottom: '1rem' }}>
+              Notificação sonora + browser quando uma conversa ultrapassa X minutos sem resposta do atendente.
+            </p>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+              <label style={{ fontSize: '0.85rem', color: 'var(--text)', fontWeight: 500 }}>Minutos sem resposta:</label>
+              <input type="number" min="1" max="1440" style={{ ...S.input, width: '90px' }}
+                value={settings.sla_minutes || '30'}
+                onChange={e => setSettings(s => ({ ...s, sla_minutes: e.target.value }))} />
+              <button style={S.addBtn} onClick={saveSettings}>
+                {settingsSaved ? '✓ Guardado' : 'Guardar'}
+              </button>
+            </div>
           </div>
         )}
 

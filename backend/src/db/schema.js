@@ -93,6 +93,14 @@ db.exec(`
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP
   );
 
+  CREATE TABLE IF NOT EXISTS keyword_rules (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    keyword TEXT NOT NULL,
+    response TEXT NOT NULL,
+    active INTEGER NOT NULL DEFAULT 1,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+  );
+
   CREATE INDEX IF NOT EXISTS idx_conversations_assigned ON conversations(assigned_to);
   CREATE INDEX IF NOT EXISTS idx_messages_conversation ON messages(conversation_id);
   CREATE INDEX IF NOT EXISTS idx_transfer_logs_conv ON transfer_logs(conversation_id);
@@ -109,10 +117,13 @@ try { db.exec(`ALTER TABLE conversations ADD COLUMN tags TEXT`); } catch (_) {}
 try { db.exec(`ALTER TABLE conversations ADD COLUMN priority TEXT NOT NULL DEFAULT 'normal'`); } catch (_) {}
 try { db.exec(`ALTER TABLE conversations ADD COLUMN snoozed_until DATETIME`); } catch (_) {}
 try { db.exec(`ALTER TABLE quick_replies ADD COLUMN category TEXT`); } catch (_) {}
+try { db.exec(`ALTER TABLE users ADD COLUMN on_shift INTEGER NOT NULL DEFAULT 0`); } catch (_) {}
+try { db.exec(`ALTER TABLE conversations ADD COLUMN sla_alerted_at DATETIME`); } catch (_) {}
 
 // Seed default settings
 const settingsDefaults = [
   ['bot_enabled', '0'],
+  ['sla_minutes', '30'],
   ['bot_message', 'Olá! No momento estamos fora do horário de atendimento. Retornaremos em breve!'],
   ['hours_0', 'closed'],          // Domingo
   ['hours_1', '08:00-18:00'],     // Segunda

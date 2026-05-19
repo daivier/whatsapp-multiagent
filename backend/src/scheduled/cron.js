@@ -23,6 +23,52 @@ function startScheduledMessagesCron(io) {
       io.emit('conversation:updated', conv);
     }
 
+    // Alertas de SLA
+    const slaMinutes = parseInt(db.prepare(`SELECT value FROM settings WHERE key = 'sla_minutes'`).get()?.value || '30', 10);
+    const slaBreached = db.prepare(`
+      SELECT conv.id, conv.assigned_to, con.name as contact_name, con.phone
+      FROM conversations conv
+      JOIN contacts con ON con.id = conv.contact_id
+      WHERE conv.status != 'closed'
+        AND (conv.snoozed_until IS NULL OR conv.snoozed_until <= CURRENT_TIMESTAMP)
+        AND (
+          SELECT MAX(m.timestamp) FROM messages m
+          WHERE m.conversation_id = conv.id AND m.from_me = 0
+        ) IS NOT NULL
+        AND (
+          SELECT MAX(m.timestamp) FROM messages m
+          WHERE m.conversation_id = conv.id AND m.from_me = 0
+        ) <= datetime('now', '-' || ? || ' minutes')
+        AND NOT EXISTS (
+          SELECT 1 FROM messages m2
+          WHERE m2.conversation_id = conv.id AND m2.from_me = 1 AND m2.is_internal = 0
+            AND m2.timestamp > (
+              SELECT MAX(m3.timestamp) FROM messages m3
+              WHERE m3.conversation_id = conv.id AND m3.from_me = 0
+            )
+        )
+        AND (
+          conv.sla_alerted_at IS NULL
+          OR conv.sla_alerted_at < (
+            SELECT MAX(m.timestamp) FROM messages m
+            WHERE m.conversation_id = conv.id AND m.from_me = 0
+          )
+        )
+    `).all(slaMinutes);
+
+    for (const conv of slaBreached) {
+      db.prepare('UPDATE conversations SET sla_alerted_at = CURRENT_TIMESTAMP WHERE id = ?').run(conv.id);
+      const payload = {
+        conversation_id: conv.id,
+        contact_name: conv.contact_name || conv.phone,
+        sla_minutes: slaMinutes,
+      };
+      // Notifica atendente responsável
+      if (conv.assigned_to) io.to(`user:${conv.assigned_to}`).emit('sla:alert', payload);
+      // Notifica owners
+      io.to('owners').emit('sla:alert', payload);
+    }
+
     const now = new Date().toISOString().slice(0, 16); // "YYYY-MM-DDTHH:MM"
     const pending = db.prepare(`
       SELECT * FROM scheduled_messages

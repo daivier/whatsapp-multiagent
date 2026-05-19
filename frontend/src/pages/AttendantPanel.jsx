@@ -19,6 +19,7 @@ export default function AttendantPanel({ socket }) {
     const s = user.status;
     return (s && s !== 'offline') ? s : 'online';
   });
+  const [onShift, setOnShift] = useState(user.on_shift === 1 || user.on_shift === true);
   const [isMobile, setIsMobile] = useState(window.innerWidth < 640);
 
   useEffect(() => {
@@ -40,6 +41,13 @@ export default function AttendantPanel({ socket }) {
     setStatus(newStatus);
     socket?.emit('user:status', { status: newStatus });
     await api.patch('/auth/status', { status: newStatus });
+  }
+
+  async function toggleShift() {
+    const next = !onShift;
+    setOnShift(next);
+    try { await api.patch('/users/me/shift', { on_shift: next }); }
+    catch (_) { setOnShift(!next); }
   }
 
   const currentStatus = STATUS_OPTIONS.find(s => s.value === status);
@@ -71,6 +79,12 @@ export default function AttendantPanel({ socket }) {
               ))}
             </select>
           </div>
+          <button
+            onClick={toggleShift}
+            title={onShift ? 'Sair do turno' : 'Entrar em turno'}
+            style={{ padding: '0.3rem 0.7rem', borderRadius: 'var(--r-sm)', border: '1px solid', cursor: 'pointer', fontSize: '0.82rem', fontWeight: 600, background: onShift ? 'var(--success)' : 'none', color: onShift ? '#fff' : 'var(--muted)', borderColor: onShift ? 'var(--success)' : 'var(--border-m)', transition: 'all .15s' }}>
+            {onShift ? '🟢 Turno' : '⚪ Turno'}
+          </button>
           <button style={S.logoutBtn} onClick={logout}>Sair</button>
         </div>
       </header>

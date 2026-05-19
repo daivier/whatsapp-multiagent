@@ -20,6 +20,7 @@ const settingsRoutes = require('./routes/settings');
 const scheduledMessagesRoutes = require('./routes/scheduled-messages');
 const contactsRoutes = require('./routes/contacts');
 const searchRoutes = require('./routes/search');
+const keywordRulesRoutes = require('./routes/keyword-rules');
 const { startScheduledMessagesCron } = require('./scheduled/cron');
 
 const app = express();
@@ -52,6 +53,7 @@ app.use('/settings', settingsRoutes);
 app.use('/scheduled-messages', scheduledMessagesRoutes);
 app.use('/contacts', contactsRoutes);
 app.use('/search', searchRoutes);
+app.use('/keyword-rules', keywordRulesRoutes);
 
 // WhatsApp status
 app.get('/whatsapp/status', authMiddleware, (req, res) => {

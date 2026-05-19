@@ -99,15 +99,25 @@ function initWhatsApp(socketIO) {
         .prepare(`SELECT * FROM conversations WHERE contact_id = ? ORDER BY id DESC LIMIT 1`)
         .get(contact.id);
 
-      // Auto-assign to least busy available attendant
-      const attendant = db
+      // Auto-assign: prefere atendentes em turno; fallback para qualquer online
+      let attendant = db
         .prepare(`
           SELECT u.id, COUNT(c.id) as load FROM users u
           LEFT JOIN conversations c ON c.assigned_to = u.id AND c.status = 'open'
-          WHERE u.role = 'attendant' AND u.status != 'offline' AND u.active = 1
+          WHERE u.role = 'attendant' AND u.status != 'offline' AND u.active = 1 AND u.on_shift = 1
           GROUP BY u.id ORDER BY load ASC LIMIT 1
         `)
         .get();
+      if (!attendant) {
+        attendant = db
+          .prepare(`
+            SELECT u.id, COUNT(c.id) as load FROM users u
+            LEFT JOIN conversations c ON c.assigned_to = u.id AND c.status = 'open'
+            WHERE u.role = 'attendant' AND u.status != 'offline' AND u.active = 1
+            GROUP BY u.id ORDER BY load ASC LIMIT 1
+          `)
+          .get();
+      }
 
       if (attendant) {
         db.prepare(`UPDATE conversations SET assigned_to = ?, status = 'open', updated_at = CURRENT_TIMESTAMP WHERE id = ?`)
@@ -163,6 +173,24 @@ function initWhatsApp(socketIO) {
     io.emit('message:new', { message, conversation: fullConversation });
     if (conversation.assigned_to) {
       io.to(`user:${conversation.assigned_to}`).emit('message:incoming', { message, conversation: fullConversation });
+    }
+
+    // Bot por palavra-chave — só para mensagens de texto
+    if (body && body.trim()) {
+      const rules = db.prepare('SELECT * FROM keyword_rules WHERE active = 1').all();
+      const lowerBody = body.toLowerCase();
+      const matched = rules.find(r => lowerBody.includes(r.keyword.toLowerCase()));
+      if (matched) {
+        try {
+          await sendMessage(waId, matched.response);
+          db.prepare('INSERT INTO messages (conversation_id, from_me, body) VALUES (?, 1, ?)').run(conversation.id, matched.response);
+          db.prepare('UPDATE conversations SET updated_at = CURRENT_TIMESTAMP WHERE id = ?').run(conversation.id);
+          const botMsg = db.prepare('SELECT * FROM messages WHERE conversation_id = ? ORDER BY id DESC LIMIT 1').get(conversation.id);
+          io.emit('message:new', { message: botMsg, conversation: getConversationWithContact(conversation.id) });
+        } catch (err) {
+          console.error('[keyword-bot] Erro ao enviar resposta automática:', err.message);
+        }
+      }
     }
   });
 
