@@ -57,7 +57,7 @@ router.get('/', authMiddleware, (req, res) => {
 
 // POST /conversations/outbound — iniciar conversa sainte
 router.post('/outbound', authMiddleware, async (req, res) => {
-  const { phone, message } = req.body;
+  const { phone, message, force } = req.body;
   if (!phone?.trim()) return res.status(400).json({ error: 'phone obrigatório' });
   if (!message?.trim()) return res.status(400).json({ error: 'message obrigatório' });
 
@@ -81,6 +81,17 @@ router.post('/outbound', authMiddleware, async (req, res) => {
 
   // Cria conversa (ou reabre a última fechada)
   let conversation = db.prepare(`SELECT * FROM conversations WHERE contact_id = ? AND status != 'closed' ORDER BY id DESC LIMIT 1`).get(contact.id);
+
+  // Conflito: já existe conversa aberta atribuída a outro utilizador
+  if (conversation && conversation.assigned_to && conversation.assigned_to !== req.user.id && !force) {
+    const assignedUser = db.prepare('SELECT name FROM users WHERE id = ?').get(conversation.assigned_to);
+    return res.status(409).json({
+      conflict: true,
+      conversation_id: conversation.id,
+      assigned_to_name: assignedUser?.name || 'outro atendente',
+    });
+  }
+
   if (!conversation) {
     db.prepare(`INSERT INTO conversations (contact_id, assigned_to, status) VALUES (?, ?, 'open')`).run(contact.id, req.user.id);
     conversation = db.prepare('SELECT * FROM conversations WHERE contact_id = ? ORDER BY id DESC LIMIT 1').get(contact.id);

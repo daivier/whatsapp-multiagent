@@ -6,22 +6,55 @@ export default function NewConversationModal({ onClose, onCreated }) {
   const [message, setMessage] = useState('');
   const [sending, setSending] = useState(false);
   const [error, setError] = useState('');
+  const [conflict, setConflict] = useState(null); // { assigned_to_name }
   const phoneRef = useRef(null);
 
   useEffect(() => { phoneRef.current?.focus(); }, []);
 
-  async function handleSubmit(e) {
-    e.preventDefault();
-    if (!phone.trim() || !message.trim()) return;
+  async function submit(force = false) {
     setSending(true);
     setError('');
     try {
-      const { data } = await api.post('/conversations/outbound', { phone: phone.trim(), message: message.trim() });
+      const { data } = await api.post('/conversations/outbound', { phone: phone.trim(), message: message.trim(), force });
       onCreated(data);
     } catch (err) {
-      setError(err.response?.data?.error || 'Erro ao enviar mensagem');
+      if (err.response?.status === 409 && err.response.data?.conflict) {
+        setConflict(err.response.data);
+      } else {
+        setError(err.response?.data?.error || 'Erro ao enviar mensagem');
+      }
     }
     setSending(false);
+  }
+
+  async function handleSubmit(e) {
+    e.preventDefault();
+    if (!phone.trim() || !message.trim()) return;
+    await submit(false);
+  }
+
+  if (conflict) {
+    return (
+      <div style={S.overlay} onClick={e => e.target === e.currentTarget && onClose()}>
+        <div style={S.modal}>
+          <div style={S.header}>
+            <strong style={S.title}>⚠️ Conversa já existe</strong>
+            <button onClick={onClose} style={S.closeBtn}>✕</button>
+          </div>
+          <p style={{ color: 'var(--text)', fontSize: '0.9rem', lineHeight: 1.5, margin: '0 0 1.25rem' }}>
+            Já existe uma conversa aberta para este contacto, atribuída a <strong>{conflict.assigned_to_name}</strong>.
+            <br /><br />
+            Queres assumir a conversa e enviar a mensagem na mesma?
+          </p>
+          <div style={S.actions}>
+            <button type="button" onClick={onClose} style={S.cancelBtn}>Cancelar</button>
+            <button type="button" onClick={() => submit(true)} style={S.sendBtn} disabled={sending}>
+              {sending ? 'A enviar...' : 'Assumir e enviar'}
+            </button>
+          </div>
+        </div>
+      </div>
+    );
   }
 
   return (
