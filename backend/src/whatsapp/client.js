@@ -68,7 +68,7 @@ function initWhatsApp(socketIO) {
       let info;
       try { info = await msg.getContact(); } catch (e) { console.log(`[LID-merge] getContact erro: ${e.message}`); }
       console.log(`[LID-merge] waId=${waId} contact.id=${contact.id} info=${JSON.stringify({ number: info?.number, user: info?.id?.user, pushname: info?.pushname })}`);
-      const realPhone = info?.number || info?.id?.user;
+      const realPhone = info?.id?.user || info?.number;
       if (realPhone) {
         const phoneContact = db.prepare('SELECT * FROM contacts WHERE (phone = ? OR phone = ?) AND id != ?')
           .get(realPhone, realPhone.replace(/^55/, ''), contact.id);
