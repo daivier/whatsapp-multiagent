@@ -18,6 +18,7 @@ export default function NewConversationModal({ onClose, onCreated }) {
       const { data } = await api.post('/conversations/outbound', { phone: phone.trim(), message: message.trim(), force });
       onCreated(data);
     } catch (err) {
+      console.log('[conflict-debug] caught error, status:', err.response?.status, 'data:', JSON.stringify(err.response?.data));
       if (err.response?.status === 409 && err.response.data?.conflict) {
         setConflict(err.response.data);
       } else {
