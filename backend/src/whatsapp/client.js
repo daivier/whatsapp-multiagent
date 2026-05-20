@@ -62,6 +62,25 @@ function initWhatsApp(socketIO) {
     let contact = db.prepare('SELECT * FROM contacts WHERE wa_id = ?').get(waId);
     let phone = waId.replace(/@c\.us$/, '').replace(/@lid$/, '');
 
+    // Para @lid já conhecido: verificar se existe contacto duplicado criado por outbound (pelo número)
+    // e fundir para que as respostas entrem na conversa correcta
+    if (contact && isLid) {
+      let info;
+      try { info = await msg.getContact(); } catch (_) {}
+      if (info) {
+        const realPhone = info.number || info.id?.user;
+        if (realPhone) {
+          const phoneContact = db.prepare('SELECT * FROM contacts WHERE (phone = ? OR phone = ?) AND id != ?')
+            .get(realPhone, realPhone.replace(/^55/, ''), contact.id);
+          if (phoneContact) {
+            console.log(`[LID] Fundindo contacto duplicado: phone=${phoneContact.phone} (id ${phoneContact.id}) → wa_id=${waId} (id ${contact.id})`);
+            db.prepare('UPDATE conversations SET contact_id = ? WHERE contact_id = ?').run(contact.id, phoneContact.id);
+            db.prepare('DELETE FROM contacts WHERE id = ?').run(phoneContact.id);
+          }
+        }
+      }
+    }
+
     if (!contact) {
       // Para @lid: obter o número real via getContact() ANTES de criar duplicado
       let info;
