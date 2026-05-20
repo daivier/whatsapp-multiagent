@@ -31,9 +31,10 @@ function App() {
     });
     setSocket(s);
 
-    s.on('message:new', ({ message }) => {
+    s.on('message:new', ({ message, conversation }) => {
       if (message?.from_me) return;
       if (!document.hidden) return;
+      if (user.role === 'attendant' && conversation?.assigned_to !== user.id) return;
       unreadRef.current += 1;
       document.title = `(${unreadRef.current}) ${originalTitle.current}`;
       playNotificationSound();
