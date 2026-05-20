@@ -66,9 +66,16 @@ function getPhoneFromJid(jid) {
 
 function normalizeJid(jid) {
   if (!jid) return null;
-  if (jid.includes('@')) {
-    return jid.replace(/@c\.us$/, '@s.whatsapp.net').replace(/@lid$/, '@s.whatsapp.net');
+  // Se é um LID (@lid ou número identificado como LID na BD), resolver para o número real
+  if (jid.endsWith('@lid') || jid.endsWith('@c.us')) {
+    const lidNum = jid.split('@')[0];
+    const contact = db.prepare('SELECT phone FROM contacts WHERE wa_id = ? OR wa_id = ?')
+      .get(jid, `${lidNum}@lid`);
+    if (contact?.phone) return `${contact.phone}@s.whatsapp.net`;
+    // Fallback: usar o número do LID directamente (pode não funcionar mas é o melhor que temos)
+    return `${lidNum}@s.whatsapp.net`;
   }
+  if (jid.includes('@')) return jid;
   return `${jid}@s.whatsapp.net`;
 }
 
