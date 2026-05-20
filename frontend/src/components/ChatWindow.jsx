@@ -111,8 +111,15 @@ export default function ChatWindow({ conversation: convProp, socket, onClose, on
   const messagesRef = useRef(null);
   const bottomRef = useRef(null);
 
-  // Sync conversation prop → state (close/reopen updates it)
-  useEffect(() => { setConversation(convProp); }, [convProp]);
+  // Sync conversation prop → state (close/reopen updates it); reset panels on conversation change
+  useEffect(() => {
+    setConversation(convProp);
+    setShowHistory(false);
+    setShowTagPicker(false);
+    setShowSchedule(false);
+    setShowSnooze(false);
+    setShowPriorityPicker(false);
+  }, [convProp?.id]);
 
   useEffect(() => {
     api.get('/quick-replies').then(r => setQuickReplies(Array.isArray(r.data) ? r.data : []));
