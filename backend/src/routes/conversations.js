@@ -83,8 +83,10 @@ router.post('/outbound', authMiddleware, async (req, res) => {
   let conversation = db.prepare(`SELECT * FROM conversations WHERE contact_id = ? AND status != 'closed' ORDER BY id DESC LIMIT 1`).get(contact.id);
 
   // Conflito: já existe conversa aberta atribuída a outro utilizador
-  if (conversation && conversation.assigned_to && conversation.assigned_to !== req.user.id && !force) {
-    const assignedUser = db.prepare('SELECT name FROM users WHERE id = ?').get(conversation.assigned_to);
+  const originalAssigneeId = (conversation && conversation.assigned_to && conversation.assigned_to !== req.user.id) ? conversation.assigned_to : null;
+
+  if (originalAssigneeId && !force) {
+    const assignedUser = db.prepare('SELECT name FROM users WHERE id = ?').get(originalAssigneeId);
     return res.status(409).json({
       conflict: true,
       conversation_id: conversation.id,
@@ -136,7 +138,19 @@ router.post('/outbound', authMiddleware, async (req, res) => {
   const fullConv = db.prepare(conversationQuery('WHERE conv.id = ?')).get(conversation.id);
   const msg = db.prepare('SELECT m.*, u.name as sender_name FROM messages m LEFT JOIN users u ON u.id = m.sender_id WHERE m.conversation_id = ? ORDER BY m.id DESC LIMIT 1').get(conversation.id);
 
-  ioInstance.get()?.emit('message:new', { message: msg, conversation: fullConv });
+  const io = ioInstance.get();
+  if (io) {
+    io.emit('message:new', { message: msg, conversation: fullConv });
+    // Notificar atendente original que perdeu a conversa (takeover)
+    if (originalAssigneeId && force) {
+      const takenByUser = db.prepare('SELECT name FROM users WHERE id = ?').get(req.user.id);
+      io.to(`user:${originalAssigneeId}`).emit('conversation:taken', {
+        conversation_id: fullConv.id,
+        contact_name: fullConv.contact_name || fullConv.phone,
+        taken_by_name: takenByUser?.name || 'outro atendente',
+      });
+    }
+  }
   res.json(fullConv);
 });
 

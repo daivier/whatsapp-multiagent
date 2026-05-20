@@ -40,6 +40,10 @@ function App() {
       playNotificationSound();
     });
 
+    s.on('conversation:taken', ({ contact_name, taken_by_name }) => {
+      alert(`⚠️ A conversa com "${contact_name}" foi assumida por ${taken_by_name}.`);
+    });
+
     const resetTitle = () => {
       if (!document.hidden) { unreadRef.current = 0; document.title = originalTitle.current; }
     };
