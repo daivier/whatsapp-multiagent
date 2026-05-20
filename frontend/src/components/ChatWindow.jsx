@@ -136,7 +136,7 @@ export default function ChatWindow({ conversation: convProp, socket, onClose, on
     function onMessage({ message, conversation: conv }) {
       const convId = conv?.id ?? message?.conversation_id;
       if (convId !== conversation?.id) return;
-      if (message.from_me) return;
+      if (message.from_me && !message.is_internal) return;
       setMessages(prev => prev.some(m => m.id === message.id) ? prev : [...prev, message]);
     }
     function onTyping({ userId, name, typing, conversation_id }) {
