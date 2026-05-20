@@ -14,7 +14,19 @@ const STATUS_OPTIONS = [
 export default function AttendantPanel({ socket }) {
   const { user, logout } = useAuth();
   const [selectedConv, setSelectedConv] = useState(null);
+  const [takenNotice, setTakenNotice] = useState(null);
   useNotifications(socket, selectedConv, user);
+
+  useEffect(() => {
+    if (!socket) return;
+    const onTaken = ({ conversation_id, contact_name, taken_by_name }) => {
+      if (selectedConv?.id === conversation_id) setSelectedConv(null);
+      setTakenNotice(`A conversa com "${contact_name}" foi assumida por ${taken_by_name}.`);
+      setTimeout(() => setTakenNotice(null), 6000);
+    };
+    socket.on('conversation:taken', onTaken);
+    return () => socket.off('conversation:taken', onTaken);
+  }, [socket, selectedConv]);
   const [status, setStatus] = useState(() => {
     const s = user.status;
     return (s && s !== 'offline') ? s : 'online';
@@ -61,6 +73,12 @@ export default function AttendantPanel({ socket }) {
 
   return (
     <div style={S.shell}>
+      {takenNotice && (
+        <div style={{ position: 'fixed', top: '1rem', left: '50%', transform: 'translateX(-50%)', zIndex: 9999, background: '#f97316', color: '#fff', padding: '0.65rem 1.25rem', borderRadius: '8px', boxShadow: '0 4px 12px rgba(0,0,0,0.25)', fontSize: '0.9rem', fontWeight: 600, display: 'flex', gap: '0.75rem', alignItems: 'center' }}>
+          <span>⚠️ {takenNotice}</span>
+          <button onClick={() => setTakenNotice(null)} style={{ background: 'none', border: 'none', color: '#fff', cursor: 'pointer', fontSize: '1rem', lineHeight: 1 }}>✕</button>
+        </div>
+      )}
       <header style={S.header}>
         <div style={S.headerLeft}>
           {isMobile && selectedConv ? (
