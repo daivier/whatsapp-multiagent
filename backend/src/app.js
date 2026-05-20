@@ -81,4 +81,17 @@ startScheduledMessagesCron(io);
 const PORT = process.env.PORT || 3001;
 server.listen(PORT, () => {
   console.log(`Servidor a correr em http://localhost:${PORT}`);
+  // Sinaliza ao PM2 que o processo está pronto (usado com wait_ready: true)
+  if (process.send) process.send('ready');
+});
+
+// Graceful shutdown — PM2 envia SIGINT no reload
+process.on('SIGINT', async () => {
+  console.log('[shutdown] A fechar gracefully...');
+  server.close(() => {
+    console.log('[shutdown] HTTP server fechado');
+    process.exit(0);
+  });
+  // Forçar saída após 8 segundos se algo travar
+  setTimeout(() => { console.log('[shutdown] Timeout — a forçar saída'); process.exit(0); }, 8000);
 });
