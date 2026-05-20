@@ -37,10 +37,16 @@ function initWhatsApp(socketIO) {
     console.log('WhatsApp conectado');
   });
 
-  client.on('disconnected', () => {
+  client.on('disconnected', (reason) => {
     isReady = false;
     io.emit('whatsapp:disconnected');
-    console.log('WhatsApp desconectado');
+    console.log('WhatsApp desconectado, motivo:', reason);
+    // Reconectar automaticamente após 5 segundos
+    setTimeout(async () => {
+      console.log('[reconnect] A tentar reconectar WhatsApp...');
+      try { await client.destroy(); } catch (_) {}
+      initWhatsApp(io);
+    }, 5000);
   });
 
   client.on('message', async (msg) => {
