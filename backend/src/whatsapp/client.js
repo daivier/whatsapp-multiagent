@@ -66,13 +66,18 @@ function initWhatsApp(socketIO) {
     // e fundir para que as respostas entrem na conversa correcta
     if (contact && isLid) {
       let info;
-      try { info = await msg.getContact(); } catch (e) { console.log(`[LID-merge] getContact erro: ${e.message}`); }
-      console.log(`[LID-merge] waId=${waId} contact.id=${contact.id} info=${JSON.stringify({ number: info?.number, user: info?.id?.user, pushname: info?.pushname })}`);
+      try { info = await msg.getContact(); } catch (e) {}
       const realPhone = info?.id?.user || info?.number;
       if (realPhone) {
+        // Se o phone do contacto ainda é o LID (não o número real), actualiza
+        const lidNum = waId.replace('@lid', '');
+        if (contact.phone === lidNum || contact.phone === lidNum + '@lid') {
+          db.prepare('UPDATE contacts SET phone = ? WHERE id = ?').run(realPhone, contact.id);
+          contact = db.prepare('SELECT * FROM contacts WHERE id = ?').get(contact.id);
+        }
+        // Fundir contacto duplicado criado por outbound com o número real
         const phoneContact = db.prepare('SELECT * FROM contacts WHERE (phone = ? OR phone = ?) AND id != ?')
           .get(realPhone, realPhone.replace(/^55/, ''), contact.id);
-        console.log(`[LID-merge] realPhone=${realPhone} phoneContact=${JSON.stringify(phoneContact?.id)}`);
         if (phoneContact) {
           console.log(`[LID] Fundindo contacto duplicado: phone=${phoneContact.phone} (id ${phoneContact.id}) → wa_id=${waId} (id ${contact.id})`);
           db.prepare('UPDATE conversations SET contact_id = ? WHERE contact_id = ?').run(contact.id, phoneContact.id);
@@ -87,8 +92,8 @@ function initWhatsApp(socketIO) {
       try { info = await msg.getContact(); } catch (_) {}
 
       if (isLid && info) {
-        // info.number é o número real (ex: "5596...")
-        const realPhone = info.number || info.id?.user || phone;
+        // info.id.user é o número real; info.number é o LID
+        const realPhone = info.id?.user || info.number || phone;
         phone = realPhone;
         // Verifica se já existe contacto com esse número
         contact = db.prepare('SELECT * FROM contacts WHERE phone = ?').get(realPhone)
