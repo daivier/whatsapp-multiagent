@@ -1,4 +1,10 @@
-const { Client, LocalAuth, MessageMedia } = require('whatsapp-web.js');
+const {
+  default: makeWASocket,
+  useMultiFileAuthState,
+  DisconnectReason,
+  fetchLatestBaileysVersion,
+  downloadMediaMessage,
+} = require('@whiskeysockets/baileys');
 const qrcode = require('qrcode');
 const db = require('../db/schema');
 const fs = require('fs');
@@ -7,356 +13,372 @@ const path = require('path');
 const UPLOADS_DIR = path.join(__dirname, '../../../uploads');
 if (!fs.existsSync(UPLOADS_DIR)) fs.mkdirSync(UPLOADS_DIR, { recursive: true });
 
+// Logger silencioso para não poluir os logs
+const logger = {
+  level: 'silent',
+  trace: () => {}, debug: () => {}, info: () => {},
+  warn: () => {}, error: () => {}, fatal: () => {},
+  child: () => logger,
+};
+
 let io;
-let client;
+let sock = null;
 let qrCodeData = null;
 let isReady = false;
 
-function initWhatsApp(socketIO) {
+function getPhoneFromJid(jid) {
+  if (!jid) return '';
+  return jid.split('@')[0];
+}
+
+function normalizeJid(jid) {
+  if (!jid) return null;
+  if (jid.includes('@')) {
+    return jid.replace(/@c\.us$/, '@s.whatsapp.net').replace(/@lid$/, '@s.whatsapp.net');
+  }
+  return `${jid}@s.whatsapp.net`;
+}
+
+async function initWhatsApp(socketIO) {
   io = socketIO;
 
-  client = new Client({
-    authStrategy: new LocalAuth({ dataPath: process.env.WA_SESSION_PATH || './whatsapp-session' }),
-    puppeteer: {
-      headless: true,
-      args: ['--no-sandbox', '--disable-setuid-sandbox'],
-    },
+  const sessionPath = process.env.WA_SESSION_PATH || './baileys-session';
+  const { state, saveCreds } = await useMultiFileAuthState(sessionPath);
+
+  let version = [2, 3000, 0];
+  try {
+    const result = await fetchLatestBaileysVersion();
+    version = result.version;
+  } catch (_) {}
+
+  sock = makeWASocket({
+    version,
+    auth: state,
+    printQRInTerminal: false,
+    logger,
+    browser: ['WhatsApp Multi-Atendente', 'Chrome', '120.0.0'],
+    connectTimeoutMs: 60000,
+    keepAliveIntervalMs: 25000,
+    retryRequestDelayMs: 2000,
+    getMessage: async () => ({ conversation: '' }),
   });
 
-  client.on('qr', async (qr) => {
-    qrCodeData = await qrcode.toDataURL(qr);
-    isReady = false;
-    io.emit('whatsapp:qr', qrCodeData);
-    console.log('QR Code gerado — escaneie no painel do dono');
-  });
+  sock.ev.on('creds.update', saveCreds);
 
-  client.on('ready', () => {
-    isReady = true;
-    qrCodeData = null;
-    io.emit('whatsapp:ready');
-    console.log('WhatsApp conectado');
-  });
+  sock.ev.on('connection.update', async (update) => {
+    const { connection, lastDisconnect, qr } = update;
 
-  client.on('disconnected', (reason) => {
-    isReady = false;
-    io.emit('whatsapp:disconnected');
-    console.log('WhatsApp desconectado, motivo:', reason);
-    // Reconectar automaticamente após 5 segundos
-    setTimeout(async () => {
-      console.log('[reconnect] A tentar reconectar WhatsApp...');
-      try { await client.destroy(); } catch (_) {}
-      initWhatsApp(io);
-    }, 5000);
-  });
-
-  client.on('message', async (msg) => {
-    if (msg.fromMe) return;
-    // Ignora status do WhatsApp, grupos e newsletter
-    if (msg.from === 'status@broadcast') return;
-    if (msg.from.endsWith('@g.us')) return;
-    if (msg.from.endsWith('@newsletter')) return;
-    // Ignora mensagens sem texto, media ou vcard
-    const isVcard = msg.type === 'vcard' || msg.type === 'multi_vcard';
-    if (!msg.hasMedia && !isVcard && (!msg.body || !msg.body.trim())) return;
-
-    // Guarda o identificador completo (ex: "351912345678@c.us" ou "88244750422224@lid")
-    const waId = msg.from;
-    const isLid = waId.endsWith('@lid');
-    const body = msg.body;
-
-    // Upsert contact
-    let contact = db.prepare('SELECT * FROM contacts WHERE wa_id = ?').get(waId);
-    let phone = waId.replace(/@c\.us$/, '').replace(/@lid$/, '');
-
-    // Para @lid já conhecido: verificar se existe contacto duplicado criado por outbound (pelo número)
-    // e fundir para que as respostas entrem na conversa correcta
-    if (contact && isLid) {
-      let info;
-      try { info = await msg.getContact(); } catch (e) {}
-      const realPhone = info?.id?.user || info?.number;
-      if (realPhone) {
-        // Se o phone do contacto ainda é o LID (não o número real), actualiza
-        const lidNum = waId.replace('@lid', '');
-        if (contact.phone === lidNum || contact.phone === lidNum + '@lid') {
-          db.prepare('UPDATE contacts SET phone = ? WHERE id = ?').run(realPhone, contact.id);
-          contact = db.prepare('SELECT * FROM contacts WHERE id = ?').get(contact.id);
-        }
-        // Fundir contacto duplicado criado por outbound com o número real
-        const phoneContact = db.prepare('SELECT * FROM contacts WHERE (phone = ? OR phone = ?) AND id != ?')
-          .get(realPhone, realPhone.replace(/^55/, ''), contact.id);
-        if (phoneContact) {
-          console.log(`[LID] Fundindo contacto duplicado: phone=${phoneContact.phone} (id ${phoneContact.id}) → wa_id=${waId} (id ${contact.id})`);
-          db.prepare('UPDATE conversations SET contact_id = ? WHERE contact_id = ?').run(contact.id, phoneContact.id);
-          db.prepare('DELETE FROM contacts WHERE id = ?').run(phoneContact.id);
-        }
-      }
-    }
-
-    if (!contact) {
-      // Para @lid: obter o número real via getContact() ANTES de criar duplicado
-      let info;
-      try { info = await msg.getContact(); } catch (_) {}
-
-      if (isLid && info) {
-        // info.id.user é o número real; info.number é o LID
-        const realPhone = info.id?.user || info.number || phone;
-        phone = realPhone;
-        // Verifica se já existe contacto com esse número
-        contact = db.prepare('SELECT * FROM contacts WHERE phone = ?').get(realPhone)
-               || db.prepare('SELECT * FROM contacts WHERE phone = ?').get(realPhone.replace(/^55/, ''));
-        if (contact) {
-          // Associa este @lid ao contacto existente para mensagens futuras
-          db.prepare('UPDATE contacts SET wa_id = ? WHERE id = ?').run(waId, contact.id);
-          console.log(`[LID] Associado ${waId} ao contacto existente ${contact.phone} (id ${contact.id})`);
-        } else {
-          // Cria novo contacto com o número real (não com o LID)
-          const name = info.pushname || info.name || realPhone;
-          db.prepare('INSERT INTO contacts (phone, name, wa_id) VALUES (?, ?, ?)').run(realPhone, name, waId);
-          contact = db.prepare('SELECT * FROM contacts WHERE wa_id = ?').get(waId);
-        }
-      } else {
-        // @c.us ou fallback: tenta pelo número primeiro
-        contact = db.prepare('SELECT * FROM contacts WHERE phone = ?').get(phone);
-        if (!contact) {
-          const name = info?.pushname || info?.name || phone;
-          db.prepare('INSERT INTO contacts (phone, name, wa_id) VALUES (?, ?, ?)').run(phone, name, waId);
-          contact = db.prepare('SELECT * FROM contacts WHERE wa_id = ?').get(waId);
-        } else if (!contact.wa_id) {
-          db.prepare('UPDATE contacts SET wa_id = ? WHERE id = ?').run(waId, contact.id);
-        }
-      }
-    }
-
-    // Verificar bot de triagem
-    function shouldSendBotReply() {
-      const enabled = db.prepare(`SELECT value FROM settings WHERE key = 'bot_enabled'`).get()?.value;
-      if (enabled !== '1') return false;
-      const now = new Date();
-      const dayKey = `hours_${now.getDay()}`;
-      const dayHours = db.prepare(`SELECT value FROM settings WHERE key = ?`).get(dayKey)?.value;
-      if (!dayHours || dayHours === 'closed') return true;
-      const [start, end] = dayHours.split('-');
-      const currentTime = `${String(now.getHours()).padStart(2,'0')}:${String(now.getMinutes()).padStart(2,'0')}`;
-      return currentTime < start || currentTime >= end;
-    }
-
-    // Find open/waiting conversation OR reopen the most recent closed one
-    let conversation = db
-      .prepare(`SELECT * FROM conversations WHERE contact_id = ? AND status != 'closed' ORDER BY id DESC LIMIT 1`)
-      .get(contact.id);
-
-    let reopened = false;
-    if (!conversation) {
-      // Verifica se há uma conversa fechada recente (últimas 24h) para reabrir
-      const recentClosed = db
-        .prepare(`SELECT * FROM conversations WHERE contact_id = ? AND status = 'closed' AND updated_at >= datetime('now', '-24 hours') ORDER BY id DESC LIMIT 1`)
-        .get(contact.id);
-
-      if (recentClosed) {
-        // Reabrir conversa fechada recente em vez de criar nova
-        db.prepare(`UPDATE conversations SET status = 'waiting', snoozed_until = NULL, updated_at = CURRENT_TIMESTAMP WHERE id = ?`)
-          .run(recentClosed.id);
-        conversation = db.prepare('SELECT * FROM conversations WHERE id = ?').get(recentClosed.id);
-        reopened = true;
-        console.log(`[conv] Conversa ${conversation.id} reaberta por nova mensagem do contacto`);
-      } else {
-        db.prepare(`INSERT INTO conversations (contact_id, status) VALUES (?, 'waiting')`).run(contact.id);
-        conversation = db
-          .prepare(`SELECT * FROM conversations WHERE contact_id = ? ORDER BY id DESC LIMIT 1`)
-          .get(contact.id);
-      }
-
-      // Auto-assign: só para conversas novas ou reabertas sem atendente
-      if (!reopened || !conversation.assigned_to) {
-        let attendant = db
-          .prepare(`
-            SELECT u.id, COUNT(c.id) as load FROM users u
-            LEFT JOIN conversations c ON c.assigned_to = u.id AND c.status = 'open'
-            WHERE u.role = 'attendant' AND u.status != 'offline' AND u.active = 1 AND u.on_shift = 1
-            GROUP BY u.id ORDER BY load ASC LIMIT 1
-          `)
-          .get();
-        if (!attendant) {
-          attendant = db
-            .prepare(`
-              SELECT u.id, COUNT(c.id) as load FROM users u
-              LEFT JOIN conversations c ON c.assigned_to = u.id AND c.status = 'open'
-              WHERE u.role = 'attendant' AND u.status != 'offline' AND u.active = 1
-              GROUP BY u.id ORDER BY load ASC LIMIT 1
-            `)
-            .get();
-        }
-        if (attendant) {
-          db.prepare(`UPDATE conversations SET assigned_to = ?, status = 'open', updated_at = CURRENT_TIMESTAMP WHERE id = ?`)
-            .run(attendant.id, conversation.id);
-          conversation = db.prepare('SELECT * FROM conversations WHERE id = ?').get(conversation.id);
-        }
-      }
-    }
-
-    // Tratar vCard
-    let mediaUrl = null;
-    let mediaType = null;
-    if (isVcard) {
-      mediaType = 'vcard';
-      // body já tem o VCF — não precisa de fazer nada mais
-    }
-
-    // Guardar media se existir
-    if (msg.hasMedia) {
+    if (qr) {
       try {
-        const media = await msg.downloadMedia();
-        if (media) {
-          const ext = media.mimetype.split('/')[1]?.split(';')[0] || 'bin';
-          const filename = `${Date.now()}-${Math.random().toString(36).slice(2)}.${ext}`;
-          fs.writeFileSync(path.join(UPLOADS_DIR, filename), Buffer.from(media.data, 'base64'));
-          mediaUrl = `/uploads/${filename}`;
-          mediaType = media.mimetype;
-        }
-      } catch (err) {
-        console.error('Aviso: não foi possível guardar media:', err.message);
-      }
-    }
-
-    // Bot de triagem — só em conversas novas (sem mensagens anteriores)
-    const existingMsgs = db.prepare('SELECT COUNT(*) as c FROM messages WHERE conversation_id = ?').get(conversation.id).c;
-    if (existingMsgs === 0 && shouldSendBotReply()) {
-      const botMsg = db.prepare(`SELECT value FROM settings WHERE key = 'bot_message'`).get()?.value;
-      if (botMsg) {
-        try { await sendMessage(waId, botMsg); } catch (_) {}
-        db.prepare('INSERT INTO messages (conversation_id, from_me, body) VALUES (?, 1, ?)').run(conversation.id, botMsg);
-      }
-    }
-
-    // Resolver reply_to_id se a mensagem for uma resposta a outra
-    let replyToId = null;
-    if (msg.hasQuotedMsg) {
-      try {
-        const quotedMsg = await msg.getQuotedMessage();
-        const quotedWaId = quotedMsg?.id?._serialized;
-        if (quotedWaId) {
-          const quotedInDb = db.prepare('SELECT id FROM messages WHERE wa_message_id = ?').get(quotedWaId);
-          replyToId = quotedInDb?.id || null;
-        }
+        qrCodeData = await qrcode.toDataURL(qr);
+        isReady = false;
+        io.emit('whatsapp:qr', qrCodeData);
+        console.log('QR Code gerado — escaneie no painel do dono');
       } catch (_) {}
     }
 
-    // Save message — body pode ser null em media com caption (usar '' como fallback)
-    const safeBody = (msg._data?.caption) || body || '';
-    const incomingWaId = msg.id?._serialized || null;
-    db.prepare('INSERT INTO messages (conversation_id, from_me, body, media_url, media_type, reply_to_id, wa_message_id) VALUES (?, 0, ?, ?, ?, ?, ?)').run(conversation.id, safeBody, mediaUrl, mediaType, replyToId, incomingWaId);
-    db.prepare('UPDATE conversations SET updated_at = CURRENT_TIMESTAMP WHERE id = ?').run(conversation.id);
-
-    const message = db
-      .prepare('SELECT * FROM messages WHERE conversation_id = ? ORDER BY id DESC LIMIT 1')
-      .get(conversation.id);
-
-    const fullConversation = getConversationWithContact(conversation.id);
-
-    io.emit('message:new', { message, conversation: fullConversation });
-    if (conversation.assigned_to) {
-      io.to(`user:${conversation.assigned_to}`).emit('message:incoming', { message, conversation: fullConversation });
+    if (connection === 'open') {
+      isReady = true;
+      qrCodeData = null;
+      io.emit('whatsapp:ready');
+      console.log('WhatsApp conectado');
     }
 
-    // Bot por palavra-chave — só para mensagens de texto
-    if (body && body.trim()) {
-      const rules = db.prepare('SELECT * FROM keyword_rules WHERE active = 1').all();
-      const lowerBody = body.toLowerCase();
-      const matched = rules.find(r => lowerBody.includes(r.keyword.toLowerCase()));
-      if (matched) {
-        try {
-          await sendMessage(waId, matched.response);
-          db.prepare('INSERT INTO messages (conversation_id, from_me, body) VALUES (?, 1, ?)').run(conversation.id, matched.response);
-          db.prepare('UPDATE conversations SET updated_at = CURRENT_TIMESTAMP WHERE id = ?').run(conversation.id);
-          const botMsg = db.prepare('SELECT * FROM messages WHERE conversation_id = ? ORDER BY id DESC LIMIT 1').get(conversation.id);
-          io.emit('message:new', { message: botMsg, conversation: getConversationWithContact(conversation.id) });
-        } catch (err) {
-          console.error('[keyword-bot] Erro ao enviar resposta automática:', err.message);
-        }
+    if (connection === 'close') {
+      isReady = false;
+      const statusCode = lastDisconnect?.error?.output?.statusCode;
+      const isLoggedOut = statusCode === DisconnectReason.loggedOut;
+      console.log(`WhatsApp desconectado, motivo: ${isLoggedOut ? 'LOGOUT' : (statusCode || 'desconhecido')}`);
+      io.emit('whatsapp:disconnected');
+      setTimeout(() => {
+        console.log('[reconnect] A tentar reconectar WhatsApp...');
+        initWhatsApp(io);
+      }, 3000);
+    }
+  });
+
+  sock.ev.on('messages.upsert', async ({ messages, type }) => {
+    if (type !== 'notify') return;
+    for (const msg of messages) {
+      try {
+        await handleIncomingMessage(msg);
+      } catch (err) {
+        console.error('[message] Erro ao processar mensagem:', err.message);
       }
     }
   });
+}
 
-  client.initialize().catch(err => {
-    console.error('[WhatsApp] Erro na inicialização, a reiniciar em 10s:', err.message);
-    isReady = false;
-    setTimeout(() => {
-      try { client.destroy(); } catch (_) {}
-      initWhatsApp(io);
-    }, 10000);
+async function handleIncomingMessage(msg) {
+  if (msg.key.fromMe) return;
+  const remoteJid = msg.key.remoteJid;
+  if (!remoteJid) return;
+  if (remoteJid === 'status@broadcast') return;
+  if (remoteJid.endsWith('@g.us')) return;
+  if (remoteJid.endsWith('@newsletter')) return;
+
+  const waId = remoteJid; // ex: "559684078116@s.whatsapp.net"
+  const phone = getPhoneFromJid(waId);
+  const msgContent = msg.message;
+  if (!msgContent) return;
+
+  // Desembrulhar mensagens efémeras/viewonce
+  const content = msgContent.ephemeralMessage?.message
+    || msgContent.viewOnceMessage?.message
+    || msgContent.viewOnceMessageV2?.message?.viewOnceMessage?.message
+    || msgContent;
+
+  // Extrair texto
+  let body = content.conversation
+    || content.extendedTextMessage?.text
+    || content.imageMessage?.caption
+    || content.videoMessage?.caption
+    || content.documentMessage?.caption
+    || '';
+
+  // vCard
+  const isVcard = !!(content.contactMessage || content.contactsArrayMessage);
+  if (isVcard) {
+    body = content.contactMessage?.vcard
+      || content.contactsArrayMessage?.contacts?.map(c => c.vcard).join('\n')
+      || '';
+  }
+
+  // Media
+  const hasMedia = !!(content.imageMessage || content.videoMessage
+    || content.audioMessage || content.documentMessage || content.stickerMessage);
+
+  if (!hasMedia && !isVcard && !body.trim()) return;
+
+  const pushName = msg.pushName || '';
+
+  // Upsert contacto
+  let contact = db.prepare('SELECT * FROM contacts WHERE wa_id = ?').get(waId);
+
+  if (!contact) {
+    contact = db.prepare('SELECT * FROM contacts WHERE phone = ? OR phone = ?')
+      .get(phone, phone.replace(/^55/, ''));
+    if (contact) {
+      if (!contact.wa_id) {
+        db.prepare('UPDATE contacts SET wa_id = ? WHERE id = ?').run(waId, contact.id);
+        contact = db.prepare('SELECT * FROM contacts WHERE id = ?').get(contact.id);
+      }
+    } else {
+      const name = pushName || phone;
+      db.prepare('INSERT INTO contacts (phone, name, wa_id) VALUES (?, ?, ?)').run(phone, name, waId);
+      contact = db.prepare('SELECT * FROM contacts WHERE wa_id = ?').get(waId);
+    }
+  }
+
+  // Bot de triagem
+  function shouldSendBotReply() {
+    const enabled = db.prepare(`SELECT value FROM settings WHERE key = 'bot_enabled'`).get()?.value;
+    if (enabled !== '1') return false;
+    const now = new Date();
+    const dayKey = `hours_${now.getDay()}`;
+    const dayHours = db.prepare(`SELECT value FROM settings WHERE key = ?`).get(dayKey)?.value;
+    if (!dayHours || dayHours === 'closed') return true;
+    const [start, end] = dayHours.split('-');
+    const currentTime = `${String(now.getHours()).padStart(2,'0')}:${String(now.getMinutes()).padStart(2,'0')}`;
+    return currentTime < start || currentTime >= end;
+  }
+
+  // Encontrar ou criar conversa
+  let conversation = db
+    .prepare(`SELECT * FROM conversations WHERE contact_id = ? AND status != 'closed' ORDER BY id DESC LIMIT 1`)
+    .get(contact.id);
+
+  let reopened = false;
+  if (!conversation) {
+    const recentClosed = db
+      .prepare(`SELECT * FROM conversations WHERE contact_id = ? AND status = 'closed' AND updated_at >= datetime('now', '-24 hours') ORDER BY id DESC LIMIT 1`)
+      .get(contact.id);
+
+    if (recentClosed) {
+      db.prepare(`UPDATE conversations SET status = 'waiting', snoozed_until = NULL, updated_at = CURRENT_TIMESTAMP WHERE id = ?`)
+        .run(recentClosed.id);
+      conversation = db.prepare('SELECT * FROM conversations WHERE id = ?').get(recentClosed.id);
+      reopened = true;
+      console.log(`[conv] Conversa ${conversation.id} reaberta por nova mensagem do contacto`);
+    } else {
+      db.prepare(`INSERT INTO conversations (contact_id, status) VALUES (?, 'waiting')`).run(contact.id);
+      conversation = db
+        .prepare(`SELECT * FROM conversations WHERE contact_id = ? ORDER BY id DESC LIMIT 1`)
+        .get(contact.id);
+    }
+
+    // Auto-assign
+    if (!reopened || !conversation.assigned_to) {
+      let attendant = db.prepare(`
+        SELECT u.id, COUNT(c.id) as load FROM users u
+        LEFT JOIN conversations c ON c.assigned_to = u.id AND c.status = 'open'
+        WHERE u.role = 'attendant' AND u.status != 'offline' AND u.active = 1 AND u.on_shift = 1
+        GROUP BY u.id ORDER BY load ASC LIMIT 1
+      `).get();
+      if (!attendant) {
+        attendant = db.prepare(`
+          SELECT u.id, COUNT(c.id) as load FROM users u
+          LEFT JOIN conversations c ON c.assigned_to = u.id AND c.status = 'open'
+          WHERE u.role = 'attendant' AND u.status != 'offline' AND u.active = 1
+          GROUP BY u.id ORDER BY load ASC LIMIT 1
+        `).get();
+      }
+      if (attendant) {
+        db.prepare(`UPDATE conversations SET assigned_to = ?, status = 'open', updated_at = CURRENT_TIMESTAMP WHERE id = ?`)
+          .run(attendant.id, conversation.id);
+        conversation = db.prepare('SELECT * FROM conversations WHERE id = ?').get(conversation.id);
+      }
+    }
+  }
+
+  // Guardar media
+  let mediaUrl = null;
+  let mediaType = null;
+  if (isVcard) {
+    mediaType = 'vcard';
+  } else if (hasMedia) {
+    try {
+      const buffer = await downloadMediaMessage(msg, 'buffer', {});
+      if (buffer) {
+        const imgMsg = content.imageMessage;
+        const vidMsg = content.videoMessage;
+        const audMsg = content.audioMessage;
+        const docMsg = content.documentMessage;
+        const stkMsg = content.stickerMessage;
+        const mimetype = imgMsg?.mimetype || vidMsg?.mimetype || audMsg?.mimetype
+          || docMsg?.mimetype || stkMsg?.mimetype || 'application/octet-stream';
+        const origName = docMsg?.fileName || null;
+        const ext = mimetype.split('/')[1]?.split(';')[0] || 'bin';
+        const filename = origName || `${Date.now()}-${Math.random().toString(36).slice(2)}.${ext}`;
+        fs.writeFileSync(path.join(UPLOADS_DIR, filename), buffer);
+        mediaUrl = `/uploads/${filename}`;
+        mediaType = mimetype;
+      }
+    } catch (err) {
+      console.error('Aviso: não foi possível guardar media:', err.message);
+    }
+  }
+
+  // Bot de triagem (só em conversas novas)
+  const existingMsgs = db.prepare('SELECT COUNT(*) as c FROM messages WHERE conversation_id = ?').get(conversation.id).c;
+  if (existingMsgs === 0 && shouldSendBotReply()) {
+    const botMsg = db.prepare(`SELECT value FROM settings WHERE key = 'bot_message'`).get()?.value;
+    if (botMsg) {
+      try { await sendMessage(waId, botMsg); } catch (_) {}
+      db.prepare('INSERT INTO messages (conversation_id, from_me, body) VALUES (?, 1, ?)').run(conversation.id, botMsg);
+    }
+  }
+
+  // Resolver reply_to_id
+  let replyToId = null;
+  const contextInfo = content.extendedTextMessage?.contextInfo
+    || content.imageMessage?.contextInfo
+    || content.videoMessage?.contextInfo
+    || content.documentMessage?.contextInfo
+    || content.audioMessage?.contextInfo;
+  if (contextInfo?.stanzaId) {
+    const quoted = db.prepare('SELECT id FROM messages WHERE wa_message_id = ?').get(contextInfo.stanzaId);
+    replyToId = quoted?.id || null;
+  }
+
+  // Guardar mensagem
+  const incomingWaId = msg.key.id || null;
+  const safeBody = body || '';
+  db.prepare('INSERT INTO messages (conversation_id, from_me, body, media_url, media_type, reply_to_id, wa_message_id) VALUES (?, 0, ?, ?, ?, ?, ?)')
+    .run(conversation.id, safeBody, mediaUrl, mediaType, replyToId, incomingWaId);
+  db.prepare('UPDATE conversations SET updated_at = CURRENT_TIMESTAMP WHERE id = ?').run(conversation.id);
+
+  const message = db.prepare('SELECT * FROM messages WHERE conversation_id = ? ORDER BY id DESC LIMIT 1').get(conversation.id);
+  const fullConversation = getConversationWithContact(conversation.id);
+
+  io.emit('message:new', { message, conversation: fullConversation });
+  if (conversation.assigned_to) {
+    io.to(`user:${conversation.assigned_to}`).emit('message:incoming', { message, conversation: fullConversation });
+  }
+
+  // Bot por palavra-chave
+  if (body && body.trim()) {
+    const rules = db.prepare('SELECT * FROM keyword_rules WHERE active = 1').all();
+    const lowerBody = body.toLowerCase();
+    const matched = rules.find(r => lowerBody.includes(r.keyword.toLowerCase()));
+    if (matched) {
+      try {
+        await sendMessage(waId, matched.response);
+        db.prepare('INSERT INTO messages (conversation_id, from_me, body) VALUES (?, 1, ?)').run(conversation.id, matched.response);
+        db.prepare('UPDATE conversations SET updated_at = CURRENT_TIMESTAMP WHERE id = ?').run(conversation.id);
+        const botMsg = db.prepare('SELECT * FROM messages WHERE conversation_id = ? ORDER BY id DESC LIMIT 1').get(conversation.id);
+        io.emit('message:new', { message: botMsg, conversation: getConversationWithContact(conversation.id) });
+      } catch (err) {
+        console.error('[keyword-bot] Erro ao enviar resposta automática:', err.message);
+      }
+    }
+  }
+}
+
+async function sendMessage(phone, body, { quotedWaId } = {}) {
+  if (!isReady || !sock) throw new Error('WhatsApp não está conectado');
+  const jid = normalizeJid(phone);
+  const opts = {};
+  if (quotedWaId) {
+    const quotedMsg = db.prepare('SELECT wa_message_id, from_me FROM messages WHERE wa_message_id = ?').get(quotedWaId);
+    opts.quoted = {
+      key: { id: quotedWaId, fromMe: !!(quotedMsg?.from_me), remoteJid: jid },
+      message: { conversation: '' },
+    };
+  }
+  const result = await sock.sendMessage(jid, { text: body }, opts);
+  return result?.key?.id || null;
+}
+
+async function editMessage(waMessageId, newBody) {
+  if (!isReady || !sock) throw new Error('WhatsApp não está conectado');
+  const msgInDb = db.prepare(`
+    SELECT m.wa_message_id, con.wa_id, con.phone
+    FROM messages m
+    JOIN conversations conv ON conv.id = m.conversation_id
+    JOIN contacts con ON con.id = conv.contact_id
+    WHERE m.wa_message_id = ? AND m.from_me = 1
+  `).get(waMessageId);
+  if (!msgInDb) throw new Error('Mensagem não encontrada');
+  const jid = normalizeJid(msgInDb.wa_id || msgInDb.phone);
+  await sock.sendMessage(jid, {
+    text: newBody,
+    edit: { id: waMessageId, fromMe: true, remoteJid: jid },
   });
+}
+
+async function sendMedia(phone, filePath, filename, caption) {
+  if (!isReady || !sock) throw new Error('WhatsApp não está conectado');
+  const jid = normalizeJid(phone);
+  const buffer = fs.readFileSync(filePath);
+  const ext = path.extname(filename || filePath).toLowerCase().replace('.', '');
+  const mimeMap = {
+    jpg: 'image/jpeg', jpeg: 'image/jpeg', png: 'image/png',
+    gif: 'image/gif', webp: 'image/webp',
+    mp4: 'video/mp4', mov: 'video/quicktime',
+    mp3: 'audio/mpeg', ogg: 'audio/ogg', m4a: 'audio/mp4',
+    pdf: 'application/pdf',
+  };
+  const mimetype = mimeMap[ext] || 'application/octet-stream';
+  const opts = caption ? { caption } : {};
+  if (mimetype.startsWith('image/')) {
+    await sock.sendMessage(jid, { image: buffer, mimetype, ...opts });
+  } else if (mimetype.startsWith('video/')) {
+    await sock.sendMessage(jid, { video: buffer, mimetype, ...opts });
+  } else if (mimetype.startsWith('audio/')) {
+    await sock.sendMessage(jid, { audio: buffer, mimetype, ptt: false });
+  } else {
+    await sock.sendMessage(jid, { document: buffer, mimetype, fileName: filename || path.basename(filePath), ...opts });
+  }
 }
 
 async function disconnectWhatsApp() {
   isReady = false;
   qrCodeData = null;
-  try { await client.logout(); } catch (_) {}
-  try { await client.destroy(); } catch (_) {}
-  // Reinicializa para gerar novo QR
-  initWhatsApp(io);
-}
-
-async function sendMessage(phone, body, { quotedWaId } = {}) {
-  if (!isReady) throw new Error('WhatsApp não está conectado');
-
-  // Se phone já tem sufixo (@lid ou @c.us), usa directamente
-  // Senão, adiciona @c.us como fallback
-  let waId;
-  if (phone.includes('@')) {
-    waId = phone;
-  } else {
-    waId = `${phone}@c.us`;
-  }
-
-  const opts = {};
-  if (quotedWaId) opts.quotedMessageId = quotedWaId;
-
-  try {
-    const msg = await client.sendMessage(waId, body, opts);
-    return msg?.id?._serialized || null;
-  } catch (err) {
-    const isDetachedFrame = err.message && err.message.includes('detached Frame');
-    if (isDetachedFrame) {
-      throw new Error('WhatsApp está a reconectar, aguarde alguns segundos e tente novamente.');
-    }
-    const isLidError = err.message && (err.message.includes('No LID') || err.message === 't');
-    if (waId.endsWith('@c.us') && isLidError) {
-      const phoneNum = waId.replace('@c.us', '');
-      const contact = db.prepare(`SELECT wa_id FROM contacts WHERE (phone = ? OR phone = ?) AND wa_id LIKE '%@lid'`)
-                        .get(phoneNum, phoneNum.replace(/^55/, ''));
-      if (contact?.wa_id) {
-        console.log(`[sendMessage] Usando LID guardado ${contact.wa_id} para ${phoneNum}`);
-        const msg = await client.sendMessage(contact.wa_id, body, opts);
-        return msg?.id?._serialized || null;
-      }
-      throw new Error(`Não foi possível entregar a mensagem (No LID). O contacto precisa de enviar uma mensagem primeiro.`);
-    }
-    throw err;
-  }
-}
-
-async function editMessage(waMessageId, newBody) {
-  if (!isReady) throw new Error('WhatsApp não está conectado');
-  const msg = await client.getMessageById(waMessageId);
-  if (!msg) throw new Error('Mensagem não encontrada no WhatsApp');
-  await msg.edit(newBody);
-}
-
-async function sendMedia(phone, filePath, filename, caption) {
-  if (!isReady) throw new Error('WhatsApp não está conectado');
-  const media = MessageMedia.fromFilePath(filePath);
-  if (filename) media.filename = filename;
-  const opts = caption ? { caption } : {};
-  let waId = phone.includes('@') ? phone : `${phone}@c.us`;
-  try {
-    await client.sendMessage(waId, media, opts);
-  } catch (err) {
-    if (waId.endsWith('@c.us') && err.message && (err.message.includes('No LID') || err.message === 't')) {
-      await client.sendMessage(waId.replace('@c.us', '@lid'), media, opts);
-    } else {
-      throw err;
-    }
-  }
+  try { await sock?.logout(); } catch (_) {}
+  try { sock?.end(undefined); } catch (_) {}
+  sock = null;
+  setTimeout(() => initWhatsApp(io), 1000);
 }
 
 function getStatus() {
@@ -364,15 +386,14 @@ function getStatus() {
 }
 
 function getConversationWithContact(conversationId) {
-  return db
-    .prepare(`
-      SELECT conv.*, con.phone, con.name as contact_name, con.email as contact_email, con.notes as contact_notes, con.id as contact_id, u.name as attendant_name
-      FROM conversations conv
-      JOIN contacts con ON con.id = conv.contact_id
-      LEFT JOIN users u ON u.id = conv.assigned_to
-      WHERE conv.id = ?
-    `)
-    .get(conversationId);
+  return db.prepare(`
+    SELECT conv.*, con.phone, con.name as contact_name, con.email as contact_email,
+           con.notes as contact_notes, con.id as contact_id, u.name as attendant_name
+    FROM conversations conv
+    JOIN contacts con ON con.id = conv.contact_id
+    LEFT JOIN users u ON u.id = conv.assigned_to
+    WHERE conv.id = ?
+  `).get(conversationId);
 }
 
 module.exports = { initWhatsApp, sendMessage, sendMedia, editMessage, getStatus, disconnectWhatsApp };
