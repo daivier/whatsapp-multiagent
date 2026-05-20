@@ -21,7 +21,7 @@ const upload = multer({ storage, limits: { fileSize: 32 * 1024 * 1024 } });
 
 function conversationQuery(extraWhere = '') {
   return `
-    SELECT conv.*, con.phone, con.wa_id, con.name as contact_name, u.name as attendant_name,
+    SELECT conv.*, con.phone, con.wa_id, con.id as contact_id, con.name as contact_name, con.email as contact_email, con.notes as contact_notes, u.name as attendant_name,
       (SELECT COUNT(*) FROM messages WHERE conversation_id = conv.id AND from_me = 0 AND read = 0) as unread_count,
       (SELECT MAX(timestamp) FROM messages WHERE conversation_id = conv.id AND from_me = 0) as last_client_at
     FROM conversations conv
@@ -63,12 +63,20 @@ router.post('/outbound', authMiddleware, async (req, res) => {
 
   // Normaliza o número: remove espaços, traços, parênteses
   const cleanPhone = phone.trim().replace(/[\s\-().]/g, '');
+  // Variante sem prefixo 55 para pesquisa
+  const phoneNoPrefix = cleanPhone.replace(/^55/, '');
 
-  // Upsert contacto
-  let contact = db.prepare('SELECT * FROM contacts WHERE phone = ? OR wa_id LIKE ?').get(cleanPhone, `${cleanPhone}%`);
+  // Upsert contacto — procura também por número sem prefixo e por wa_id
+  let contact = db.prepare(`
+    SELECT * FROM contacts
+    WHERE phone = ? OR phone = ? OR wa_id LIKE ? OR wa_id LIKE ?
+  `).get(cleanPhone, phoneNoPrefix, `${cleanPhone}%`, `${phoneNoPrefix}%`);
+
+  let isNewContact = false;
   if (!contact) {
     db.prepare('INSERT INTO contacts (phone, name) VALUES (?, ?)').run(cleanPhone, cleanPhone);
     contact = db.prepare('SELECT * FROM contacts WHERE phone = ?').get(cleanPhone);
+    isNewContact = true;
   }
 
   // Cria conversa (ou reabre a última fechada)
@@ -79,14 +87,39 @@ router.post('/outbound', authMiddleware, async (req, res) => {
   }
 
   // Envia mensagem pelo WhatsApp
+  let waMessageId;
   try {
-    await sendMessage(contact.wa_id || cleanPhone, message);
+    waMessageId = await sendMessage(contact.wa_id || cleanPhone, message);
   } catch (err) {
     return res.status(500).json({ error: 'Erro ao enviar: ' + err.message });
   }
 
+  // Extrair wa_id real do destinatário a partir do ID da mensagem enviada
+  // Formato: "true_<waId>_<hash>" — permite detectar se é @lid ou @c.us diferente do que temos
+  if (waMessageId && isNewContact) {
+    const parts = waMessageId.split('_');
+    if (parts.length >= 2) {
+      const recipientWaId = parts[1]; // ex: "88244750422224@lid" ou "559684078116@c.us"
+      if (recipientWaId && recipientWaId.includes('@')) {
+        const existingContact = db.prepare('SELECT * FROM contacts WHERE wa_id = ? AND id != ?').get(recipientWaId, contact.id);
+        if (existingContact) {
+          // Já existe contacto com este wa_id — mover a conversa para ele e apagar o duplicado
+          console.log(`[outbound] Contacto duplicado detectado: ${cleanPhone} = ${existingContact.phone} (${recipientWaId}). A fundir.`);
+          db.prepare('UPDATE conversations SET contact_id = ?, assigned_to = ?, status = ? WHERE id = ?')
+            .run(existingContact.id, req.user.id, 'open', conversation.id);
+          db.prepare('DELETE FROM contacts WHERE id = ?').run(contact.id);
+          contact = existingContact;
+          conversation = db.prepare('SELECT * FROM conversations WHERE id = ?').get(conversation.id);
+        } else {
+          // Actualizar o wa_id do contacto novo com o valor real
+          db.prepare('UPDATE contacts SET wa_id = ? WHERE id = ?').run(recipientWaId, contact.id);
+        }
+      }
+    }
+  }
+
   // Guarda mensagem
-  db.prepare('INSERT INTO messages (conversation_id, from_me, sender_id, body) VALUES (?, 1, ?, ?)').run(conversation.id, req.user.id, message);
+  db.prepare('INSERT INTO messages (conversation_id, from_me, sender_id, body, wa_message_id) VALUES (?, 1, ?, ?, ?)').run(conversation.id, req.user.id, message, waMessageId || null);
   db.prepare('UPDATE conversations SET updated_at = CURRENT_TIMESTAMP, assigned_to = ?, status = ? WHERE id = ?').run(req.user.id, 'open', conversation.id);
 
   const fullConv = db.prepare(conversationQuery('WHERE conv.id = ?')).get(conversation.id);

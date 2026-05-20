@@ -278,6 +278,10 @@ async function sendMessage(phone, body, { quotedWaId } = {}) {
     const msg = await client.sendMessage(waId, body, opts);
     return msg?.id?._serialized || null;
   } catch (err) {
+    const isDetachedFrame = err.message && err.message.includes('detached Frame');
+    if (isDetachedFrame) {
+      throw new Error('WhatsApp está a reconectar, aguarde alguns segundos e tente novamente.');
+    }
     const isLidError = err.message && (err.message.includes('No LID') || err.message === 't');
     if (waId.endsWith('@c.us') && isLidError) {
       const phoneNum = waId.replace('@c.us', '');
@@ -325,7 +329,7 @@ function getStatus() {
 function getConversationWithContact(conversationId) {
   return db
     .prepare(`
-      SELECT conv.*, con.phone, con.name as contact_name, u.name as attendant_name
+      SELECT conv.*, con.phone, con.name as contact_name, con.email as contact_email, con.notes as contact_notes, con.id as contact_id, u.name as attendant_name
       FROM conversations conv
       JOIN contacts con ON con.id = conv.contact_id
       LEFT JOIN users u ON u.id = conv.assigned_to

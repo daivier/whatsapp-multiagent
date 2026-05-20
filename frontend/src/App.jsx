@@ -26,7 +26,7 @@ function App() {
 
   useEffect(() => {
     if (!token || !user) return;
-    const s = io(import.meta.env.VITE_API_URL || 'http://localhost:3001', {
+    const s = io(import.meta.env.VITE_API_URL ?? window.location.origin, {
       auth: { token },
     });
     setSocket(s);

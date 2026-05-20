@@ -94,9 +94,10 @@ export default function ChatWindow({ conversation: convProp, socket, onClose, on
   // Edit message
   const [editingMsg, setEditingMsg] = useState(null); // { id, body }
   const [editBody, setEditBody] = useState('');
-  // Merge conversations
-  const [showMerge, setShowMerge] = useState(false);
-  const [mergeTargetId, setMergeTargetId] = useState('');
+  // Edit contact
+  const [showContactEdit, setShowContactEdit] = useState(false);
+  const [contactForm, setContactForm] = useState({ name: '', email: '', notes: '' });
+  const [contactSaving, setContactSaving] = useState(false);
   // Priority
   const [showPriorityPicker, setShowPriorityPicker] = useState(false);
   // Snooze
@@ -195,6 +196,28 @@ export default function ChatWindow({ conversation: convProp, socket, onClose, on
       setEditBody('');
     } catch (err) {
       alert(err.response?.data?.error || 'Erro ao editar mensagem');
+    }
+  }
+
+  function openContactEdit() {
+    setContactForm({
+      name: conversation.contact_name || '',
+      email: conversation.contact_email || '',
+      notes: conversation.contact_notes || '',
+    });
+    setShowContactEdit(true);
+  }
+
+  async function saveContact() {
+    setContactSaving(true);
+    try {
+      await api.patch(`/contacts/${conversation.contact_id}`, contactForm);
+      setConversation(prev => ({ ...prev, contact_name: contactForm.name, contact_email: contactForm.email, contact_notes: contactForm.notes }));
+      setShowContactEdit(false);
+    } catch (err) {
+      alert(err.response?.data?.error || err.message || 'Erro ao guardar contacto');
+    } finally {
+      setContactSaving(false);
     }
   }
 
@@ -423,6 +446,7 @@ export default function ChatWindow({ conversation: convProp, socket, onClose, on
         <div style={{ flex: 1, minWidth: 0 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flexWrap: 'wrap' }}>
             <strong style={{ fontSize: '0.9rem', color: 'var(--text)' }}>{conversation.contact_name || conversation.phone}</strong>
+            <button onClick={openContactEdit} title="Editar contacto" style={{ background: 'none', border: 'none', cursor: 'pointer', padding: '0 2px', fontSize: '0.8rem', opacity: 0.5, lineHeight: 1 }}>✏️</button>
             {isClosed && <span style={{ background: '#f3f4f6', color: 'var(--hint)', borderRadius: '999px', padding: '0.1rem 0.55rem', fontSize: '0.7rem', fontWeight: 600 }}>Fechada</span>}
             {isSnoozed && <span style={{ background: '#e0e7ff', color: '#4338ca', borderRadius: '999px', padding: '0.1rem 0.55rem', fontSize: '0.7rem', fontWeight: 600 }}>💤 Adiada</span>}
             {convTags.map(t => (
@@ -481,29 +505,11 @@ export default function ChatWindow({ conversation: convProp, socket, onClose, on
           ) : (
             <button style={{ ...S.iconBtn, color: 'var(--warn)', borderColor: 'var(--warn)' }} onClick={closeConversation}>Fechar</button>
           )}
-          {user.role === 'owner' && (
-            <button style={{ ...S.iconBtn, fontSize: '0.75rem' }} title="Fundir com outra conversa" onClick={() => setShowMerge(v => !v)}>🔗 Fundir</button>
-          )}
           {onDelete && <button style={S.dangerBtn} onClick={onDelete}>Eliminar</button>}
           <button style={S.closeBtn} onClick={onClose}>✕</button>
         </div>
       </div>
 
-      {/* Painel Fundir */}
-      {showMerge && (
-        <div style={{ background: '#fef9c3', borderBottom: '1px solid #fde68a', padding: '0.6rem 1rem', display: 'flex', alignItems: 'center', gap: '0.5rem', flexWrap: 'wrap', fontSize: '0.83rem' }}>
-          <span style={{ fontWeight: 600, color: '#92400e' }}>🔗 Fundir esta conversa (ID {conversation.id}) na:</span>
-          <input
-            placeholder="ID da conversa de destino"
-            value={mergeTargetId}
-            onChange={e => setMergeTargetId(e.target.value)}
-            style={{ padding: '0.25rem 0.5rem', border: '1px solid #fbbf24', borderRadius: '4px', width: '160px', fontSize: '0.83rem' }}
-          />
-          <button onClick={mergeConversation} style={{ padding: '0.25rem 0.75rem', background: '#d97706', color: '#fff', border: 'none', borderRadius: '4px', cursor: 'pointer', fontWeight: 600, fontSize: '0.83rem' }}>Confirmar</button>
-          <button onClick={() => { setShowMerge(false); setMergeTargetId(''); }} style={{ padding: '0.25rem 0.6rem', background: 'none', border: '1px solid #fbbf24', borderRadius: '4px', cursor: 'pointer', fontSize: '0.83rem', color: '#92400e' }}>Cancelar</button>
-          <span style={{ color: '#78350f', fontSize: '0.75rem' }}>As mensagens desta conversa passarão para a conversa de destino e esta será eliminada.</span>
-        </div>
-      )}
 
       {/* Histórico */}
       {showHistory && (
@@ -521,6 +527,33 @@ export default function ChatWindow({ conversation: convProp, socket, onClose, on
                 <span style={{ fontSize: '0.72rem', color: c.status === 'closed' ? 'var(--hint)' : 'var(--success)', marginLeft: 'auto' }}>{c.status}</span>
               </div>
             ))}
+        </div>
+      )}
+
+      {/* Editar Contacto */}
+      {showContactEdit && (
+        <div style={{ background: 'var(--bg-2)', borderBottom: '1px solid var(--border-m)', padding: '0.75rem 1rem', display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+            <span style={{ fontWeight: 600, fontSize: '0.85rem', color: 'var(--text)' }}>✏️ Editar contacto</span>
+            <button onClick={() => setShowContactEdit(false)} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: '1rem', color: 'var(--muted)' }}>✕</button>
+          </div>
+          <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
+            <input placeholder="Nome" value={contactForm.name}
+              onChange={e => setContactForm(p => ({ ...p, name: e.target.value }))}
+              style={{ flex: '1 1 140px', padding: '0.3rem 0.5rem', border: '1px solid var(--border-m)', borderRadius: '4px', fontSize: '0.83rem', background: 'var(--bg)', color: 'var(--text)' }} />
+            <input placeholder="Email" value={contactForm.email}
+              onChange={e => setContactForm(p => ({ ...p, email: e.target.value }))}
+              style={{ flex: '1 1 160px', padding: '0.3rem 0.5rem', border: '1px solid var(--border-m)', borderRadius: '4px', fontSize: '0.83rem', background: 'var(--bg)', color: 'var(--text)' }} />
+          </div>
+          <textarea placeholder="Notas" value={contactForm.notes} rows={2}
+            onChange={e => setContactForm(p => ({ ...p, notes: e.target.value }))}
+            style={{ padding: '0.3rem 0.5rem', border: '1px solid var(--border-m)', borderRadius: '4px', fontSize: '0.83rem', resize: 'vertical', background: 'var(--bg)', color: 'var(--text)' }} />
+          <div style={{ display: 'flex', gap: '0.5rem', justifyContent: 'flex-end' }}>
+            <button onClick={() => setShowContactEdit(false)} style={{ padding: '0.25rem 0.75rem', background: 'none', border: '1px solid var(--border-m)', borderRadius: '4px', cursor: 'pointer', fontSize: '0.83rem', color: 'var(--muted)' }}>Cancelar</button>
+            <button onClick={saveContact} disabled={contactSaving} style={{ padding: '0.25rem 0.75rem', background: 'var(--accent)', color: '#fff', border: 'none', borderRadius: '4px', cursor: 'pointer', fontSize: '0.83rem', opacity: contactSaving ? 0.6 : 1 }}>
+              {contactSaving ? 'A guardar…' : 'Guardar'}
+            </button>
+          </div>
         </div>
       )}
 
@@ -572,16 +605,30 @@ export default function ChatWindow({ conversation: convProp, socket, onClose, on
                 <>
                   <MessageContent msg={msg} onMediaLoad={scrollToBottom} />
                   {msg.failed ? (
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', marginTop: '0.25rem' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', marginTop: '0.25rem', flexWrap: 'wrap' }}>
                       <span style={{ color: 'var(--danger)', fontSize: '0.75rem' }}>⚠️ Não entregue</span>
-                      <button onClick={async () => {
+                      <button onClick={async (e) => {
+                        const btn = e.currentTarget;
+                        btn.disabled = true;
+                        btn.textContent = '...';
                         try {
                           const { data } = await api.post(`/messages/${msg.id}/retry`);
                           setMessages(prev => prev.map(m => m.id === data.id ? data : m));
-                        } catch (e) { alert(e.response?.data?.error || 'Erro ao reenviar'); }
+                        } catch (err) {
+                          const errMsg = err.response?.data?.error || 'Erro ao reenviar';
+                          setMessages(prev => prev.map(m => m.id === msg.id
+                            ? { ...m, retryError: errMsg }
+                            : m
+                          ));
+                          btn.disabled = false;
+                          btn.textContent = '↻ Reenviar';
+                        }
                       }} style={{ fontSize: '0.72rem', padding: '1px 7px', background: 'var(--danger)', color: '#fff', border: 'none', borderRadius: '4px', cursor: 'pointer' }}>
                         ↻ Reenviar
                       </button>
+                      {msg.retryError && (
+                        <span style={{ fontSize: '0.72rem', color: 'var(--danger)' }}>⚠ {msg.retryError}</span>
+                      )}
                     </div>
                   ) : null}
                 </>
