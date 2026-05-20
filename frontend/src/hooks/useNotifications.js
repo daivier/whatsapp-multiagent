@@ -21,7 +21,7 @@ function playNotificationSound() {
   } catch (_) {}
 }
 
-export function useNotifications(socket, selectedConv) {
+export function useNotifications(socket, selectedConv, user) {
   // Pede permissão ao montar
   useEffect(() => {
     if ('Notification' in window && Notification.permission === 'default') {
@@ -35,6 +35,7 @@ export function useNotifications(socket, selectedConv) {
     function onNewMessage({ message, conversation }) {
       if (message?.from_me) return;
       if (conversation?.id === selectedConv?.id) return;
+      if (user?.role === 'attendant' && conversation?.assigned_to !== user?.id) return;
 
       // Som — sempre que chega mensagem noutras conversas
       playNotificationSound();

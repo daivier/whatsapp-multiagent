@@ -14,7 +14,7 @@ const STATUS_OPTIONS = [
 export default function AttendantPanel({ socket }) {
   const { user, logout } = useAuth();
   const [selectedConv, setSelectedConv] = useState(null);
-  useNotifications(socket, selectedConv);
+  useNotifications(socket, selectedConv, user);
   const [status, setStatus] = useState(() => {
     const s = user.status;
     return (s && s !== 'offline') ? s : 'online';
