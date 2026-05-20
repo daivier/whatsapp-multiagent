@@ -66,17 +66,17 @@ function initWhatsApp(socketIO) {
     // e fundir para que as respostas entrem na conversa correcta
     if (contact && isLid) {
       let info;
-      try { info = await msg.getContact(); } catch (_) {}
-      if (info) {
-        const realPhone = info.number || info.id?.user;
-        if (realPhone) {
-          const phoneContact = db.prepare('SELECT * FROM contacts WHERE (phone = ? OR phone = ?) AND id != ?')
-            .get(realPhone, realPhone.replace(/^55/, ''), contact.id);
-          if (phoneContact) {
-            console.log(`[LID] Fundindo contacto duplicado: phone=${phoneContact.phone} (id ${phoneContact.id}) → wa_id=${waId} (id ${contact.id})`);
-            db.prepare('UPDATE conversations SET contact_id = ? WHERE contact_id = ?').run(contact.id, phoneContact.id);
-            db.prepare('DELETE FROM contacts WHERE id = ?').run(phoneContact.id);
-          }
+      try { info = await msg.getContact(); } catch (e) { console.log(`[LID-merge] getContact erro: ${e.message}`); }
+      console.log(`[LID-merge] waId=${waId} contact.id=${contact.id} info=${JSON.stringify({ number: info?.number, user: info?.id?.user, pushname: info?.pushname })}`);
+      const realPhone = info?.number || info?.id?.user;
+      if (realPhone) {
+        const phoneContact = db.prepare('SELECT * FROM contacts WHERE (phone = ? OR phone = ?) AND id != ?')
+          .get(realPhone, realPhone.replace(/^55/, ''), contact.id);
+        console.log(`[LID-merge] realPhone=${realPhone} phoneContact=${JSON.stringify(phoneContact?.id)}`);
+        if (phoneContact) {
+          console.log(`[LID] Fundindo contacto duplicado: phone=${phoneContact.phone} (id ${phoneContact.id}) → wa_id=${waId} (id ${contact.id})`);
+          db.prepare('UPDATE conversations SET contact_id = ? WHERE contact_id = ?').run(contact.id, phoneContact.id);
+          db.prepare('DELETE FROM contacts WHERE id = ?').run(phoneContact.id);
         }
       }
     }
