@@ -26,6 +26,39 @@ let sock = null;
 let qrCodeData = null;
 let isReady = false;
 
+// Fila de reenvio: msgId → { jid, body, opts, sentAt }
+// Guarda mensagens enviadas nos últimos RETRY_TTL_MS ms para reenvio se a ligação cair
+const pendingQueue = new Map();
+const RETRY_TTL_MS = 2 * 60 * 1000; // 2 minutos
+
+function cleanPendingQueue() {
+  const now = Date.now();
+  for (const [id, entry] of pendingQueue) {
+    if (now - entry.sentAt > RETRY_TTL_MS) pendingQueue.delete(id);
+  }
+}
+
+async function retryPendingMessages() {
+  cleanPendingQueue();
+  if (pendingQueue.size === 0) return;
+  console.log(`[retry] A reenviar ${pendingQueue.size} mensagem(ns) pendente(s)...`);
+  for (const [id, entry] of pendingQueue) {
+    try {
+      const result = await sock.sendMessage(entry.jid, { text: entry.body }, entry.opts || {});
+      const newId = result?.key?.id;
+      if (newId) {
+        // Actualizar wa_message_id na BD
+        db.prepare('UPDATE messages SET wa_message_id = ? WHERE wa_message_id = ?').run(newId, id);
+        pendingQueue.delete(id);
+        pendingQueue.set(newId, { ...entry, sentAt: Date.now() });
+      }
+      console.log(`[retry] Mensagem reenviada: ${id} → ${newId}`);
+    } catch (err) {
+      console.error(`[retry] Falha ao reenviar ${id}:`, err.message);
+    }
+  }
+}
+
 function getPhoneFromJid(jid) {
   if (!jid) return '';
   return jid.split('@')[0];
@@ -82,6 +115,8 @@ async function initWhatsApp(socketIO) {
       qrCodeData = null;
       io.emit('whatsapp:ready');
       console.log('WhatsApp conectado');
+      // Reenviar mensagens que ficaram pendentes antes da desconexão
+      setTimeout(retryPendingMessages, 2000);
     }
 
     if (connection === 'close') {
@@ -94,6 +129,15 @@ async function initWhatsApp(socketIO) {
         console.log('[reconnect] A tentar reconectar WhatsApp...');
         initWhatsApp(io);
       }, 3000);
+    }
+  });
+
+  // Remover da fila quando o servidor confirma a entrega (status >= 2 = SERVER_ACK)
+  sock.ev.on('messages.update', (updates) => {
+    for (const { key, update } of updates) {
+      if (update.status >= 2 && pendingQueue.has(key.id)) {
+        pendingQueue.delete(key.id);
+      }
     }
   });
 
@@ -327,7 +371,12 @@ async function sendMessage(phone, body, { quotedWaId } = {}) {
     };
   }
   const result = await sock.sendMessage(jid, { text: body }, opts);
-  return result?.key?.id || null;
+  const msgId = result?.key?.id || null;
+  // Registar na fila de reenvio até receber ACK do servidor
+  if (msgId) {
+    pendingQueue.set(msgId, { jid, body, opts, sentAt: Date.now() });
+  }
+  return msgId;
 }
 
 async function editMessage(waMessageId, newBody) {
