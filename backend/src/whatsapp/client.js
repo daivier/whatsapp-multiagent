@@ -266,7 +266,14 @@ function initWhatsApp(socketIO) {
     }
   });
 
-  client.initialize();
+  client.initialize().catch(err => {
+    console.error('[WhatsApp] Erro na inicialização, a reiniciar em 10s:', err.message);
+    isReady = false;
+    setTimeout(() => {
+      try { client.destroy(); } catch (_) {}
+      initWhatsApp(io);
+    }, 10000);
+  });
 }
 
 async function disconnectWhatsApp() {
