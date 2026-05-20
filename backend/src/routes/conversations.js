@@ -171,6 +171,16 @@ router.post('/:id/notes', authMiddleware, (req, res) => {
     .run(req.params.id, req.user.id, body);
   const message = db.prepare('SELECT m.*, u.name as sender_name FROM messages m LEFT JOIN users u ON u.id = m.sender_id WHERE m.id = ?').get(result.lastInsertRowid);
 
+  // Emitir para todos na sala da conversa e para o atendente atribuído
+  const fullConv = db.prepare(conversationQuery('WHERE conv.id = ?')).get(req.params.id);
+  const io = ioInstance.get();
+  if (io) {
+    io.to(`conv:${req.params.id}`).emit('message:new', { message, conversation: fullConv });
+    if (conv.assigned_to && conv.assigned_to !== req.user.id) {
+      io.to(`user:${conv.assigned_to}`).emit('message:new', { message, conversation: fullConv });
+    }
+  }
+
   // Processar @menções: emitir mention:new para cada utilizador mencionado
   const allUsers = db.prepare('SELECT id, name FROM users WHERE active = 1').all();
   for (const u of allUsers) {
