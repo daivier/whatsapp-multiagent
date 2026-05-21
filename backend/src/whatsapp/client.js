@@ -185,16 +185,13 @@ async function initWhatsApp(socketIO) {
   });
 
   sock.ev.on('messages.upsert', async ({ messages, type }) => {
-    console.log(`[upsert] type=${type} count=${messages.length} fromMe=${messages.map(m=>m.key.fromMe).join(',')}`);
     for (const msg of messages) {
       // 'notify' = mensagem nova em tempo real (de cliente ou do telemóvel)
       // 'append' = sincronização de histórico — ignorar (exceto fromMe recentes)
       if (type !== 'notify') {
-        // Para mensagens fromMe em append: só processar se forem recentes (últimos 5 min)
         if (!msg.key.fromMe) continue;
         const msgTs = (msg.messageTimestamp || 0) * 1000;
         if (Date.now() - msgTs > 5 * 60 * 1000) continue;
-        console.log(`[upsert] fromMe append recente: ${msg.key.id}`);
       }
       try {
         await handleIncomingMessage(msg);
@@ -216,8 +213,7 @@ async function handleIncomingMessage(msg) {
   // Mensagens enviadas directamente pelo telemóvel devem aparecer na interface
   if (msg.key.fromMe) {
     const existing = db.prepare('SELECT id FROM messages WHERE wa_message_id = ?').get(msg.key.id);
-    if (existing) { console.log(`[fromMe] já na BD (${msg.key.id}) — ignorar`); return; }
-    console.log(`[fromMe] nova do telemóvel — remoteJid=${remoteJid} id=${msg.key.id}`);
+    if (existing) return;
   }
 
   const fromMe = !!msg.key.fromMe; // true = enviada do telemóvel directamente
@@ -227,7 +223,6 @@ async function handleIncomingMessage(msg) {
   if (waId.endsWith('@lid')) {
     const realJid = lidToJidMap.get(waId);
     if (realJid) {
-      console.log(`[lid] ${waId} → ${realJid}`);
       waId = realJid;
     } else {
       // Tentar resolver via BD (contacto com este LID pode ter phone real registado)
@@ -285,7 +280,6 @@ async function handleIncomingMessage(msg) {
         contact = db.prepare('SELECT * FROM contacts WHERE id = ?').get(contact.id);
       }
     } else if (fromMe) {
-      console.log(`[fromMe] contacto desconhecido (waId=${waId}, phone=${phone}) — ignorar`);
       return;
     } else {
       const name = pushName || phone;
@@ -314,7 +308,6 @@ async function handleIncomingMessage(msg) {
 
   if (!conversation) {
     if (fromMe) {
-      console.log(`[fromMe] sem conversa activa para contacto ${contact.id} (${contact.phone}) — ignorar`);
       return;
     } else {
       // Mensagem recebida do cliente
