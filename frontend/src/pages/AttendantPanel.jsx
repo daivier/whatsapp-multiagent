@@ -50,8 +50,15 @@ export default function AttendantPanel({ socket }) {
     function onUserStatus({ userId, status: s }) {
       if (userId === user.id && s !== 'offline') setStatus(s);
     }
+    function onUserShift({ userId, on_shift }) {
+      if (userId === user.id) setOnShift(!!on_shift);
+    }
     socket.on('user:status', onUserStatus);
-    return () => socket.off('user:status', onUserStatus);
+    socket.on('user:shift', onUserShift);
+    return () => {
+      socket.off('user:status', onUserStatus);
+      socket.off('user:shift', onUserShift);
+    };
   }, [socket, user.id]);
 
   async function changeStatus(newStatus) {
