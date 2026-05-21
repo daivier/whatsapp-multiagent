@@ -146,7 +146,9 @@ export default function ChatWindow({ conversation: convProp, socket, onClose, on
     function onMessage({ message, conversation: conv }) {
       const convId = conv?.id ?? message?.conversation_id;
       if (convId !== conversation?.id) return;
-      if (message.from_me && !message.is_internal) return;
+      // Ignorar mensagens outbound normais da interface (já aparecem via optimistic update)
+      // MAS mostrar mensagens enviadas directamente do telemóvel (from_me=1 sem sender_id)
+      if (message.from_me && !message.is_internal && message.sender_id != null) return;
       // Dedup via ref — impermeável a re-renders e eventos duplicados
       if (seenMsgIds.current.has(message.id)) return;
       seenMsgIds.current.add(message.id);
