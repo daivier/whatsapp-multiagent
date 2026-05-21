@@ -211,11 +211,11 @@ async function initWhatsApp(socketIO) {
         const interesting = keys.filter(k => !['extendedTextMessage','conversation','messageContextInfo','senderKeyDistributionMessage','reactionMessage'].includes(k));
         if (interesting.length > 0) {
           console.log(`[msg-debug] type=${type} fromMe=${msg.key.fromMe} keys=${interesting.join(',')}`);
-          // Logar campos view-once dentro de imageMessage/videoMessage
-          const imgMsg = msg.message.imageMessage;
-          const vidMsg = msg.message.videoMessage;
-          if (imgMsg) console.log('[msg-debug] imageMessage fields:', JSON.stringify({ viewOnce: imgMsg.viewOnce, viewOnceMessage: imgMsg.viewOnceMessage, url: imgMsg.url ? 'present' : 'absent' }));
-          if (vidMsg) console.log('[msg-debug] videoMessage fields:', JSON.stringify({ viewOnce: vidMsg.viewOnce, viewOnceMessage: vidMsg.viewOnceMessage, url: vidMsg.url ? 'present' : 'absent' }));
+          // Logar estrutura completa para diagnóstico
+          try {
+            const raw = JSON.stringify(msg.message, (k, v) => Buffer.isBuffer(v) ? '[Buffer]' : v);
+            console.log('[msg-debug] full:', raw.slice(0, 800));
+          } catch(e) { console.log('[msg-debug] serialize error:', e.message); }
         }
       }
       try {
