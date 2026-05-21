@@ -219,7 +219,6 @@ function handleMessageDeleted(waMessageId) {
   const existing = db.prepare('SELECT id, conversation_id FROM messages WHERE wa_message_id = ?').get(waMessageId);
   if (!existing) return;
   db.prepare('UPDATE messages SET deleted = 1 WHERE id = ?').run(existing.id);
-  const io = ioInstance.get();
   if (io) {
     io.emit('message:deleted', { id: existing.id, conversation_id: existing.conversation_id });
   }
