@@ -45,6 +45,9 @@ function MessageContent({ msg, onMediaLoad }) {
       </>
     );
   }
+  if (msg.deleted) {
+    return <p style={{ margin: 0, fontSize: '0.85rem', color: 'var(--hint)', fontStyle: 'italic' }}>🚫 Mensagem apagada</p>;
+  }
   if (msg.media_url && msg.media_type?.startsWith('audio/')) {
     return <audio controls src={`${API}${msg.media_url}`} style={{ maxWidth: '100%', display: 'block' }} />;
   }
@@ -164,11 +167,22 @@ export default function ChatWindow({ conversation: convProp, socket, onClose, on
       if (msg.conversation_id !== conversation.id) return;
       setMessages(prev => prev.map(m => m.id === msg.id ? { ...m, failed: msg.failed } : m));
     }
+    function onDeleted({ id, conversation_id }) {
+      if (conversation_id !== conversation.id) return;
+      setMessages(prev => prev.map(m => m.id === id ? { ...m, deleted: 1 } : m));
+    }
     socket.on('message:new', onMessage);
     socket.on('typing:update', onTyping);
     socket.on('message:edited', onEdited);
     socket.on('message:failed', onFailed);
-    return () => { socket.off('message:new', onMessage); socket.off('typing:update', onTyping); socket.off('message:edited', onEdited); socket.off('message:failed', onFailed); };
+    socket.on('message:deleted', onDeleted);
+    return () => {
+      socket.off('message:new', onMessage);
+      socket.off('typing:update', onTyping);
+      socket.off('message:edited', onEdited);
+      socket.off('message:failed', onFailed);
+      socket.off('message:deleted', onDeleted);
+    };
   }, [socket, conversation]);
 
   function scrollToBottom() {

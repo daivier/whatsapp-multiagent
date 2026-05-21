@@ -176,16 +176,28 @@ async function initWhatsApp(socketIO) {
   });
 
   // Remover da fila quando o servidor confirma a entrega (status >= 2 = SERVER_ACK)
+  // Também detetar mensagens apagadas via messages.update
   sock.ev.on('messages.update', (updates) => {
     for (const { key, update } of updates) {
       if (update.status >= 2 && pendingQueue.has(key.id)) {
         pendingQueue.delete(key.id);
+      }
+      // Mensagem apagada: message passa a null
+      if (update.message === null && key.id) {
+        handleMessageDeleted(key.id);
       }
     }
   });
 
   sock.ev.on('messages.upsert', async ({ messages, type }) => {
     for (const msg of messages) {
+      // Detetar apagamento via protocolMessage (type 0 = REVOKE = apagar para todos)
+      const proto = msg.message?.protocolMessage;
+      if (proto && proto.type === 0 && proto.key?.id) {
+        handleMessageDeleted(proto.key.id);
+        continue;
+      }
+
       // 'notify' = mensagem nova em tempo real (de cliente ou do telemóvel)
       // 'append' = sincronização de histórico — ignorar (exceto fromMe recentes)
       if (type !== 'notify') {
@@ -200,6 +212,18 @@ async function initWhatsApp(socketIO) {
       }
     }
   });
+}
+
+function handleMessageDeleted(waMessageId) {
+  if (!waMessageId) return;
+  const existing = db.prepare('SELECT id, conversation_id FROM messages WHERE wa_message_id = ?').get(waMessageId);
+  if (!existing) return;
+  db.prepare('UPDATE messages SET deleted = 1 WHERE id = ?').run(existing.id);
+  const io = ioInstance.get();
+  if (io) {
+    io.emit('message:deleted', { id: existing.id, conversation_id: existing.conversation_id });
+  }
+  console.log(`[msg] Mensagem ${existing.id} (wa: ${waMessageId}) marcada como apagada`);
 }
 
 async function handleIncomingMessage(msg) {
