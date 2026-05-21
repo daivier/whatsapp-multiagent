@@ -163,13 +163,21 @@ async function initWhatsApp(socketIO) {
 }
 
 async function handleIncomingMessage(msg) {
-  if (msg.key.fromMe) return;
   const remoteJid = msg.key.remoteJid;
   if (!remoteJid) return;
   if (remoteJid === 'status@broadcast') return;
   if (remoteJid.endsWith('@g.us')) return;
   if (remoteJid.endsWith('@newsletter')) return;
 
+  // Se fromMe: só processar se NÃO enviámos nós pela interface (não está na BD)
+  // Mensagens enviadas directamente pelo telemóvel devem aparecer na interface
+  if (msg.key.fromMe) {
+    const existing = db.prepare('SELECT id FROM messages WHERE wa_message_id = ?').get(msg.key.id);
+    if (existing) return; // Já na BD — enviada pela interface, ignorar
+    // Caso contrário: enviada pelo telemóvel directamente → continuar para capturar
+  }
+
+  const fromMe = !!msg.key.fromMe; // true = enviada do telemóvel directamente
   const waId = remoteJid; // ex: "559684078116@s.whatsapp.net"
   const phone = getPhoneFromJid(waId);
   const msgContent = msg.message;
@@ -241,45 +249,54 @@ async function handleIncomingMessage(msg) {
     .prepare(`SELECT * FROM conversations WHERE contact_id = ? AND status != 'closed' ORDER BY id DESC LIMIT 1`)
     .get(contact.id);
 
-  let reopened = false;
   if (!conversation) {
-    const recentClosed = db
-      .prepare(`SELECT * FROM conversations WHERE contact_id = ? AND status = 'closed' AND updated_at >= datetime('now', '-24 hours') ORDER BY id DESC LIMIT 1`)
-      .get(contact.id);
-
-    if (recentClosed) {
-      db.prepare(`UPDATE conversations SET status = 'waiting', snoozed_until = NULL, updated_at = CURRENT_TIMESTAMP WHERE id = ?`)
-        .run(recentClosed.id);
-      conversation = db.prepare('SELECT * FROM conversations WHERE id = ?').get(recentClosed.id);
-      reopened = true;
-      console.log(`[conv] Conversa ${conversation.id} reaberta por nova mensagem do contacto`);
+    if (fromMe) {
+      // Mensagem enviada do telemóvel para um contacto sem conversa activa:
+      // Criar conversa com status 'open' (o agente tomou a iniciativa)
+      db.prepare(`INSERT INTO conversations (contact_id, status) VALUES (?, 'open')`).run(contact.id);
+      conversation = db.prepare(`SELECT * FROM conversations WHERE contact_id = ? ORDER BY id DESC LIMIT 1`).get(contact.id);
+      console.log(`[conv] Nova conversa ${conversation.id} criada por mensagem enviada do telemóvel`);
     } else {
-      db.prepare(`INSERT INTO conversations (contact_id, status) VALUES (?, 'waiting')`).run(contact.id);
-      conversation = db
-        .prepare(`SELECT * FROM conversations WHERE contact_id = ? ORDER BY id DESC LIMIT 1`)
+      // Mensagem recebida do cliente
+      const recentClosed = db
+        .prepare(`SELECT * FROM conversations WHERE contact_id = ? AND status = 'closed' AND updated_at >= datetime('now', '-24 hours') ORDER BY id DESC LIMIT 1`)
         .get(contact.id);
-    }
 
-    // Auto-assign
-    if (!reopened || !conversation.assigned_to) {
-      let attendant = db.prepare(`
-        SELECT u.id, COUNT(c.id) as load FROM users u
-        LEFT JOIN conversations c ON c.assigned_to = u.id AND c.status = 'open'
-        WHERE u.role = 'attendant' AND u.status != 'offline' AND u.active = 1 AND u.on_shift = 1
-        GROUP BY u.id ORDER BY load ASC LIMIT 1
-      `).get();
-      if (!attendant) {
-        attendant = db.prepare(`
+      let reopened = false;
+      if (recentClosed) {
+        db.prepare(`UPDATE conversations SET status = 'waiting', snoozed_until = NULL, updated_at = CURRENT_TIMESTAMP WHERE id = ?`)
+          .run(recentClosed.id);
+        conversation = db.prepare('SELECT * FROM conversations WHERE id = ?').get(recentClosed.id);
+        reopened = true;
+        console.log(`[conv] Conversa ${conversation.id} reaberta por nova mensagem do contacto`);
+      } else {
+        db.prepare(`INSERT INTO conversations (contact_id, status) VALUES (?, 'waiting')`).run(contact.id);
+        conversation = db
+          .prepare(`SELECT * FROM conversations WHERE contact_id = ? ORDER BY id DESC LIMIT 1`)
+          .get(contact.id);
+      }
+
+      // Auto-assign (só para mensagens do cliente)
+      if (!reopened || !conversation.assigned_to) {
+        let attendant = db.prepare(`
           SELECT u.id, COUNT(c.id) as load FROM users u
           LEFT JOIN conversations c ON c.assigned_to = u.id AND c.status = 'open'
-          WHERE u.role = 'attendant' AND u.status != 'offline' AND u.active = 1
+          WHERE u.role = 'attendant' AND u.status != 'offline' AND u.active = 1 AND u.on_shift = 1
           GROUP BY u.id ORDER BY load ASC LIMIT 1
         `).get();
-      }
-      if (attendant) {
-        db.prepare(`UPDATE conversations SET assigned_to = ?, status = 'open', updated_at = CURRENT_TIMESTAMP WHERE id = ?`)
-          .run(attendant.id, conversation.id);
-        conversation = db.prepare('SELECT * FROM conversations WHERE id = ?').get(conversation.id);
+        if (!attendant) {
+          attendant = db.prepare(`
+            SELECT u.id, COUNT(c.id) as load FROM users u
+            LEFT JOIN conversations c ON c.assigned_to = u.id AND c.status = 'open'
+            WHERE u.role = 'attendant' AND u.status != 'offline' AND u.active = 1
+            GROUP BY u.id ORDER BY load ASC LIMIT 1
+          `).get();
+        }
+        if (attendant) {
+          db.prepare(`UPDATE conversations SET assigned_to = ?, status = 'open', updated_at = CURRENT_TIMESTAMP WHERE id = ?`)
+            .run(attendant.id, conversation.id);
+          conversation = db.prepare('SELECT * FROM conversations WHERE id = ?').get(conversation.id);
+        }
       }
     }
   }
@@ -312,13 +329,15 @@ async function handleIncomingMessage(msg) {
     }
   }
 
-  // Bot de triagem (só em conversas novas)
-  const existingMsgs = db.prepare('SELECT COUNT(*) as c FROM messages WHERE conversation_id = ?').get(conversation.id).c;
-  if (existingMsgs === 0 && shouldSendBotReply()) {
-    const botMsg = db.prepare(`SELECT value FROM settings WHERE key = 'bot_message'`).get()?.value;
-    if (botMsg) {
-      try { await sendMessage(waId, botMsg); } catch (_) {}
-      db.prepare('INSERT INTO messages (conversation_id, from_me, body) VALUES (?, 1, ?)').run(conversation.id, botMsg);
+  // Bot de triagem (só em conversas novas e só para mensagens do cliente)
+  if (!fromMe) {
+    const existingMsgs = db.prepare('SELECT COUNT(*) as c FROM messages WHERE conversation_id = ?').get(conversation.id).c;
+    if (existingMsgs === 0 && shouldSendBotReply()) {
+      const botMsg = db.prepare(`SELECT value FROM settings WHERE key = 'bot_message'`).get()?.value;
+      if (botMsg) {
+        try { await sendMessage(waId, botMsg); } catch (_) {}
+        db.prepare('INSERT INTO messages (conversation_id, from_me, body) VALUES (?, 1, ?)').run(conversation.id, botMsg);
+      }
     }
   }
 
@@ -334,23 +353,24 @@ async function handleIncomingMessage(msg) {
     replyToId = quoted?.id || null;
   }
 
-  // Guardar mensagem
+  // Guardar mensagem (from_me=1 se enviada do telemóvel, 0 se do cliente)
   const incomingWaId = msg.key.id || null;
   const safeBody = body || '';
-  db.prepare('INSERT INTO messages (conversation_id, from_me, body, media_url, media_type, reply_to_id, wa_message_id) VALUES (?, 0, ?, ?, ?, ?, ?)')
-    .run(conversation.id, safeBody, mediaUrl, mediaType, replyToId, incomingWaId);
+  db.prepare('INSERT INTO messages (conversation_id, from_me, body, media_url, media_type, reply_to_id, wa_message_id) VALUES (?, ?, ?, ?, ?, ?, ?)')
+    .run(conversation.id, fromMe ? 1 : 0, safeBody, mediaUrl, mediaType, replyToId, incomingWaId);
   db.prepare('UPDATE conversations SET updated_at = CURRENT_TIMESTAMP WHERE id = ?').run(conversation.id);
 
   const message = db.prepare('SELECT * FROM messages WHERE conversation_id = ? ORDER BY id DESC LIMIT 1').get(conversation.id);
   const fullConversation = getConversationWithContact(conversation.id);
 
   io.emit('message:new', { message, conversation: fullConversation });
-  if (conversation.assigned_to) {
+  if (!fromMe && conversation.assigned_to) {
+    // Notificação de mensagem recebida (só para mensagens do cliente)
     io.to(`user:${conversation.assigned_to}`).emit('message:incoming', { message, conversation: fullConversation });
   }
 
-  // Bot por palavra-chave
-  if (body && body.trim()) {
+  // Bot por palavra-chave (só para mensagens do cliente)
+  if (!fromMe && body && body.trim()) {
     const rules = db.prepare('SELECT * FROM keyword_rules WHERE active = 1').all();
     const lowerBody = body.toLowerCase();
     const matched = rules.find(r => lowerBody.includes(r.keyword.toLowerCase()));
