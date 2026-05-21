@@ -307,8 +307,8 @@ async function handleIncomingMessage(msg) {
       || '';
   }
 
-  // Media
-  const hasMedia = !!(content.imageMessage || content.videoMessage
+  // Media (ptvMessage = recado de vídeo circular)
+  const hasMedia = !!(content.imageMessage || content.videoMessage || content.ptvMessage
     || content.audioMessage || content.documentMessage || content.stickerMessage);
 
   // Nunca ignorar mensagens view-once mesmo sem body/media detectados após unwrap
@@ -406,7 +406,7 @@ async function handleIncomingMessage(msg) {
       const buffer = await downloadMediaMessage(msg, 'buffer', {});
       if (buffer) {
         const imgMsg = content.imageMessage;
-        const vidMsg = content.videoMessage;
+        const vidMsg = content.videoMessage || content.ptvMessage;
         const audMsg = content.audioMessage;
         const docMsg = content.documentMessage;
         const stkMsg = content.stickerMessage;
@@ -427,7 +427,7 @@ async function handleIncomingMessage(msg) {
   // Se não foi possível guardar a media (download falhou ou view-once), usar placeholder
   if (hasMedia && !mediaUrl && !body.trim()) {
     const vType = content.imageMessage ? '📷 Imagem'
-      : content.videoMessage ? '🎥 Vídeo'
+      : (content.videoMessage || content.ptvMessage) ? '🎥 Vídeo'
       : content.audioMessage ? '🎤 Áudio'
       : content.stickerMessage ? '🪄 Sticker'
       : '📎 Ficheiro';
