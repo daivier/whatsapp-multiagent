@@ -402,6 +402,11 @@ async function handleIncomingMessage(msg) {
 
   // Guardar mensagem (from_me=1 se enviada do telemóvel, 0 se do cliente)
   const incomingWaId = msg.key.id || null;
+  // Dedup: evitar duplicado se mensagem já foi guardada (ex: pelo cron de agendamentos ou socket handler)
+  if (incomingWaId) {
+    const existing = db.prepare('SELECT id FROM messages WHERE wa_message_id = ?').get(incomingWaId);
+    if (existing) return;
+  }
   const safeBody = body || '';
   db.prepare('INSERT INTO messages (conversation_id, from_me, body, media_url, media_type, reply_to_id, wa_message_id) VALUES (?, ?, ?, ?, ?, ?, ?)')
     .run(conversation.id, fromMe ? 1 : 0, safeBody, mediaUrl, mediaType, replyToId, incomingWaId);

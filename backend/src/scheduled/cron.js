@@ -78,15 +78,15 @@ function startScheduledMessagesCron(io) {
 
     for (const sm of pending) {
       try {
-        await sendMessage(sm.wa_id, sm.body);
+        const waMessageId = await sendMessage(sm.wa_id, sm.body);
 
         db.prepare('UPDATE scheduled_messages SET sent_at = CURRENT_TIMESTAMP WHERE id = ?').run(sm.id);
 
-        // Guardar como mensagem na conversa
+        // Guardar como mensagem na conversa (com wa_message_id para evitar duplicado via messages.upsert)
         if (sm.conversation_id) {
           db.prepare(
-            'INSERT INTO messages (conversation_id, from_me, body, sender_id) VALUES (?, 1, ?, ?)'
-          ).run(sm.conversation_id, sm.body, sm.created_by);
+            'INSERT INTO messages (conversation_id, from_me, body, sender_id, wa_message_id) VALUES (?, 1, ?, ?, ?)'
+          ).run(sm.conversation_id, sm.body, sm.created_by, waMessageId || null);
           db.prepare('UPDATE conversations SET updated_at = CURRENT_TIMESTAMP WHERE id = ?').run(sm.conversation_id);
 
           const message = db.prepare('SELECT * FROM messages WHERE conversation_id = ? ORDER BY id DESC LIMIT 1').get(sm.conversation_id);
