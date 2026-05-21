@@ -182,8 +182,8 @@ async function handleIncomingMessage(msg) {
   // Mensagens enviadas directamente pelo telemóvel devem aparecer na interface
   if (msg.key.fromMe) {
     const existing = db.prepare('SELECT id FROM messages WHERE wa_message_id = ?').get(msg.key.id);
-    if (existing) return; // Já na BD — enviada pela interface, ignorar
-    // Caso contrário: enviada pelo telemóvel directamente → continuar para capturar
+    if (existing) { console.log(`[fromMe] já na BD (${msg.key.id}) — ignorar`); return; }
+    console.log(`[fromMe] nova do telemóvel — remoteJid=${remoteJid} id=${msg.key.id}`);
   }
 
   const fromMe = !!msg.key.fromMe; // true = enviada do telemóvel directamente
@@ -234,7 +234,7 @@ async function handleIncomingMessage(msg) {
         contact = db.prepare('SELECT * FROM contacts WHERE id = ?').get(contact.id);
       }
     } else if (fromMe) {
-      // Mensagem enviada do telemóvel para contacto desconhecido → ignorar
+      console.log(`[fromMe] contacto desconhecido (waId=${waId}, phone=${phone}) — ignorar`);
       return;
     } else {
       const name = pushName || phone;
@@ -263,8 +263,7 @@ async function handleIncomingMessage(msg) {
 
   if (!conversation) {
     if (fromMe) {
-      // Mensagem enviada do telemóvel sem conversa activa → ignorar
-      // Não criar conversa nova para não poluir o sistema com mensagens externas
+      console.log(`[fromMe] sem conversa activa para contacto ${contact.id} (${contact.phone}) — ignorar`);
       return;
     } else {
       // Mensagem recebida do cliente
