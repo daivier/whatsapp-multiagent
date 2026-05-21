@@ -28,6 +28,10 @@ let sock = null;
 let qrCodeData = null;
 let isReady = false;
 
+// Mapa LID → JID real (ex: "175286893162624@lid" → "5596933005328@s.whatsapp.net")
+// Populado pelos eventos contacts.upsert do Baileys
+const lidToJidMap = new Map();
+
 // Fila de reenvio: msgId → { jid, body, opts, sentAt }
 // Guarda mensagens enviadas nos últimos RETRY_TTL_MS ms para reenvio se a ligação cair
 const pendingQueue = new Map();
@@ -106,6 +110,20 @@ async function initWhatsApp(socketIO) {
   });
 
   sock.ev.on('creds.update', saveCreds);
+
+  // Manter mapa LID → JID real para resolução de contactos
+  sock.ev.on('contacts.upsert', (contacts) => {
+    for (const c of contacts) {
+      // c.id pode ser "@lid" ou "@s.whatsapp.net"
+      // c.lid existe quando o servidor mapeia LID → JID real
+      if (c.id && c.lid) {
+        // c.id = JID real (@s.whatsapp.net), c.lid = LID (@lid)
+        lidToJidMap.set(c.lid, c.id);
+        lidToJidMap.set(c.id, c.lid); // mapeamento inverso também
+        console.log(`[contacts] LID mapeado: ${c.lid} ↔ ${c.id}`);
+      }
+    }
+  });
 
   sock.ev.on('connection.update', async (update) => {
     const { connection, lastDisconnect, qr } = update;
@@ -187,7 +205,24 @@ async function handleIncomingMessage(msg) {
   }
 
   const fromMe = !!msg.key.fromMe; // true = enviada do telemóvel directamente
-  const waId = remoteJid; // ex: "559684078116@s.whatsapp.net"
+
+  // Resolver LID → JID real se possível (via mapa de contactos ou DB)
+  let waId = remoteJid;
+  if (waId.endsWith('@lid')) {
+    const realJid = lidToJidMap.get(waId);
+    if (realJid) {
+      console.log(`[lid] ${waId} → ${realJid}`);
+      waId = realJid;
+    } else {
+      // Tentar resolver via BD (contacto com este LID pode ter phone real registado)
+      const lidNum = waId.split('@')[0];
+      const dbContact = db.prepare('SELECT phone FROM contacts WHERE wa_id = ? AND phone NOT LIKE ?').get(waId, lidNum);
+      if (dbContact?.phone) {
+        waId = `${dbContact.phone}@s.whatsapp.net`;
+        console.log(`[lid] ${remoteJid} → ${waId} (via BD)`);
+      }
+    }
+  }
   const phone = getPhoneFromJid(waId);
   const msgContent = msg.message;
   if (!msgContent) return;
