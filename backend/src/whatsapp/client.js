@@ -412,7 +412,8 @@ async function sendMedia(phone, filePath, filename, caption) {
     jpg: 'image/jpeg', jpeg: 'image/jpeg', png: 'image/png',
     gif: 'image/gif', webp: 'image/webp',
     mp4: 'video/mp4', mov: 'video/quicktime',
-    mp3: 'audio/mpeg', ogg: 'audio/ogg', m4a: 'audio/mp4',
+    mp3: 'audio/mpeg', ogg: 'audio/ogg', m4a: 'audio/mp4', aac: 'audio/aac',
+    opus: 'audio/ogg; codecs=opus',
     pdf: 'application/pdf',
   };
   const mimetype = mimeMap[ext] || 'application/octet-stream';
@@ -422,7 +423,21 @@ async function sendMedia(phone, filePath, filename, caption) {
   } else if (mimetype.startsWith('video/')) {
     await sock.sendMessage(jid, { video: buffer, mimetype, ...opts });
   } else if (mimetype.startsWith('audio/')) {
-    await sock.sendMessage(jid, { audio: buffer, mimetype, ptt: false });
+    // Baileys só suporta nativamente OGG Opus (PTT) e MP4/AAC como audio
+    // MP3 e outros formatos chegam como silêncio ou não chegam — enviar como documento
+    const isOgg = mimetype.includes('ogg');
+    const isMp4Audio = mimetype === 'audio/mp4' || mimetype === 'audio/aac';
+    if (isOgg) {
+      // OGG Opus → voice note (PTT)
+      await sock.sendMessage(jid, { audio: buffer, mimetype: 'audio/ogg; codecs=opus', ptt: true });
+    } else if (isMp4Audio) {
+      // M4A/AAC → audio attachment
+      await sock.sendMessage(jid, { audio: buffer, mimetype: 'audio/mp4', ptt: false });
+    } else {
+      // MP3 e outros → documento (garantia de entrega; receptor pode descarregar e ouvir)
+      console.log(`[sendMedia] Formato de áudio não suportado nativamente (${mimetype}) — a enviar como documento`);
+      await sock.sendMessage(jid, { document: buffer, mimetype, fileName: filename || path.basename(filePath) });
+    }
   } else {
     await sock.sendMessage(jid, { document: buffer, mimetype, fileName: filename || path.basename(filePath), ...opts });
   }
