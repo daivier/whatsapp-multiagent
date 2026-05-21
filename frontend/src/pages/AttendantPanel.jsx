@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import ConversationList from '../components/ConversationList';
 import ChatWindow from '../components/ChatWindow';
+import ScheduledMessagesPage from './ScheduledMessagesPage';
 import { useAuth } from '../context/AuthContext';
 import { useNotifications } from '../hooks/useNotifications';
 import api from '../api';
@@ -32,6 +33,7 @@ export default function AttendantPanel({ socket }) {
     return (s && s !== 'offline') ? s : 'online';
   });
   const [onShift, setOnShift] = useState(!!(user.on_shift));
+  const [view, setView] = useState('conversations'); // 'conversations' | 'scheduled'
   const [isMobile, setIsMobile] = useState(window.innerWidth < 640);
 
   // Re-sincroniza o turno ao montar (garante que está actualizado após re-login)
@@ -119,16 +121,32 @@ export default function AttendantPanel({ socket }) {
         </div>
       </header>
 
+      {/* Navegação entre vistas */}
+      <div style={S.navBar}>
+        <button style={{ ...S.navBtn, ...(view === 'conversations' ? S.navBtnActive : {}) }} onClick={() => setView('conversations')}>
+          💬 Conversas
+        </button>
+        <button style={{ ...S.navBtn, ...(view === 'scheduled' ? S.navBtnActive : {}) }} onClick={() => setView('scheduled')}>
+          📅 Agendamentos
+        </button>
+      </div>
+
       <div style={S.body}>
-        {showList && (
-          <div style={isMobile ? { flex: 1 } : S.listPane}>
-            <ConversationList socket={socket} selected={selectedConv} onSelect={setSelectedConv} />
-          </div>
-        )}
-        {showChat && (
-          <div style={isMobile ? { flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' } : S.chatPane}>
-            <ChatWindow conversation={selectedConv} socket={socket} onClose={() => setSelectedConv(null)} onConversationChange={setSelectedConv} />
-          </div>
+        {view === 'scheduled' ? (
+          <ScheduledMessagesPage />
+        ) : (
+          <>
+            {showList && (
+              <div style={isMobile ? { flex: 1 } : S.listPane}>
+                <ConversationList socket={socket} selected={selectedConv} onSelect={setSelectedConv} />
+              </div>
+            )}
+            {showChat && (
+              <div style={isMobile ? { flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' } : S.chatPane}>
+                <ChatWindow conversation={selectedConv} socket={socket} onClose={() => setSelectedConv(null)} onConversationChange={setSelectedConv} />
+              </div>
+            )}
+          </>
         )}
       </div>
     </div>
@@ -148,6 +166,9 @@ const S = {
   userName: { fontSize: '0.85rem', color: 'var(--muted)', fontWeight: 500 },
   statusSelect: { padding: '0.3rem 0.5rem', borderRadius: 'var(--r-sm)', border: '1px solid var(--border-m)', background: 'var(--bg)', color: 'var(--text)', cursor: 'pointer', fontSize: '0.82rem', fontWeight: 500 },
   logoutBtn: { padding: '0.3rem 0.75rem', background: 'none', border: '1px solid var(--border-m)', color: 'var(--muted)', borderRadius: 'var(--r-sm)', cursor: 'pointer', fontSize: '0.82rem' },
+  navBar: { display: 'flex', gap: '0.25rem', padding: '0.4rem 1rem', background: 'var(--card)', borderBottom: '1px solid var(--border)', flexShrink: 0 },
+  navBtn: { padding: '0.3rem 0.9rem', borderRadius: 'var(--r-sm)', border: '1px solid transparent', background: 'none', cursor: 'pointer', fontSize: '0.82rem', fontWeight: 500, color: 'var(--muted)', transition: 'all .15s' },
+  navBtnActive: { background: 'var(--accent)', color: '#fff', border: '1px solid var(--accent)' },
   body: { display: 'flex', flex: 1, overflow: 'hidden' },
   listPane: { width: '300px', flexShrink: 0, overflowY: 'auto' },
   chatPane: { flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' },

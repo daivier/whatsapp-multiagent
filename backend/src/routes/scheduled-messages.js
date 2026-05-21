@@ -5,17 +5,30 @@ const { authMiddleware } = require('../middleware/auth');
 
 router.use(authMiddleware);
 
-// Listar agendamentos pendentes
+// Listar agendamentos (atendente vê só os seus; owner/admin vê todos)
 router.get('/', (req, res) => {
+  const { show_cancelled } = req.query;
+  const conditions = [];
+  const params = [];
+
+  if (req.user.role === 'attendant') {
+    conditions.push('sm.created_by = ?');
+    params.push(req.user.id);
+  }
+  if (show_cancelled !== '1') {
+    conditions.push('sm.cancelled = 0');
+  }
+
+  const where = conditions.length ? 'WHERE ' + conditions.join(' AND ') : '';
   const rows = db.prepare(`
     SELECT sm.*, con.phone, con.name as contact_name, u.name as created_by_name
     FROM scheduled_messages sm
     LEFT JOIN conversations cv ON cv.id = sm.conversation_id
     LEFT JOIN contacts con ON con.id = cv.contact_id
     LEFT JOIN users u ON u.id = sm.created_by
-    WHERE sm.sent_at IS NULL AND sm.cancelled = 0
-    ORDER BY sm.scheduled_at ASC
-  `).all();
+    ${where}
+    ORDER BY sm.sent_at ASC, sm.scheduled_at ASC
+  `).all(...params);
   res.json(rows);
 });
 
@@ -30,8 +43,27 @@ router.post('/', (req, res) => {
   res.json(row);
 });
 
+// Editar agendamento (só se ainda não foi enviado)
+router.patch('/:id', (req, res) => {
+  const { body, scheduled_at } = req.body;
+  const sm = db.prepare('SELECT * FROM scheduled_messages WHERE id = ?').get(req.params.id);
+  if (!sm) return res.status(404).json({ error: 'Agendamento não encontrado' });
+  if (sm.sent_at) return res.status(400).json({ error: 'Mensagem já enviada, não é possível editar' });
+  if (sm.cancelled) return res.status(400).json({ error: 'Agendamento cancelado, não é possível editar' });
+  if (req.user.role === 'attendant' && sm.created_by !== req.user.id) return res.status(403).json({ error: 'Sem permissão' });
+
+  const newBody = body?.trim() || sm.body;
+  const newAt = scheduled_at || sm.scheduled_at;
+  db.prepare('UPDATE scheduled_messages SET body = ?, scheduled_at = ? WHERE id = ?').run(newBody, newAt, sm.id);
+  const updated = db.prepare('SELECT * FROM scheduled_messages WHERE id = ?').get(sm.id);
+  res.json(updated);
+});
+
 // Cancelar agendamento
 router.delete('/:id', (req, res) => {
+  const sm = db.prepare('SELECT * FROM scheduled_messages WHERE id = ?').get(req.params.id);
+  if (!sm) return res.status(404).json({ error: 'Agendamento não encontrado' });
+  if (req.user.role === 'attendant' && sm.created_by !== req.user.id) return res.status(403).json({ error: 'Sem permissão' });
   db.prepare('UPDATE scheduled_messages SET cancelled = 1 WHERE id = ?').run(req.params.id);
   res.json({ ok: true });
 });
