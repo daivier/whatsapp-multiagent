@@ -65,7 +65,7 @@ function MessageContent({ msg, onMediaLoad }) {
       </a>
     );
   }
-  return <p style={{ margin: 0, fontSize: '0.9rem', whiteSpace: 'pre-wrap' }}>{msg.body}</p>;
+  return <p style={{ margin: 0, fontSize: '0.9rem', whiteSpace: 'pre-wrap', overflowWrap: 'break-word', wordBreak: 'break-word' }}>{msg.body}</p>;
 }
 
 export default function ChatWindow({ conversation: convProp, socket, onClose, onDelete, onConversationChange }) {
@@ -823,7 +823,7 @@ const S = {
   historyPanel: { background: 'var(--warn-l)', borderBottom: '1px solid rgba(217,119,6,0.2)', padding: '0.75rem 1rem', maxHeight: '150px', overflowY: 'auto' },
   historyItem: { display: 'flex', alignItems: 'center', padding: '0.25rem 0', borderBottom: '1px solid rgba(217,119,6,0.12)' },
   messages: { flex: 1, overflowY: 'auto', padding: '1rem', display: 'flex', flexDirection: 'column', gap: '0.5rem' },
-  bubble: { maxWidth: '70%', padding: '0.5rem 0.75rem', borderRadius: 'var(--r-md)', position: 'relative' },
+  bubble: { maxWidth: '70%', padding: '0.5rem 0.75rem', borderRadius: 'var(--r-md)', position: 'relative', overflowWrap: 'break-word', wordBreak: 'break-word', minWidth: 0 },
   mine: { alignSelf: 'flex-end', background: 'var(--wa-bubble)', boxShadow: 'var(--sh)' },
   theirs: { alignSelf: 'flex-start', background: 'var(--card)', boxShadow: 'var(--sh)' },
   internal: { background: 'var(--warn-l)', border: '1px dashed var(--warn)', alignSelf: 'flex-end' },
