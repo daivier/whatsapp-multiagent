@@ -224,6 +224,9 @@ async function handleIncomingMessage(msg) {
         db.prepare('UPDATE contacts SET wa_id = ? WHERE id = ?').run(waId, contact.id);
         contact = db.prepare('SELECT * FROM contacts WHERE id = ?').get(contact.id);
       }
+    } else if (fromMe) {
+      // Mensagem enviada do telemóvel para contacto desconhecido → ignorar
+      return;
     } else {
       const name = pushName || phone;
       db.prepare('INSERT INTO contacts (phone, name, wa_id) VALUES (?, ?, ?)').run(phone, name, waId);
@@ -251,11 +254,9 @@ async function handleIncomingMessage(msg) {
 
   if (!conversation) {
     if (fromMe) {
-      // Mensagem enviada do telemóvel para um contacto sem conversa activa:
-      // Criar conversa com status 'open' (o agente tomou a iniciativa)
-      db.prepare(`INSERT INTO conversations (contact_id, status) VALUES (?, 'open')`).run(contact.id);
-      conversation = db.prepare(`SELECT * FROM conversations WHERE contact_id = ? ORDER BY id DESC LIMIT 1`).get(contact.id);
-      console.log(`[conv] Nova conversa ${conversation.id} criada por mensagem enviada do telemóvel`);
+      // Mensagem enviada do telemóvel sem conversa activa → ignorar
+      // Não criar conversa nova para não poluir o sistema com mensagens externas
+      return;
     } else {
       // Mensagem recebida do cliente
       const recentClosed = db
