@@ -191,22 +191,6 @@ async function initWhatsApp(socketIO) {
 
   sock.ev.on('messages.upsert', async ({ messages, type }) => {
     for (const msg of messages) {
-      // Debug ANTES de qualquer filtro — logar tudo
-      if (msg.message) {
-        const keys = Object.keys(msg.message);
-        const interesting = keys.filter(k => !['extendedTextMessage','conversation','messageContextInfo','senderKeyDistributionMessage','reactionMessage'].includes(k));
-        if (interesting.length > 0) {
-          console.log(`[msg-debug] type=${type} fromMe=${msg.key.fromMe} keys=${interesting.join(',')}`);
-          try {
-            const raw = JSON.stringify(msg.message, (k, v) => Buffer.isBuffer(v) ? '[Buffer]' : v);
-            console.log('[msg-debug] full:', raw.slice(0, 1000));
-          } catch(e) { console.log('[msg-debug] serialize error:', e.message); }
-        }
-      } else {
-        console.log(`[msg-debug] type=${type} fromMe=${msg.key.fromMe} message=NULL category=${msg.category} stubType=${msg.messageStubType} broadcast=${msg.broadcast} pushName=${msg.pushName}`);
-        console.log(`[msg-debug] msg keys:`, Object.keys(msg).join(','));
-      }
-
       // Detetar apagamento via protocolMessage (type 0 = REVOKE = apagar para todos)
       const proto = msg.message?.protocolMessage;
       if (proto && proto.type === 0 && proto.key?.id) {
@@ -275,24 +259,25 @@ async function handleIncomingMessage(msg) {
   }
   const phone = getPhoneFromJid(waId);
   const msgContent = msg.message;
-  if (!msgContent) return;
 
-  // Detetar view-once antes de desembrulhar
-  const isViewOnce = !!(msgContent.viewOnceMessage || msgContent.viewOnceMessageV2 || msgContent.viewOnceMessageV2Extension);
-  if (isViewOnce) {
-    console.log('[view-once] keys:', Object.keys(msgContent));
-    const vo = msgContent.viewOnceMessage || msgContent.viewOnceMessageV2 || msgContent.viewOnceMessageV2Extension;
-    console.log('[view-once] inner keys:', vo ? Object.keys(vo) : 'none');
-    if (vo?.message) console.log('[view-once] media keys:', Object.keys(vo.message));
+  // Mensagem com conteúdo nulo — Baileys apaga o conteúdo de mensagens view-once
+  // por razões de privacidade. Tratar como mensagem de visualização única.
+  if (!msgContent) {
+    if (fromMe || !msg.pushName) return; // Sem remetente identificado → ignorar
+    // Continuar com placeholder view-once (conteúdo/media indisponível)
   }
 
-  // Desembrulhar mensagens efémeras/viewonce
-  // viewOnceMessageV2 tem o media directamente em .message (sem .viewOnceMessage aninhado)
-  const content = msgContent.ephemeralMessage?.message
-    || msgContent.viewOnceMessage?.message
-    || msgContent.viewOnceMessageV2?.message
-    || msgContent.viewOnceMessageV2Extension?.message
-    || msgContent;
+  // Detetar view-once — formato legado (viewOnceMessage wrapper) ou conteúdo nulo
+  const isViewOnce = !msgContent || !!(msgContent.viewOnceMessage || msgContent.viewOnceMessageV2 || msgContent.viewOnceMessageV2Extension);
+
+  // Desembrulhar mensagens efémeras/viewonce (quando há conteúdo)
+  const content = msgContent
+    ? (msgContent.ephemeralMessage?.message
+        || msgContent.viewOnceMessage?.message
+        || msgContent.viewOnceMessageV2?.message
+        || msgContent.viewOnceMessageV2Extension?.message
+        || msgContent)
+    : {};
 
   // Extrair texto
   let body = content.conversation
@@ -434,7 +419,11 @@ async function handleIncomingMessage(msg) {
 
   // Se é view-once e não ficou com media nem body, definir placeholder
   if (isViewOnce && !mediaUrl && !body.trim()) {
-    const vType = content.imageMessage ? '📷 Imagem' : content.videoMessage ? '🎥 Vídeo' : content.audioMessage ? '🎤 Áudio' : '📎 Ficheiro';
+    const vType = !msgContent ? '🔒 Mensagem'
+      : content.imageMessage ? '📷 Imagem'
+      : content.videoMessage ? '🎥 Vídeo'
+      : content.audioMessage ? '🎤 Áudio'
+      : '📎 Ficheiro';
     body = `${vType} de visualização única`;
   }
 
