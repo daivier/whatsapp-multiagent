@@ -111,16 +111,32 @@ async function initWhatsApp(socketIO) {
 
   sock.ev.on('creds.update', saveCreds);
 
-  // Manter mapa LID → JID real para resolução de contactos
+  // Carregar mapa LID → telefone a partir dos ficheiros de sessão do Baileys
+  // Formato: lid-mapping-{lid}_reverse.json → conteúdo = "phoneNumber"
+  try {
+    const sessionPath = process.env.WA_SESSION_PATH || './baileys-session';
+    const files = fs.readdirSync(sessionPath).filter(f => f.startsWith('lid-mapping-') && f.endsWith('_reverse.json'));
+    let count = 0;
+    for (const file of files) {
+      try {
+        const lid = file.replace('lid-mapping-', '').replace('_reverse.json', '');
+        const raw = fs.readFileSync(path.join(sessionPath, file), 'utf8');
+        const phone = JSON.parse(raw); // ex: "5596933005328"
+        if (phone && typeof phone === 'string') {
+          lidToJidMap.set(`${lid}@lid`, `${phone}@s.whatsapp.net`);
+          count++;
+        }
+      } catch (_) {}
+    }
+    if (count > 0) console.log(`[lid-map] ${count} mapeamentos LID→JID carregados da sessão`);
+  } catch (_) {}
+
+  // Actualizar mapa quando chegam novos contactos
   sock.ev.on('contacts.upsert', (contacts) => {
     for (const c of contacts) {
-      // c.id pode ser "@lid" ou "@s.whatsapp.net"
-      // c.lid existe quando o servidor mapeia LID → JID real
       if (c.id && c.lid) {
-        // c.id = JID real (@s.whatsapp.net), c.lid = LID (@lid)
         lidToJidMap.set(c.lid, c.id);
-        lidToJidMap.set(c.id, c.lid); // mapeamento inverso também
-        console.log(`[contacts] LID mapeado: ${c.lid} ↔ ${c.id}`);
+        console.log(`[lid-map] novo: ${c.lid} → ${c.id}`);
       }
     }
   });
