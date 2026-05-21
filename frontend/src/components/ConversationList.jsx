@@ -60,6 +60,10 @@ export default function ConversationList({ socket, selected, onSelect }) {
       setConversations(prev => {
         const idx = prev.findIndex(c => c.id === conversation.id);
         if (idx < 0) return prev;
+        // Atendente: se a conversa foi reatribuída a outro, remover da lista
+        if (user.role === 'attendant' && conversation.assigned_to !== user.id) {
+          return prev.filter(c => c.id !== conversation.id);
+        }
         const next = [...prev];
         next[idx] = { ...next[idx], ...conversation };
         return next;
@@ -70,15 +74,21 @@ export default function ConversationList({ socket, selected, onSelect }) {
       setConversations(prev => prev.filter(c => c.id !== id));
     }
 
+    function onConversationUnassigned({ id }) {
+      setConversations(prev => prev.filter(c => c.id !== id));
+    }
+
     socket.on('message:new', onNewMessage);
     socket.on('message:incoming', onNewMessage);
     socket.on('conversation:updated', onConversationUpdated);
     socket.on('conversation:deleted', onConversationDeleted);
+    socket.on('conversation:unassigned', onConversationUnassigned);
     return () => {
       socket.off('message:new', onNewMessage);
       socket.off('message:incoming', onNewMessage);
       socket.off('conversation:updated', onConversationUpdated);
       socket.off('conversation:deleted', onConversationDeleted);
+      socket.off('conversation:unassigned', onConversationUnassigned);
     };
   }, [socket, selected]);
 

@@ -291,6 +291,16 @@ router.post('/:id/transfer', authMiddleware, ownerOnly, async (req, res) => {
     }
   }
 
+  const io = ioInstance.get();
+  if (io) {
+    // Notifica todos os clientes para actualizar a conversa
+    io.emit('conversation:updated', conv);
+    // Notifica o atendente anterior especificamente (para remover da lista)
+    if (prevConv?.assigned_to && prevConv.assigned_to !== attendant_id) {
+      io.to(`user:${prevConv.assigned_to}`).emit('conversation:unassigned', { id: conv.id });
+    }
+  }
+
   res.json(conv);
 });
 
