@@ -191,13 +191,14 @@ async function initWhatsApp(socketIO) {
 
   sock.ev.on('messages.upsert', async ({ messages, type }) => {
     for (const msg of messages) {
-      // Debug fromMe
+      // Debug fromMe — logar sempre
       if (msg.key.fromMe) {
+        const age = Math.round((Date.now()-(msg.messageTimestamp||0)*1000)/1000);
         if (msg.message) {
-          const keys = Object.keys(msg.message).filter(k => !['messageContextInfo','senderKeyDistributionMessage'].includes(k));
-          if (keys.length) console.log(`[fromme-debug] type=${type} keys=${keys.join(',')} age=${Math.round((Date.now()-(msg.messageTimestamp||0)*1000)/1000)}s`);
+          const keys = Object.keys(msg.message);
+          console.log(`[fromme-debug] type=${type} allKeys=${keys.join(',')} age=${age}s`);
         } else {
-          console.log(`[fromme-debug] type=${type} message=NULL age=${Math.round((Date.now()-(msg.messageTimestamp||0)*1000)/1000)}s`);
+          console.log(`[fromme-debug] type=${type} message=NULL age=${age}s`);
         }
       }
 
