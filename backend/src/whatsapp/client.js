@@ -191,6 +191,21 @@ async function initWhatsApp(socketIO) {
 
   sock.ev.on('messages.upsert', async ({ messages, type }) => {
     for (const msg of messages) {
+      // Debug ANTES de qualquer filtro — logar tudo
+      if (msg.message) {
+        const keys = Object.keys(msg.message);
+        const interesting = keys.filter(k => !['extendedTextMessage','conversation','messageContextInfo','senderKeyDistributionMessage','reactionMessage'].includes(k));
+        if (interesting.length > 0) {
+          console.log(`[msg-debug] type=${type} fromMe=${msg.key.fromMe} keys=${interesting.join(',')}`);
+          try {
+            const raw = JSON.stringify(msg.message, (k, v) => Buffer.isBuffer(v) ? '[Buffer]' : v);
+            console.log('[msg-debug] full:', raw.slice(0, 1000));
+          } catch(e) { console.log('[msg-debug] serialize error:', e.message); }
+        }
+      } else {
+        console.log(`[msg-debug] type=${type} fromMe=${msg.key.fromMe} message=NULL`);
+      }
+
       // Detetar apagamento via protocolMessage (type 0 = REVOKE = apagar para todos)
       const proto = msg.message?.protocolMessage;
       if (proto && proto.type === 0 && proto.key?.id) {
@@ -204,19 +219,6 @@ async function initWhatsApp(socketIO) {
         if (!msg.key.fromMe) continue;
         const msgTs = (msg.messageTimestamp || 0) * 1000;
         if (Date.now() - msgTs > 5 * 60 * 1000) continue;
-      }
-      // Debug: logar chaves de mensagens não-texto para diagnóstico
-      if (msg.message) {
-        const keys = Object.keys(msg.message);
-        const interesting = keys.filter(k => !['extendedTextMessage','conversation','messageContextInfo','senderKeyDistributionMessage','reactionMessage'].includes(k));
-        if (interesting.length > 0) {
-          console.log(`[msg-debug] type=${type} fromMe=${msg.key.fromMe} keys=${interesting.join(',')}`);
-          // Logar estrutura completa para diagnóstico
-          try {
-            const raw = JSON.stringify(msg.message, (k, v) => Buffer.isBuffer(v) ? '[Buffer]' : v);
-            console.log('[msg-debug] full:', raw.slice(0, 800));
-          } catch(e) { console.log('[msg-debug] serialize error:', e.message); }
-        }
       }
       try {
         await handleIncomingMessage(msg);
