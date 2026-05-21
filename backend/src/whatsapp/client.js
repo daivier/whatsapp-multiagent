@@ -203,7 +203,8 @@ async function initWhatsApp(socketIO) {
           } catch(e) { console.log('[msg-debug] serialize error:', e.message); }
         }
       } else {
-        console.log(`[msg-debug] type=${type} fromMe=${msg.key.fromMe} message=NULL`);
+        console.log(`[msg-debug] type=${type} fromMe=${msg.key.fromMe} message=NULL stubType=${msg.messageStubType} stubParams=${JSON.stringify(msg.messageStubParameters)}`);
+        console.log(`[msg-debug] msg keys:`, Object.keys(msg).join(','));
       }
 
       // Detetar apagamento via protocolMessage (type 0 = REVOKE = apagar para todos)
