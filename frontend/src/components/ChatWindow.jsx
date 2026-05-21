@@ -258,8 +258,8 @@ export default function ChatWindow({ conversation: convProp, socket, onClose, on
 
     if (isInternal) {
       try {
-        const r = await api.post(`/conversations/${conversation.id}/notes`, { body });
-        setMessages(prev => [...prev, r.data]);
+        await api.post(`/conversations/${conversation.id}/notes`, { body });
+        // Não adicionar aqui — o socket event 'message:new' já adiciona via backend emit
       } catch (err) {
         setWarning(err.response?.data?.error || 'Erro ao guardar nota');
         setText(body);
