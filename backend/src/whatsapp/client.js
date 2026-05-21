@@ -409,22 +409,24 @@ async function handleIncomingMessage(msg) {
       }
     } catch (err) {
       console.error('Aviso: não foi possível guardar media:', err.message);
-      // Para view-once: se o download falhar, registar com placeholder no body
-      if (isViewOnce) {
-        const vType = content.imageMessage ? '📷 Imagem' : content.videoMessage ? '🎥 Vídeo' : content.audioMessage ? '🎤 Áudio' : '📎 Ficheiro';
-        body = body || `${vType} de visualização única`;
-      }
     }
   }
 
-  // Se é view-once e não ficou com media nem body, definir placeholder
-  if (isViewOnce && !mediaUrl && !body.trim()) {
-    const vType = !msgContent ? '🔒 Mensagem'
-      : content.imageMessage ? '📷 Imagem'
+  // Se não foi possível guardar a media (download falhou ou view-once), usar placeholder
+  if (hasMedia && !mediaUrl && !body.trim()) {
+    const vType = content.imageMessage ? '📷 Imagem'
       : content.videoMessage ? '🎥 Vídeo'
       : content.audioMessage ? '🎤 Áudio'
+      : content.stickerMessage ? '🪄 Sticker'
       : '📎 Ficheiro';
-    body = `${vType} de visualização única`;
+    body = isViewOnce ? `${vType} de visualização única`
+         : fromMe    ? `${vType} enviada do telemóvel`
+         : vType;
+  }
+
+  // View-once com conteúdo nulo (Baileys strippou) e sem body ainda → placeholder genérico
+  if (isViewOnce && !mediaUrl && !body.trim()) {
+    body = '🔒 Mensagem de visualização única';
   }
 
   // Bot de triagem (só em conversas novas e só para mensagens do cliente)
