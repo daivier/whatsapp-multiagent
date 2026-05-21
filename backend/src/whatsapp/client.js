@@ -330,26 +330,20 @@ async function handleIncomingMessage(msg) {
       }
 
       // Auto-assign (só para mensagens do cliente)
+      // Apenas atribui se houver atendente online/no turno — sem fallback para offline
       if (!reopened || !conversation.assigned_to) {
-        let attendant = db.prepare(`
+        const attendant = db.prepare(`
           SELECT u.id, COUNT(c.id) as load FROM users u
           LEFT JOIN conversations c ON c.assigned_to = u.id AND c.status = 'open'
           WHERE u.role = 'attendant' AND u.status != 'offline' AND u.active = 1 AND u.on_shift = 1
           GROUP BY u.id ORDER BY load ASC LIMIT 1
         `).get();
-        if (!attendant) {
-          attendant = db.prepare(`
-            SELECT u.id, COUNT(c.id) as load FROM users u
-            LEFT JOIN conversations c ON c.assigned_to = u.id AND c.status = 'open'
-            WHERE u.role = 'attendant' AND u.status != 'offline' AND u.active = 1
-            GROUP BY u.id ORDER BY load ASC LIMIT 1
-          `).get();
-        }
         if (attendant) {
           db.prepare(`UPDATE conversations SET assigned_to = ?, status = 'open', updated_at = CURRENT_TIMESTAMP WHERE id = ?`)
             .run(attendant.id, conversation.id);
           conversation = db.prepare('SELECT * FROM conversations WHERE id = ?').get(conversation.id);
         }
+        // Se não há ninguém disponível, conversa fica 'waiting' sem atribuição
       }
     }
   }
