@@ -1,21 +1,27 @@
 import { useState, useEffect } from 'react';
 import api from '../api';
 
-function utcToLocal(str) {
-  if (!str) return '';
+function parseDate(str) {
+  if (!str) return new Date(str);
   if (/[Z+]/.test(str.slice(-6))) return new Date(str);
-  if (str.includes('T')) return new Date(str + 'Z');
-  return new Date(str.replace(' ', 'T') + 'Z');
+  // Formato SQLite "YYYY-MM-DD HH:MM:SS" — UTC sem 'Z'
+  if (!str.includes('T')) return new Date(str.replace(' ', 'T') + 'Z');
+  // Formato ISO com T mas sem timezone (vem do datetime-local input) — já é hora local
+  return new Date(str);
 }
 
 function fmtDateTime(str) {
   if (!str) return '—';
-  return utcToLocal(str).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+  return parseDate(str).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' });
 }
 
 function toInputValue(str) {
   if (!str) return '';
-  const d = utcToLocal(str);
+  // Se já está no formato datetime-local (sem timezone), devolver directamente
+  if (/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}/.test(str) && !/[Z+]/.test(str.slice(-6))) {
+    return str.slice(0, 16);
+  }
+  const d = parseDate(str);
   const pad = n => String(n).padStart(2, '0');
   return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
 }
