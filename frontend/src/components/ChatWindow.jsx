@@ -146,10 +146,8 @@ export default function ChatWindow({ conversation: convProp, socket, onClose, on
     function onMessage({ message, conversation: conv }) {
       const convId = conv?.id ?? message?.conversation_id;
       if (convId !== conversation?.id) return;
-      // Ignorar mensagens outbound normais da interface (já aparecem via optimistic update)
-      // MAS mostrar mensagens enviadas directamente do telemóvel (from_me=1 sem sender_id)
-      if (message.from_me && !message.is_internal && message.sender_id != null) return;
-      // Dedup via ref — impermeável a re-renders e eventos duplicados
+      // Dedup via ref — a aba que enviou regista o ID real no callback de envio,
+      // por isso ignora o evento aqui. Outras abas não têm o ID e mostram a mensagem.
       if (seenMsgIds.current.has(message.id)) return;
       seenMsgIds.current.add(message.id);
       setMessages(prev => [...prev, message]);
@@ -285,6 +283,9 @@ export default function ChatWindow({ conversation: convProp, socket, onClose, on
     socket.emit('message:send', { conversation_id: conversation.id, body, reply_to_id: replyToId }, (res) => {
       setSending(false);
       if (res?.message) {
+        // Registar o ID real no seenMsgIds para que o evento message:new seja ignorado
+        // nesta aba (evita duplicado), mas outras abas não têm este ID e mostram a mensagem
+        seenMsgIds.current.add(res.message.id);
         setMessages(prev => prev.map(m => m.id === tempId ? { ...res.message, quoted_body: tempMsg.quoted_body, quoted_from_me: tempMsg.quoted_from_me, quoted_sender_name: tempMsg.quoted_sender_name } : m));
       } else if (res?.error) {
         setWarning(res.error);
