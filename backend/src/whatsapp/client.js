@@ -203,7 +203,7 @@ async function initWhatsApp(socketIO) {
           } catch(e) { console.log('[msg-debug] serialize error:', e.message); }
         }
       } else {
-        console.log(`[msg-debug] type=${type} fromMe=${msg.key.fromMe} message=NULL stubType=${msg.messageStubType} stubParams=${JSON.stringify(msg.messageStubParameters)}`);
+        console.log(`[msg-debug] type=${type} fromMe=${msg.key.fromMe} message=NULL category=${msg.category} stubType=${msg.messageStubType} broadcast=${msg.broadcast} pushName=${msg.pushName}`);
         console.log(`[msg-debug] msg keys:`, Object.keys(msg).join(','));
       }
 
