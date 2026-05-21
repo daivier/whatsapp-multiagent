@@ -151,8 +151,17 @@ async function initWhatsApp(socketIO) {
   });
 
   sock.ev.on('messages.upsert', async ({ messages, type }) => {
-    if (type !== 'notify') return;
+    console.log(`[upsert] type=${type} count=${messages.length} fromMe=${messages.map(m=>m.key.fromMe).join(',')}`);
     for (const msg of messages) {
+      // 'notify' = mensagem nova em tempo real (de cliente ou do telemóvel)
+      // 'append' = sincronização de histórico — ignorar (exceto fromMe recentes)
+      if (type !== 'notify') {
+        // Para mensagens fromMe em append: só processar se forem recentes (últimos 5 min)
+        if (!msg.key.fromMe) continue;
+        const msgTs = (msg.messageTimestamp || 0) * 1000;
+        if (Date.now() - msgTs > 5 * 60 * 1000) continue;
+        console.log(`[upsert] fromMe append recente: ${msg.key.id}`);
+      }
       try {
         await handleIncomingMessage(msg);
       } catch (err) {
