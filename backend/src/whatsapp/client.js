@@ -205,6 +205,14 @@ async function initWhatsApp(socketIO) {
         const msgTs = (msg.messageTimestamp || 0) * 1000;
         if (Date.now() - msgTs > 5 * 60 * 1000) continue;
       }
+      // Debug: logar chaves de mensagens não-texto para diagnóstico
+      if (msg.message) {
+        const keys = Object.keys(msg.message);
+        const interesting = keys.filter(k => !['extendedTextMessage','conversation','messageContextInfo','senderKeyDistributionMessage','reactionMessage'].includes(k));
+        if (interesting.length > 0) {
+          console.log(`[msg-debug] type=${type} fromMe=${msg.key.fromMe} keys=${interesting.join(',')}`);
+        }
+      }
       try {
         await handleIncomingMessage(msg);
       } catch (err) {
