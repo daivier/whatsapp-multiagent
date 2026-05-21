@@ -110,10 +110,13 @@ export default function ChatWindow({ conversation: convProp, socket, onClose, on
   const typingTimer = useRef(null);
   const messagesRef = useRef(null);
   const bottomRef = useRef(null);
+  // Rastreia IDs já adicionados ao estado — evita duplicatas por re-render de effect ou eventos duplos
+  const seenMsgIds = useRef(new Set());
 
   // Sync conversation prop → state (close/reopen updates it); reset panels on conversation change
   useEffect(() => {
     setConversation(convProp);
+    seenMsgIds.current = new Set(); // limpar ao trocar conversa
     setShowHistory(false);
     setShowTagPicker(false);
     setShowSchedule(false);
@@ -144,7 +147,10 @@ export default function ChatWindow({ conversation: convProp, socket, onClose, on
       const convId = conv?.id ?? message?.conversation_id;
       if (convId !== conversation?.id) return;
       if (message.from_me && !message.is_internal) return;
-      setMessages(prev => prev.some(m => m.id === message.id) ? prev : [...prev, message]);
+      // Dedup via ref — impermeável a re-renders e eventos duplicados
+      if (seenMsgIds.current.has(message.id)) return;
+      seenMsgIds.current.add(message.id);
+      setMessages(prev => [...prev, message]);
     }
     function onTyping({ userId, name, typing, conversation_id }) {
       if (conversation_id !== conversation.id) return;
