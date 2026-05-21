@@ -283,10 +283,16 @@ export default function ChatWindow({ conversation: convProp, socket, onClose, on
     socket.emit('message:send', { conversation_id: conversation.id, body, reply_to_id: replyToId }, (res) => {
       setSending(false);
       if (res?.message) {
-        // Registar o ID real no seenMsgIds para que o evento message:new seja ignorado
-        // nesta aba (evita duplicado), mas outras abas não têm este ID e mostram a mensagem
+        // Registar ID real — impede que message:new (que chega depois) duplique
         seenMsgIds.current.add(res.message.id);
-        setMessages(prev => prev.map(m => m.id === tempId ? { ...res.message, quoted_body: tempMsg.quoted_body, quoted_from_me: tempMsg.quoted_from_me, quoted_sender_name: tempMsg.quoted_sender_name } : m));
+        setMessages(prev => {
+          // Se message:new já chegou antes do callback e adicionou a mensagem real,
+          // apenas remover o tempId para não duplicar
+          const alreadyAdded = prev.some(m => m.id === res.message.id);
+          if (alreadyAdded) return prev.filter(m => m.id !== tempId);
+          // Caso normal: substituir tempId pela mensagem real
+          return prev.map(m => m.id === tempId ? { ...res.message, quoted_body: tempMsg.quoted_body, quoted_from_me: tempMsg.quoted_from_me, quoted_sender_name: tempMsg.quoted_sender_name } : m);
+        });
       } else if (res?.error) {
         setWarning(res.error);
         setMessages(prev => prev.map(m => m.id === tempId ? { ...m, failed: true } : m));
