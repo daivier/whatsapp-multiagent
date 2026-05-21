@@ -263,6 +263,12 @@ async function handleIncomingMessage(msg) {
 
   // Detetar view-once antes de desembrulhar
   const isViewOnce = !!(msgContent.viewOnceMessage || msgContent.viewOnceMessageV2 || msgContent.viewOnceMessageV2Extension);
+  if (isViewOnce) {
+    console.log('[view-once] keys:', Object.keys(msgContent));
+    const vo = msgContent.viewOnceMessage || msgContent.viewOnceMessageV2 || msgContent.viewOnceMessageV2Extension;
+    console.log('[view-once] inner keys:', vo ? Object.keys(vo) : 'none');
+    if (vo?.message) console.log('[view-once] media keys:', Object.keys(vo.message));
+  }
 
   // Desembrulhar mensagens efémeras/viewonce
   // viewOnceMessageV2 tem o media directamente em .message (sem .viewOnceMessage aninhado)
