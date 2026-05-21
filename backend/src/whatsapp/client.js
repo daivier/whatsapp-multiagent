@@ -190,6 +190,7 @@ async function initWhatsApp(socketIO) {
   });
 
   sock.ev.on('messages.upsert', async ({ messages, type }) => {
+    console.log(`[upsert] type=${type} count=${messages.length} fromMe=${messages.map(m=>m.key.fromMe).join(',')}`);
     for (const msg of messages) {
       // Debug fromMe — logar sempre
       if (msg.key.fromMe) {
