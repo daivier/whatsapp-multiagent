@@ -261,10 +261,15 @@ async function handleIncomingMessage(msg) {
   const msgContent = msg.message;
   if (!msgContent) return;
 
+  // Detetar view-once antes de desembrulhar
+  const isViewOnce = !!(msgContent.viewOnceMessage || msgContent.viewOnceMessageV2 || msgContent.viewOnceMessageV2Extension);
+
   // Desembrulhar mensagens efémeras/viewonce
+  // viewOnceMessageV2 tem o media directamente em .message (sem .viewOnceMessage aninhado)
   const content = msgContent.ephemeralMessage?.message
     || msgContent.viewOnceMessage?.message
-    || msgContent.viewOnceMessageV2?.message?.viewOnceMessage?.message
+    || msgContent.viewOnceMessageV2?.message
+    || msgContent.viewOnceMessageV2Extension?.message
     || msgContent;
 
   // Extrair texto
@@ -287,7 +292,8 @@ async function handleIncomingMessage(msg) {
   const hasMedia = !!(content.imageMessage || content.videoMessage
     || content.audioMessage || content.documentMessage || content.stickerMessage);
 
-  if (!hasMedia && !isVcard && !body.trim()) return;
+  // Nunca ignorar mensagens view-once mesmo sem body/media detectados após unwrap
+  if (!hasMedia && !isVcard && !body.trim() && !isViewOnce) return;
 
   const pushName = msg.pushName || '';
 
@@ -396,7 +402,18 @@ async function handleIncomingMessage(msg) {
       }
     } catch (err) {
       console.error('Aviso: não foi possível guardar media:', err.message);
+      // Para view-once: se o download falhar, registar com placeholder no body
+      if (isViewOnce) {
+        const vType = content.imageMessage ? '📷 Imagem' : content.videoMessage ? '🎥 Vídeo' : content.audioMessage ? '🎤 Áudio' : '📎 Ficheiro';
+        body = body || `${vType} de visualização única`;
+      }
     }
+  }
+
+  // Se é view-once e não ficou com media nem body, definir placeholder
+  if (isViewOnce && !mediaUrl && !body.trim()) {
+    const vType = content.imageMessage ? '📷 Imagem' : content.videoMessage ? '🎥 Vídeo' : content.audioMessage ? '🎤 Áudio' : '📎 Ficheiro';
+    body = `${vType} de visualização única`;
   }
 
   // Bot de triagem (só em conversas novas e só para mensagens do cliente)
