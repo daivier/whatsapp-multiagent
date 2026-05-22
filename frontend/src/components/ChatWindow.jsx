@@ -325,16 +325,24 @@ export default function ChatWindow({ conversation: convProp, socket, onClose, on
     if (!file) return;
     setUploadingFile(true);
     setWarning('');
+    const tempId = `temp-media-${Date.now()}`;
+    // Mostrar placeholder enquanto faz upload
+    setMessages(prev => [...prev, { id: tempId, from_me: 1, body: `📎 ${file.name}`, conversation_id: conversation.id, timestamp: new Date().toISOString(), sender_name: user.name }]);
     try {
       const formData = new FormData();
       formData.append('file', file);
       const { data: message } = await api.post(`/conversations/${conversation.id}/send-media`, formData, {
         headers: { 'Content-Type': 'multipart/form-data' },
       });
-      // Registar ID para evitar que o socket 'message:new' adicione duplicado
+      // Registar ID real — se o socket já adicionou a mensagem, apenas remove o temp
       seenMsgIds.current.add(message.id);
-      setMessages(prev => [...prev, message]);
+      setMessages(prev => {
+        const alreadyAdded = prev.some(m => m.id === message.id);
+        if (alreadyAdded) return prev.filter(m => m.id !== tempId);
+        return prev.map(m => m.id === tempId ? message : m);
+      });
     } catch (err) {
+      setMessages(prev => prev.filter(m => m.id !== tempId));
       setWarning(err.response?.data?.error || 'Erro ao enviar ficheiro');
     }
     setUploadingFile(false);
