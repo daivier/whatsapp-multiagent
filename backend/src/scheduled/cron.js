@@ -82,6 +82,10 @@ function startScheduledMessagesCron(io) {
 
         db.prepare('UPDATE scheduled_messages SET sent_at = CURRENT_TIMESTAMP WHERE id = ?').run(sm.id);
 
+        // Notificar criador do agendamento em tempo real
+        const sentAt = db.prepare('SELECT sent_at FROM scheduled_messages WHERE id = ?').get(sm.id)?.sent_at;
+        if (sm.created_by) io.to(`user:${sm.created_by}`).emit('scheduled:sent', { id: sm.id, sent_at: sentAt });
+
         // Guardar como mensagem na conversa (com wa_message_id para evitar duplicado via messages.upsert)
         if (sm.conversation_id) {
           db.prepare(

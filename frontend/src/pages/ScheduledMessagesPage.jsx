@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import api from '../api';
 
 function parseDate(str) {
@@ -26,7 +26,7 @@ function toInputValue(str) {
   return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
 }
 
-export default function ScheduledMessagesPage() {
+export default function ScheduledMessagesPage({ socket }) {
   const [items, setItems] = useState([]);
   const [loading, setLoading] = useState(true);
   const [showCancelled, setShowCancelled] = useState(false);
@@ -36,6 +36,16 @@ export default function ScheduledMessagesPage() {
   const [error, setError] = useState('');
 
   useEffect(() => { load(); }, [showCancelled]);
+
+  // Atualizar em tempo real quando o cron envia um agendamento
+  useEffect(() => {
+    if (!socket) return;
+    function onScheduledSent({ id, sent_at }) {
+      setItems(prev => prev.map(i => i.id === id ? { ...i, sent_at } : i));
+    }
+    socket.on('scheduled:sent', onScheduledSent);
+    return () => socket.off('scheduled:sent', onScheduledSent);
+  }, [socket]);
 
   async function load() {
     setLoading(true);

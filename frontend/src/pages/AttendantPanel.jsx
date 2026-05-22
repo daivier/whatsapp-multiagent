@@ -133,7 +133,7 @@ export default function AttendantPanel({ socket }) {
 
       <div style={S.body}>
         {view === 'scheduled' ? (
-          <ScheduledMessagesPage />
+          <ScheduledMessagesPage socket={socket} />
         ) : (
           <>
             {showList && (
