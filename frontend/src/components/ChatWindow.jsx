@@ -541,7 +541,7 @@ export default function ChatWindow({ conversation: convProp, socket, onClose, on
       <div style={S.header}>
         <div style={{ flex: 1, minWidth: 0 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flexWrap: 'wrap' }}>
-            <strong style={{ fontSize: '0.9rem', color: 'var(--text)' }}>{conversation.contact_name || conversation.phone}</strong>
+            <strong style={{ fontSize: '0.9rem', color: 'var(--text)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: '40vw' }}>{conversation.contact_name || conversation.phone}</strong>
             <button onClick={openContactEdit} title="Editar contacto" style={{ background: 'none', border: 'none', cursor: 'pointer', padding: '0 2px', fontSize: '0.8rem', opacity: 0.5, lineHeight: 1 }}>✏️</button>
             {isClosed && <span style={{ background: '#f3f4f6', color: 'var(--hint)', borderRadius: '999px', padding: '0.1rem 0.55rem', fontSize: '0.7rem', fontWeight: 600 }}>Fechada</span>}
             {isSnoozed && <span style={{ background: '#e0e7ff', color: '#4338ca', borderRadius: '999px', padding: '0.1rem 0.55rem', fontSize: '0.7rem', fontWeight: 600 }}>💤 Adiada</span>}
@@ -637,7 +637,7 @@ export default function ChatWindow({ conversation: convProp, socket, onClose, on
             <button onClick={() => setShowContactEdit(false)} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: '1rem', color: 'var(--muted)' }}>✕</button>
           </div>
           <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
-            <input placeholder="Nome" value={contactForm.name}
+            <input placeholder="Nome" value={contactForm.name} maxLength={100}
               onChange={e => setContactForm(p => ({ ...p, name: e.target.value }))}
               style={{ flex: '1 1 140px', padding: '0.3rem 0.5rem', border: '1px solid var(--border-m)', borderRadius: '4px', fontSize: '0.83rem', background: 'var(--bg)', color: 'var(--text)' }} />
             <input placeholder="Email" value={contactForm.email}
