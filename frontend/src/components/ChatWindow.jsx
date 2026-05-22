@@ -48,6 +48,18 @@ function MessageContent({ msg, onMediaLoad }) {
   if (msg.deleted) {
     return <p style={{ margin: 0, fontSize: '0.85rem', color: 'var(--hint)', fontStyle: 'italic' }}>🚫 Mensagem apagada</p>;
   }
+  const isViewOnce = !msg.media_url && msg.body && (
+    msg.body.includes('visualização única') || msg.body === '🔒 Mensagem de visualização única'
+  );
+  if (isViewOnce) {
+    return (
+      <div title="Mensagens de visualização única só podem ser abertas pelo destinatário no telemóvel. O conteúdo não está disponível aqui."
+        style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', cursor: 'help' }}>
+        <p style={{ margin: 0, fontSize: '0.85rem', color: 'var(--hint)', fontStyle: 'italic' }}>{msg.body}</p>
+        <span style={{ fontSize: '0.75rem', background: 'var(--border)', color: 'var(--muted)', borderRadius: '999px', padding: '0.05rem 0.45rem', fontWeight: 600, flexShrink: 0 }}>?</span>
+      </div>
+    );
+  }
   if (msg.media_url && msg.media_type?.startsWith('audio/')) {
     return <audio controls src={`${API}${msg.media_url}`} style={{ maxWidth: '100%', display: 'block' }} />;
   }
