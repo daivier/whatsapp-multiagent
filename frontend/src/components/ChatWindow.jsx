@@ -178,7 +178,7 @@ export default function ChatWindow({ conversation: convProp, socket, onClose, on
       setMessages(prev => prev.map(m => m.id === id ? { ...m, deleted: 1 } : m));
     }
     function onTagsUpdated({ conversation_id, tags }) {
-      if (conversation_id !== conversation.id) return;
+      if (Number(conversation_id) !== conversation.id) return;
       setConvTags(tags);
     }
     socket.on('message:new', onMessage);

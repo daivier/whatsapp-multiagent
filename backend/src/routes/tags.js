@@ -13,7 +13,7 @@ function emitTagsUpdated(convId) {
     JOIN conversation_tags ct ON ct.tag_id = t.id
     WHERE ct.conversation_id = ?
   `).all(convId);
-  io.emit('conversation:tags_updated', { conversation_id: convId, tags });
+  io.emit('conversation:tags_updated', { conversation_id: parseInt(convId, 10), tags });
 }
 
 router.get('/', authMiddleware, (req, res) => {
