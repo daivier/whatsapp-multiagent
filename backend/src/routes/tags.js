@@ -1,8 +1,20 @@
 const express = require('express');
 const db = require('../db/schema');
 const { authMiddleware, ownerOnly } = require('../middleware/auth');
+const ioInstance = require('../io-instance');
 
 const router = express.Router();
+
+function emitTagsUpdated(convId) {
+  const io = ioInstance.get();
+  if (!io) return;
+  const tags = db.prepare(`
+    SELECT t.* FROM tags t
+    JOIN conversation_tags ct ON ct.tag_id = t.id
+    WHERE ct.conversation_id = ?
+  `).all(convId);
+  io.emit('conversation:tags_updated', { conversation_id: convId, tags });
+}
 
 router.get('/', authMiddleware, (req, res) => {
   res.json(db.prepare('SELECT * FROM tags ORDER BY name ASC').all());
@@ -24,12 +36,14 @@ router.delete('/:id', authMiddleware, ownerOnly, (req, res) => {
 router.post('/conversations/:convId', authMiddleware, (req, res) => {
   const { tag_id } = req.body;
   db.prepare('INSERT OR IGNORE INTO conversation_tags (conversation_id, tag_id) VALUES (?, ?)').run(req.params.convId, tag_id);
+  emitTagsUpdated(req.params.convId);
   res.json({ ok: true });
 });
 
 // Remover tag de conversa
 router.delete('/conversations/:convId/:tagId', authMiddleware, (req, res) => {
   db.prepare('DELETE FROM conversation_tags WHERE conversation_id = ? AND tag_id = ?').run(req.params.convId, req.params.tagId);
+  emitTagsUpdated(req.params.convId);
   res.json({ ok: true });
 });
 

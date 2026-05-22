@@ -177,17 +177,23 @@ export default function ChatWindow({ conversation: convProp, socket, onClose, on
       if (conversation_id !== conversation.id) return;
       setMessages(prev => prev.map(m => m.id === id ? { ...m, deleted: 1 } : m));
     }
+    function onTagsUpdated({ conversation_id, tags }) {
+      if (conversation_id !== conversation.id) return;
+      setConvTags(tags);
+    }
     socket.on('message:new', onMessage);
     socket.on('typing:update', onTyping);
     socket.on('message:edited', onEdited);
     socket.on('message:failed', onFailed);
     socket.on('message:deleted', onDeleted);
+    socket.on('conversation:tags_updated', onTagsUpdated);
     return () => {
       socket.off('message:new', onMessage);
       socket.off('typing:update', onTyping);
       socket.off('message:edited', onEdited);
       socket.off('message:failed', onFailed);
       socket.off('message:deleted', onDeleted);
+      socket.off('conversation:tags_updated', onTagsUpdated);
     };
   }, [socket, conversation]);
 
