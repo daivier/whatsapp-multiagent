@@ -101,9 +101,19 @@ db.exec(`
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP
   );
 
+  CREATE TABLE IF NOT EXISTS ratings (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    conversation_id INTEGER NOT NULL REFERENCES conversations(id) ON DELETE CASCADE,
+    contact_id INTEGER NOT NULL REFERENCES contacts(id) ON DELETE CASCADE,
+    attendant_id INTEGER REFERENCES users(id) ON DELETE SET NULL,
+    score INTEGER NOT NULL CHECK(score BETWEEN 1 AND 5),
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+  );
+
   CREATE INDEX IF NOT EXISTS idx_conversations_assigned ON conversations(assigned_to);
   CREATE INDEX IF NOT EXISTS idx_messages_conversation ON messages(conversation_id);
   CREATE INDEX IF NOT EXISTS idx_transfer_logs_conv ON transfer_logs(conversation_id);
+  CREATE INDEX IF NOT EXISTS idx_ratings_attendant ON ratings(attendant_id);
 `);
 
 // Migrations
@@ -124,6 +134,7 @@ try { db.exec(`ALTER TABLE messages ADD COLUMN edited_at DATETIME`); } catch (_)
 try { db.exec(`ALTER TABLE messages ADD COLUMN failed INTEGER NOT NULL DEFAULT 0`); } catch (_) {}
 try { db.exec(`ALTER TABLE messages ADD COLUMN reply_to_id INTEGER`); } catch (_) {}
 try { db.exec(`ALTER TABLE messages ADD COLUMN deleted INTEGER NOT NULL DEFAULT 0`); } catch (_) {}
+try { db.exec(`ALTER TABLE conversations ADD COLUMN awaiting_rating INTEGER NOT NULL DEFAULT 0`); } catch (_) {}
 
 // Seed default settings
 const settingsDefaults = [
@@ -137,6 +148,8 @@ const settingsDefaults = [
   ['hours_4', '08:00-18:00'],     // Quinta
   ['hours_5', '08:00-18:00'],     // Sexta
   ['hours_6', '09:00-13:00'],     // Sábado
+  ['rating_enabled', '0'],
+  ['rating_message', 'Obrigado pelo atendimento! 😊 Como avaliaria o nosso serviço?\n\nResponda apenas com um número:\n1 - 😞 Muito mau\n2 - 😕 Mau\n3 - 😐 Razoável\n4 - 😊 Bom\n5 - 😄 Excelente'],
 ];
 const insertSetting = db.prepare(`INSERT OR IGNORE INTO settings (key, value) VALUES (?, ?)`);
 for (const [key, value] of settingsDefaults) insertSetting.run(key, value);

@@ -319,12 +319,37 @@ router.post('/:id/transfer', authMiddleware, async (req, res) => {
 });
 
 // PATCH /conversations/:id/close
-router.patch('/:id/close', authMiddleware, (req, res) => {
-  const conv = db.prepare('SELECT * FROM conversations WHERE id = ?').get(req.params.id);
+router.patch('/:id/close', authMiddleware, async (req, res) => {
+  const conv = db.prepare('SELECT conv.*, con.wa_id, con.phone FROM conversations conv JOIN contacts con ON con.id = conv.contact_id WHERE conv.id = ?').get(req.params.id);
   if (!conv) return res.status(404).json({ error: 'Conversa não encontrada' });
   if (req.user.role === 'attendant' && conv.assigned_to !== req.user.id) return res.status(403).json({ error: 'Sem permissão' });
 
+  const ratingEnabled = db.prepare("SELECT value FROM settings WHERE key = 'rating_enabled'").get()?.value === '1';
+
   db.prepare(`UPDATE conversations SET status = 'closed', updated_at = CURRENT_TIMESTAMP WHERE id = ?`).run(req.params.id);
+
+  // Enviar mensagem de avaliação se ativado
+  if (ratingEnabled) {
+    const ratingMsg = db.prepare("SELECT value FROM settings WHERE key = 'rating_message'").get()?.value
+      || 'Como avaliaria o nosso atendimento? Responda com 1 (Muito mau) a 5 (Excelente).';
+    const dest = conv.wa_id || conv.phone;
+    if (dest) {
+      try {
+        const waMessageId = await sendMessage(dest, ratingMsg);
+        db.prepare('INSERT INTO messages (conversation_id, from_me, body, wa_message_id) VALUES (?, 1, ?, ?)')
+          .run(conv.id, ratingMsg, waMessageId || null);
+        db.prepare('UPDATE conversations SET awaiting_rating = 1 WHERE id = ?').run(conv.id);
+        const io = ioInstance.get();
+        if (io) {
+          const ratingMsgRow = db.prepare('SELECT * FROM messages WHERE conversation_id = ? ORDER BY id DESC LIMIT 1').get(conv.id);
+          io.emit('message:new', { message: ratingMsgRow, conversation: db.prepare(conversationQuery('WHERE conv.id = ?')).get(conv.id) });
+        }
+      } catch (err) {
+        console.error('[rating] Erro ao enviar mensagem de avaliação:', err.message);
+      }
+    }
+  }
+
   const updated = db.prepare(conversationQuery('WHERE conv.id = ?')).get(req.params.id);
   ioInstance.get()?.emit('conversation:updated', updated);
   res.json(updated);
@@ -556,6 +581,52 @@ router.get('/reports', authMiddleware, ownerOnly, (req, res) => {
   `).all();
 
   res.json({ period, summary, byAttendant, byHour, byDay, avgResponse });
+});
+
+// GET /conversations/ratings?period=today|week|month|all
+router.get('/ratings', authMiddleware, ownerOnly, (req, res) => {
+  const VALID = ['today', 'week', 'month', 'all'];
+  const period = VALID.includes(req.query.period) ? req.query.period : 'month';
+  const PERIOD = {
+    today: `date(r.created_at, 'localtime') = date('now', 'localtime')`,
+    week:  `r.created_at >= datetime('now', 'localtime', '-7 days')`,
+    month: `r.created_at >= datetime('now', 'localtime', '-30 days')`,
+    all:   '1=1',
+  };
+  const w = PERIOD[period];
+
+  const summary = db.prepare(`
+    SELECT COUNT(*) as total, ROUND(AVG(score), 2) as avg_score,
+      COUNT(CASE WHEN score = 5 THEN 1 END) as score5,
+      COUNT(CASE WHEN score = 4 THEN 1 END) as score4,
+      COUNT(CASE WHEN score = 3 THEN 1 END) as score3,
+      COUNT(CASE WHEN score = 2 THEN 1 END) as score2,
+      COUNT(CASE WHEN score = 1 THEN 1 END) as score1
+    FROM ratings r WHERE ${w}
+  `).get();
+
+  const byAttendant = db.prepare(`
+    SELECT u.name,
+      COUNT(r.id) as total,
+      ROUND(AVG(r.score), 2) as avg_score
+    FROM users u
+    LEFT JOIN ratings r ON r.attendant_id = u.id AND ${w}
+    WHERE u.role = 'attendant' AND u.active = 1
+    GROUP BY u.id ORDER BY avg_score DESC NULLS LAST
+  `).all();
+
+  const recent = db.prepare(`
+    SELECT r.id, r.score, r.created_at,
+      con.name as contact_name, con.phone,
+      u.name as attendant_name
+    FROM ratings r
+    JOIN contacts con ON con.id = r.contact_id
+    LEFT JOIN users u ON u.id = r.attendant_id
+    WHERE ${w}
+    ORDER BY r.created_at DESC LIMIT 20
+  `).all();
+
+  res.json({ summary, byAttendant, recent });
 });
 
 module.exports = router;

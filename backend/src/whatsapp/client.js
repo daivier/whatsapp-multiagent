@@ -518,6 +518,21 @@ async function handleIncomingMessage(msg) {
     io.to(`user:${conversation.assigned_to}`).emit('message:incoming', { message, conversation: fullConversation });
   }
 
+  // Avaliação: capturar resposta 1-5 se conversa aguarda avaliação
+  if (!fromMe && body && conversation.awaiting_rating) {
+    const score = parseInt(body.trim(), 10);
+    if (score >= 1 && score <= 5) {
+      try {
+        db.prepare('INSERT INTO ratings (conversation_id, contact_id, attendant_id, score) VALUES (?, ?, ?, ?)')
+          .run(conversation.id, conversation.contact_id, conversation.assigned_to, score);
+        db.prepare('UPDATE conversations SET awaiting_rating = 0 WHERE id = ?').run(conversation.id);
+        console.log(`[rating] Avaliação ${score}/5 registada para conversa ${conversation.id}`);
+      } catch (err) {
+        console.error('[rating] Erro ao guardar avaliação:', err.message);
+      }
+    }
+  }
+
   // Bot por palavra-chave (só para mensagens do cliente)
   if (!fromMe && body && body.trim()) {
     const rules = db.prepare('SELECT * FROM keyword_rules WHERE active = 1').all();

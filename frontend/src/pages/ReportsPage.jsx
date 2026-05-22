@@ -160,6 +160,94 @@ const PERIODS = [
   { key: 'all',   label: 'Tudo' },
 ];
 
+function stars(score) {
+  return '⭐'.repeat(Math.round(score || 0));
+}
+
+function RatingsSection({ period }) {
+  const [ratings, setRatings] = useState(null);
+
+  useEffect(() => {
+    api.get('/conversations/ratings', { params: { period } })
+      .then(r => setRatings(r.data))
+      .catch(() => {});
+  }, [period]);
+
+  if (!ratings) return null;
+  const s = ratings.summary;
+  if (!s?.total) return (
+    <div style={S.chartCard}>
+      <h3 style={S.chartTitle}>⭐ Avaliações</h3>
+      <p style={S.empty}>Sem avaliações para o período</p>
+    </div>
+  );
+
+  const scoreColors = { 5: '#22c55e', 4: '#84cc16', 3: '#eab308', 2: '#f97316', 1: '#ef4444' };
+
+  return (
+    <div style={{ display: 'flex', gap: '1.25rem', flexWrap: 'wrap' }}>
+      {/* Resumo */}
+      <div style={{ ...S.chartCard, flex: '1 1 280px' }}>
+        <h3 style={S.chartTitle}>⭐ Avaliações</h3>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '1.25rem', margin: '0.75rem 0 1rem', flexWrap: 'wrap' }}>
+          <div style={{ textAlign: 'center' }}>
+            <p style={{ margin: 0, fontSize: '2.5rem', fontWeight: 800, color: '#eab308', lineHeight: 1 }}>
+              {s.avg_score ? parseFloat(s.avg_score).toFixed(1) : '—'}
+            </p>
+            <p style={{ margin: '0.2rem 0 0', fontSize: '0.75rem', color: 'var(--muted)' }}>{s.total} avaliações</p>
+          </div>
+          <div style={{ flex: 1, minWidth: 160 }}>
+            {[5,4,3,2,1].map(n => {
+              const count = s[`score${n}`] || 0;
+              const pct = s.total ? Math.round((count / s.total) * 100) : 0;
+              return (
+                <div key={n} style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '3px' }}>
+                  <span style={{ fontSize: '0.72rem', color: 'var(--muted)', width: '10px', textAlign: 'right' }}>{n}</span>
+                  <div style={{ flex: 1, background: 'var(--accent-l)', borderRadius: '3px', height: '7px' }}>
+                    <div style={{ width: `${pct}%`, height: '7px', borderRadius: '3px', background: scoreColors[n], transition: 'width 0.4s' }} />
+                  </div>
+                  <span style={{ fontSize: '0.7rem', color: 'var(--hint)', width: '28px' }}>{count}</span>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+        {/* Por atendente */}
+        {ratings.byAttendant.filter(a => a.total > 0).length > 0 && (
+          <div style={{ borderTop: '1px solid var(--border)', paddingTop: '0.75rem', marginTop: '0.25rem' }}>
+            <p style={{ margin: '0 0 0.5rem', fontSize: '0.72rem', fontWeight: 700, color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Por atendente</p>
+            {ratings.byAttendant.filter(a => a.total > 0).map(a => (
+              <div key={a.name} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '0.25rem 0', fontSize: '0.82rem' }}>
+                <span style={{ color: 'var(--text)', fontWeight: 500 }}>{a.name}</span>
+                <span style={{ color: '#eab308', fontWeight: 700 }}>{parseFloat(a.avg_score).toFixed(1)} ⭐ <span style={{ color: 'var(--hint)', fontWeight: 400 }}>({a.total})</span></span>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* Recentes */}
+      {ratings.recent.length > 0 && (
+        <div style={{ ...S.chartCard, flex: '1 1 280px' }}>
+          <h3 style={S.chartTitle}>🕐 Avaliações Recentes</h3>
+          <div style={{ marginTop: '0.75rem', display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+            {ratings.recent.map(r => (
+              <div key={r.id} style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', padding: '0.4rem 0', borderBottom: '1px solid var(--border)' }}>
+                <span style={{ fontSize: '1rem', minWidth: '20px', textAlign: 'center', color: scoreColors[r.score] }}>{'★'.repeat(r.score)}{'☆'.repeat(5 - r.score)}</span>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <p style={{ margin: 0, fontSize: '0.82rem', fontWeight: 600, color: 'var(--text)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{r.contact_name || r.phone}</p>
+                  <p style={{ margin: 0, fontSize: '0.72rem', color: 'var(--hint)' }}>{r.attendant_name || '—'}</p>
+                </div>
+                <span style={{ fontSize: '0.7rem', color: 'var(--hint)', flexShrink: 0 }}>{new Date(r.created_at.includes('T') ? r.created_at : r.created_at.replace(' ','T')+'Z').toLocaleDateString('pt-BR')}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function ReportsPage() {
   const [period, setPeriod] = useState('month');
   const [data, setData] = useState(null);
@@ -259,6 +347,9 @@ export default function ReportsPage() {
           {period !== 'today' && (
             <DayChart byDay={data.byDay} />
           )}
+
+          {/* Ratings */}
+          <RatingsSection period={period} />
 
         </div>
       )}

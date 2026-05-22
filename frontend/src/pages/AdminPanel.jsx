@@ -75,7 +75,7 @@ export default function AdminPanel({ socket }) {
   const [newKR, setNewKR] = useState({ keyword: '', response: '' });
 
   const [settings, setSettings] = useState({
-    bot_enabled: '0', bot_message: '',
+    bot_enabled: '0', bot_message: '', rating_enabled: '0', rating_message: '',
     hours_0: 'closed', hours_1: '08:00-18:00', hours_2: '08:00-18:00',
     hours_3: '08:00-18:00', hours_4: '08:00-18:00', hours_5: '08:00-18:00',
     hours_6: '09:00-13:00',
@@ -244,7 +244,7 @@ export default function AdminPanel({ socket }) {
     ['conversations','Conversas'],['attendants','Atendentes'],['contacts','Contactos'],
     ['metrics','Métricas'],['reports','Relatórios'],['scheduled','Agendamentos'],
     ['transfers','Transferências'],['quickreplies','Respostas Rápidas'],
-    ['tags','Etiquetas'],['automation','🤖 Automação'],['bot','Bot'],['whatsapp','WhatsApp'],
+    ['tags','Etiquetas'],['automation','🤖 Automação'],['bot','Bot'],['rating','⭐ Avaliação'],['whatsapp','WhatsApp'],
   ];
 
   function selectTab(key) {
@@ -695,6 +695,39 @@ export default function AdminPanel({ socket }) {
                 <textarea style={{ ...S.input, width: '100%', resize: 'vertical', minHeight: '80px', boxSizing: 'border-box' }}
                   value={settings.bot_message}
                   onChange={e => setSettings(s => ({ ...s, bot_message: e.target.value }))} />
+              </div>
+              <button style={{ ...S.addBtn, alignSelf: 'flex-start' }} onClick={saveSettings}>
+                {settingsSaved ? '✓ Guardado' : 'Guardar'}
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* AVALIAÇÃO */}
+        {tab === 'rating' && (
+          <div style={S.section}>
+            <h2 style={S.sectionTitle}>⭐ Avaliação de Atendimento</h2>
+            <p style={{ color: 'var(--muted)', fontSize: '0.85rem', marginBottom: '1.5rem' }}>
+              Quando uma conversa é fechada, é enviada automaticamente uma mensagem ao cliente pedindo avaliação de 1 a 5.
+            </p>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem', maxWidth: '560px' }}>
+              <label style={S.settingRow}>
+                <span style={{ fontWeight: 500 }}>Ativar avaliação automática</span>
+                <input type="checkbox" checked={settings.rating_enabled === '1'}
+                  onChange={e => setSettings(s => ({ ...s, rating_enabled: e.target.checked ? '1' : '0' }))} />
+              </label>
+              <div>
+                <label style={{ fontSize: '0.85rem', color: 'var(--muted)', display: 'block', marginBottom: '0.35rem', fontWeight: 600 }}>
+                  Mensagem de avaliação
+                </label>
+                <textarea
+                  style={{ ...S.input, width: '100%', resize: 'vertical', minHeight: '130px', boxSizing: 'border-box', fontFamily: 'inherit' }}
+                  value={settings.rating_message || ''}
+                  onChange={e => setSettings(s => ({ ...s, rating_message: e.target.value }))}
+                />
+                <p style={{ fontSize: '0.75rem', color: 'var(--hint)', margin: '0.35rem 0 0' }}>
+                  O cliente deve responder com o número 1 a 5. A resposta é registada automaticamente.
+                </p>
               </div>
               <button style={{ ...S.addBtn, alignSelf: 'flex-start' }} onClick={saveSettings}>
                 {settingsSaved ? '✓ Guardado' : 'Guardar'}
