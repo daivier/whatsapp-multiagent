@@ -477,11 +477,11 @@ export default function ChatWindow({ conversation: convProp, socket, onClose, on
     const has = convTags.some(t => t.id === tag.id);
     if (has) {
       await api.delete(`/tags/conversations/${conversation.id}/${tag.id}`);
-      setConvTags(prev => prev.filter(t => t.id !== tag.id));
     } else {
       await api.post(`/tags/conversations/${conversation.id}`, { tag_id: tag.id });
-      setConvTags(prev => [...prev, tag]);
     }
+    // O update do estado é feito pelo socket event 'conversation:tags_updated'
+    // que chega para todas as abas (incluindo esta) — evita duplicação
   }
 
   function handleKey(e) {
