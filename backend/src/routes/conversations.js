@@ -282,7 +282,7 @@ router.post('/:id/transfer', authMiddleware, async (req, res) => {
   const conv = db.prepare(conversationQuery('WHERE conv.id = ?')).get(req.params.id);
 
   if (notify) {
-    const notifyText = `Olá! O seu atendimento foi transferido para *${attendant.name}*, que irá continuar a ajudá-lo em breve. 😊`;
+    const notifyText = `Olá! O seu atendimento foi transferido para *${attendant.name.trim()}*, que irá continuar a ajudá-lo em breve. 😊`;
     try {
       await sendMessage(conv.wa_id || conv.phone, notifyText);
       db.prepare('INSERT INTO messages (conversation_id, from_me, body) VALUES (?, 1, ?)').run(conv.id, notifyText);
