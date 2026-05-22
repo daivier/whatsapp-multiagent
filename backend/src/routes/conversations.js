@@ -296,8 +296,9 @@ router.post('/:id/transfer', authMiddleware, async (req, res) => {
   if (notify) {
     const notifyText = `Olá! O seu atendimento foi transferido para *${attendant.name.trim()}*, que irá continuar a ajudá-lo em breve. 😊`;
     try {
-      await sendMessage(conv.wa_id || conv.phone, notifyText);
-      db.prepare('INSERT INTO messages (conversation_id, from_me, body) VALUES (?, 1, ?)').run(conv.id, notifyText);
+      const waMessageId = await sendMessage(conv.wa_id || conv.phone, notifyText);
+      db.prepare('INSERT INTO messages (conversation_id, from_me, body, wa_message_id) VALUES (?, 1, ?, ?)')
+        .run(conv.id, notifyText, waMessageId || null);
     } catch (err) {
       console.error('Aviso: notificação de transferência não enviada:', err.message);
     }
