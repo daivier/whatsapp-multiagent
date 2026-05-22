@@ -264,7 +264,7 @@ router.get('/contact/:phone', authMiddleware, (req, res) => {
 });
 
 // POST /conversations/:id/transfer
-router.post('/:id/transfer', authMiddleware, ownerOnly, async (req, res) => {
+router.post('/:id/transfer', authMiddleware, async (req, res) => {
   const { attendant_id, notify = true } = req.body;
   if (!attendant_id) return res.status(400).json({ error: 'attendant_id obrigatório' });
 
