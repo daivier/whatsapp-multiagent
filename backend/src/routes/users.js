@@ -11,6 +11,16 @@ router.get('/team', authMiddleware, (req, res) => {
   res.json(users);
 });
 
+// GET /users/available — atendentes disponíveis para transferência (online/turno, excluindo o próprio)
+router.get('/available', authMiddleware, (req, res) => {
+  const users = db.prepare(
+    `SELECT id, name, status FROM users
+     WHERE active = 1 AND role = 'attendant' AND status != 'offline' AND on_shift = 1 AND id != ?
+     ORDER BY name ASC`
+  ).all(req.user.id);
+  res.json(users);
+});
+
 // GET /users — listar atendentes (owner only)
 router.get('/', authMiddleware, ownerOnly, (req, res) => {
   const users = db

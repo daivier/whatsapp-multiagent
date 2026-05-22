@@ -105,6 +105,11 @@ export default function ChatWindow({ conversation: convProp, socket, onClose, on
   const [showPriorityPicker, setShowPriorityPicker] = useState(false);
   // Snooze
   const [showSnooze, setShowSnooze] = useState(false);
+  // Transfer
+  const [showTransfer, setShowTransfer] = useState(false);
+  const [availableAttendants, setAvailableAttendants] = useState([]);
+  const [transferToId, setTransferToId] = useState('');
+  const [transferring, setTransferring] = useState(false);
   // @mention autocomplete
   const [teamUsers, setTeamUsers] = useState([]);
   const [mentionActive, setMentionActive] = useState(false);
@@ -125,6 +130,7 @@ export default function ChatWindow({ conversation: convProp, socket, onClose, on
     setShowSchedule(false);
     setShowSnooze(false);
     setShowPriorityPicker(false);
+    setShowTransfer(false);
   }, [convProp?.id]);
 
   useEffect(() => {
@@ -377,6 +383,28 @@ export default function ChatWindow({ conversation: convProp, socket, onClose, on
     setShowPriorityPicker(false);
   }
 
+  async function openTransfer() {
+    try {
+      const { data } = await api.get('/users/available');
+      setAvailableAttendants(Array.isArray(data) ? data : []);
+      setTransferToId('');
+      setShowTransfer(true);
+    } catch { setWarning('Erro ao carregar atendentes'); }
+  }
+
+  async function doTransfer() {
+    if (!transferToId) return;
+    setTransferring(true);
+    try {
+      await api.post(`/conversations/${conversation.id}/transfer`, { attendant_id: parseInt(transferToId) });
+      setShowTransfer(false);
+      onClose?.();
+    } catch (err) {
+      setWarning(err.response?.data?.error || 'Erro ao transferir');
+    }
+    setTransferring(false);
+  }
+
   async function snoozeConversation(minutes) {
     const until = new Date(Date.now() + minutes * 60 * 1000).toISOString();
     try {
@@ -536,6 +564,9 @@ export default function ChatWindow({ conversation: convProp, socket, onClose, on
           </div>
 
           <button style={S.iconBtn} onClick={loadHistory} title="Histórico">🕐</button>
+          {!isClosed && user.role === 'attendant' && (
+            <button style={{ ...S.iconBtn, color: 'var(--accent)', borderColor: 'var(--accent)' }} onClick={openTransfer} title="Transferir conversa">🔄 Transferir</button>
+          )}
           {isClosed ? (
             <button style={{ ...S.iconBtn, color: 'var(--success)', borderColor: 'var(--success)' }} onClick={reopenConversation}>Reabrir</button>
           ) : (
@@ -725,6 +756,33 @@ export default function ChatWindow({ conversation: convProp, socket, onClose, on
               <span style={{ fontSize: '0.85rem', color: 'var(--text)' }}>@{u.name}</span>
             </div>
           ))}
+        </div>
+      )}
+
+      {/* Transfer panel */}
+      {showTransfer && (
+        <div style={S.schedulePanel}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem' }}>
+            <strong style={{ fontSize: '0.85rem', color: 'var(--text)' }}>🔄 Transferir conversa</strong>
+            <button onClick={() => setShowTransfer(false)} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: '1rem', color: 'var(--muted)' }}>✕</button>
+          </div>
+          {availableAttendants.length === 0 ? (
+            <p style={{ margin: 0, fontSize: '0.83rem', color: 'var(--hint)' }}>Nenhum atendente disponível no momento.</p>
+          ) : (
+            <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center', flexWrap: 'wrap' }}>
+              <select value={transferToId} onChange={e => setTransferToId(e.target.value)}
+                style={{ flex: 1, padding: '0.35rem 0.5rem', border: '1px solid var(--border-m)', borderRadius: 'var(--r-sm)', fontSize: '0.85rem', background: 'var(--card)', color: 'var(--text)' }}>
+                <option value=''>Selecionar atendente...</option>
+                {availableAttendants.map(a => (
+                  <option key={a.id} value={a.id}>{a.name} ({a.status === 'online' ? '🟢' : a.status === 'busy' ? '🟡' : '⚫'} {a.status})</option>
+                ))}
+              </select>
+              <button onClick={doTransfer} disabled={!transferToId || transferring}
+                style={{ padding: '0.35rem 0.9rem', background: 'var(--accent)', color: '#fff', border: 'none', borderRadius: 'var(--r-sm)', cursor: 'pointer', fontSize: '0.85rem', fontWeight: 600, opacity: (!transferToId || transferring) ? 0.6 : 1 }}>
+                {transferring ? 'A transferir...' : 'Transferir'}
+              </button>
+            </div>
+          )}
         </div>
       )}
 
