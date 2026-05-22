@@ -219,7 +219,17 @@ router.post('/:id/notes', authMiddleware, (req, res) => {
 });
 
 // POST /conversations/:id/send-media — enviar ficheiro/imagem
-router.post('/:id/send-media', authMiddleware, upload.single('file'), async (req, res) => {
+router.post('/:id/send-media', authMiddleware, (req, res, next) => {
+  upload.single('file')(req, res, (err) => {
+    if (err) {
+      if (err.code === 'LIMIT_FILE_SIZE') {
+        return res.status(400).json({ error: 'Ficheiro demasiado grande (máximo 32 MB)' });
+      }
+      return res.status(400).json({ error: err.message || 'Erro ao processar ficheiro' });
+    }
+    next();
+  });
+}, async (req, res) => {
   const conv = db.prepare('SELECT conv.*, con.phone, con.wa_id FROM conversations conv JOIN contacts con ON con.id = conv.contact_id WHERE conv.id = ?').get(req.params.id);
   if (!conv) return res.status(404).json({ error: 'Conversa não encontrada' });
   if (req.user.role === 'attendant' && conv.assigned_to !== req.user.id) return res.status(403).json({ error: 'Sem permissão' });

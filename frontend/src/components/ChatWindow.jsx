@@ -21,6 +21,12 @@ function parseVcard(vcf) {
   return { fn, tel };
 }
 
+// Remove Zalgo text (combining Unicode marks em excesso)
+function sanitizeZalgo(text) {
+  if (!text) return text;
+  return text.replace(/(\p{M}{3,})/gu, m => m.slice(0, 2));
+}
+
 function MessageContent({ msg, onMediaLoad }) {
   if (msg.media_type === 'vcard') {
     const { fn, tel } = parseVcard(msg.body || '');
@@ -297,7 +303,7 @@ export default function ChatWindow({ conversation: convProp, socket, onClose, on
     if (!text.trim() || sending) return;
     setSending(true);
     setWarning('');
-    const body = text;
+    const body = sanitizeZalgo(text);
     setText('');
 
     if (isInternal) {

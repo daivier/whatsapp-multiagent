@@ -70,6 +70,13 @@ function getPhoneFromJid(jid) {
   return jid.split('@')[0];
 }
 
+// Remove caracteres Zalgo (combinações excessivas de diacríticos Unicode)
+// Mantém no máximo 2 combining marks consecutivos (suficiente para texto legítimo)
+function sanitizeZalgo(text) {
+  if (!text || typeof text !== 'string') return text;
+  return text.replace(/(\p{M}{3,})/gu, m => m.slice(0, 2));
+}
+
 function normalizeJid(jid) {
   if (!jid) return null;
   // Se é um LID (@lid ou número identificado como LID na BD), resolver para o número real
@@ -131,12 +138,49 @@ async function initWhatsApp(socketIO) {
     if (count > 0) console.log(`[lid-map] ${count} mapeamentos LID→JID carregados da sessão`);
   } catch (_) {}
 
-  // Actualizar mapa quando chegam novos contactos
+  // Actualizar mapa quando chegam novos contactos + fundir duplicados LID
   sock.ev.on('contacts.upsert', (contacts) => {
     for (const c of contacts) {
       if (c.id && c.lid) {
         lidToJidMap.set(c.lid, c.id);
         console.log(`[lid-map] novo: ${c.lid} → ${c.id}`);
+
+        // Tentar fundir contacto LID com contacto real para eliminar duplicados
+        try {
+          const lidPhone = c.lid.split('@')[0];
+          const realPhone = c.id.split('@')[0];
+
+          // Contacto criado com o LID (phone = lidPhone ou wa_id = c.lid)
+          const lidContact = db.prepare(
+            'SELECT * FROM contacts WHERE wa_id = ? OR phone = ? LIMIT 1'
+          ).get(c.lid, lidPhone);
+
+          // Contacto real (phone = realPhone ou wa_id = c.id)
+          const realContact = db.prepare(
+            'SELECT * FROM contacts WHERE wa_id = ? OR phone = ? OR phone = ? LIMIT 1'
+          ).get(c.id, realPhone, realPhone.replace(/^55/, ''));
+
+          if (lidContact && realContact && lidContact.id !== realContact.id) {
+            // Mover todas as conversas do contacto LID para o contacto real
+            db.prepare('UPDATE conversations SET contact_id = ? WHERE contact_id = ?')
+              .run(realContact.id, lidContact.id);
+            // Garantir que o contacto real tem o wa_id correcto
+            if (!realContact.wa_id || realContact.wa_id === c.lid) {
+              db.prepare('UPDATE contacts SET wa_id = ? WHERE id = ?').run(c.id, realContact.id);
+            }
+            // Eliminar contacto LID duplicado
+            db.prepare('DELETE FROM contacts WHERE id = ?').run(lidContact.id);
+            console.log(`[lid-merge] Contacto LID ${lidContact.id} (${lidPhone}) fundido com real ${realContact.id} (${realPhone})`);
+            if (io) io.emit('conversation:updated', {}); // forçar refresh na UI
+          } else if (lidContact && !realContact) {
+            // Actualizar contacto LID com o número real
+            db.prepare('UPDATE contacts SET wa_id = ?, phone = ? WHERE id = ?')
+              .run(c.id, realPhone, lidContact.id);
+            console.log(`[lid-merge] Contacto LID ${lidContact.id} actualizado para ${realPhone}`);
+          }
+        } catch (mergeErr) {
+          console.error('[lid-merge] Erro ao fundir:', mergeErr.message);
+        }
       }
     }
   });
@@ -460,7 +504,7 @@ async function handleIncomingMessage(msg) {
     const existing = db.prepare('SELECT id FROM messages WHERE wa_message_id = ?').get(incomingWaId);
     if (existing) return;
   }
-  const safeBody = body || '';
+  const safeBody = sanitizeZalgo(body || '');
   db.prepare('INSERT INTO messages (conversation_id, from_me, body, media_url, media_type, reply_to_id, wa_message_id) VALUES (?, ?, ?, ?, ?, ?, ?)')
     .run(conversation.id, fromMe ? 1 : 0, safeBody, mediaUrl, mediaType, replyToId, incomingWaId);
   db.prepare('UPDATE conversations SET updated_at = CURRENT_TIMESTAMP WHERE id = ?').run(conversation.id);
