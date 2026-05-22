@@ -19,10 +19,23 @@ function playNotificationSound() {
 }
 
 function App() {
-  const { user, token, loading } = useAuth();
+  const { user, token, loading, logout } = useAuth();
   const [socket, setSocket] = useState(null);
   const unreadRef = useRef(0);
   const originalTitle = useRef(document.title);
+
+  // Timer proactivo: desligar socket e fazer logout quando o JWT expirar
+  useEffect(() => {
+    if (!token) return;
+    try {
+      const payload = JSON.parse(atob(token.split('.')[1]));
+      if (!payload.exp) return;
+      const msUntilExpiry = payload.exp * 1000 - Date.now();
+      if (msUntilExpiry <= 0) { logout(); return; }
+      const timer = setTimeout(() => logout(), msUntilExpiry);
+      return () => clearTimeout(timer);
+    } catch (_) {}
+  }, [token]);
 
   useEffect(() => {
     if (!token || !user) return;

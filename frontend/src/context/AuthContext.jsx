@@ -16,6 +16,13 @@ export function AuthProvider({ children }) {
       .finally(() => setLoading(false));
   }, [token]);
 
+  // Reagir ao evento global de logout forçado (token expirado detectado pelo api interceptor)
+  useEffect(() => {
+    function onForceLogout() { logout(); }
+    window.addEventListener('auth:force-logout', onForceLogout);
+    return () => window.removeEventListener('auth:force-logout', onForceLogout);
+  }, []);
+
   function login(newToken, newUser) {
     localStorage.setItem('token', newToken);
     setToken(newToken);
