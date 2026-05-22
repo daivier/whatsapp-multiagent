@@ -44,6 +44,7 @@ function initSocket(io) {
         .get(conversation_id);
 
       if (!conv) return callback?.({ error: 'Conversa não encontrada' });
+      if (conv.status === 'closed') return callback?.({ error: 'Conversa fechada. Reabre para responder.' });
       if (user.role === 'attendant' && conv.assigned_to !== user.id) return callback?.({ error: 'Sem permissão' });
 
       // Guarda na BD primeiro — a mensagem aparece sempre na UI

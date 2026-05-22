@@ -4,6 +4,7 @@ import ConversationList from '../components/ConversationList';
 import ChatWindow from '../components/ChatWindow';
 import { useAuth } from '../context/AuthContext';
 import { useNotifications } from '../hooks/useNotifications';
+import ReportsPage from './ReportsPage';
 
 const COLORS = ['#ef4444','#f97316','#eab308','#22c55e','#3b82f6','#8b5cf6','#ec4899','#6b7280'];
 
@@ -49,7 +50,7 @@ export default function AdminPanel({ socket }) {
 
   const [attendants, setAttendants] = useState([]);
   const [metrics, setMetrics] = useState(null);
-  const [reports, setReports] = useState(null);
+  // reports state managed by ReportsPage component
   const [qrCode, setQrCode] = useState(null);
   const [whatsappReady, setWhatsappReady] = useState(false);
   const [disconnecting, setDisconnecting] = useState(false);
@@ -87,7 +88,6 @@ export default function AdminPanel({ socket }) {
   }, []);
 
   useEffect(() => {
-    if (tab === 'reports') loadReports();
     if (tab === 'scheduled') loadScheduled();
     if (tab === 'contacts') loadContacts();
     if (tab === 'transfers') loadTransferLogs();
@@ -115,10 +115,6 @@ export default function AdminPanel({ socket }) {
   async function loadMetrics() {
     const { data } = await api.get('/conversations/metrics');
     setMetrics(data);
-  }
-  async function loadReports() {
-    const { data } = await api.get('/conversations/reports');
-    setReports(data);
   }
   async function checkWhatsapp() {
     const { data } = await api.get('/whatsapp/status');
@@ -455,76 +451,7 @@ export default function AdminPanel({ socket }) {
         )}
 
         {/* RELATÓRIOS */}
-        {tab === 'reports' && (
-          <div style={S.section}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', marginBottom: '1.5rem', flexWrap: 'wrap' }}>
-              <h2 style={{ margin: 0, fontSize: '1.15rem', fontWeight: 700, color: 'var(--text)' }}>Relatórios</h2>
-              <button
-                style={{ ...S.addBtn, fontSize: '0.82rem', padding: '0.35rem 0.9rem' }}
-                onClick={async () => {
-                  try {
-                    const { data } = await api.get('/conversations/export', { responseType: 'blob' });
-                    const url = URL.createObjectURL(new Blob([data], { type: 'text/csv' }));
-                    const a = document.createElement('a');
-                    a.href = url;
-                    a.download = `conversas_${new Date().toISOString().slice(0,10)}.csv`;
-                    a.click();
-                    URL.revokeObjectURL(url);
-                  } catch (e) { alert('Erro ao exportar'); }
-                }}>
-                📤 Exportar CSV
-              </button>
-            </div>
-            {!reports ? <p style={{ color: 'var(--hint)' }}>A carregar...</p> : (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '2rem' }}>
-                <div>
-                  <h3 style={S.subTitle}>Tempo médio de resposta</h3>
-                  <p style={{ fontSize: '2rem', fontWeight: 700, color: 'var(--accent)', margin: 0 }}>
-                    {reports.avgResponse?.avg_minutes ?? '—'} min
-                  </p>
-                </div>
-                <div>
-                  <h3 style={S.subTitle}>Por atendente</h3>
-                  {reports.byAttendant.map(a => (
-                    <SimpleBar key={a.name} label={a.name} value={a.total}
-                      max={Math.max(...reports.byAttendant.map(x => x.total), 1)} color="var(--accent)" />
-                  ))}
-                </div>
-                <div>
-                  <h3 style={S.subTitle}>Por hora (últimos 7 dias)</h3>
-                  <div style={{ display: 'flex', alignItems: 'flex-end', gap: '4px', height: '80px' }}>
-                    {Array.from({ length: 24 }, (_, h) => {
-                      const hr = String(h).padStart(2, '0');
-                      const found = reports.byHour.find(x => x.hour === hr);
-                      const max = Math.max(...reports.byHour.map(x => x.total), 1);
-                      const pct = found ? (found.total / max) * 100 : 0;
-                      return (
-                        <div key={h} title={`${hr}h: ${found?.total || 0}`}
-                          style={{ flex: 1, background: pct > 0 ? 'var(--accent)' : 'var(--accent-l)', height: `${Math.max(pct, 2)}%`, borderRadius: '2px 2px 0 0', minHeight: '2px' }} />
-                      );
-                    })}
-                  </div>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.65rem', color: 'var(--hint)', marginTop: '4px' }}>
-                    <span>0h</span><span>6h</span><span>12h</span><span>18h</span><span>23h</span>
-                  </div>
-                </div>
-                <div>
-                  <h3 style={S.subTitle}>Por dia (últimos 30 dias)</h3>
-                  <div style={{ display: 'flex', alignItems: 'flex-end', gap: '3px', height: '80px', overflowX: 'auto' }}>
-                    {reports.byDay.map(d => {
-                      const max = Math.max(...reports.byDay.map(x => x.total), 1);
-                      const pct = (d.total / max) * 100;
-                      return (
-                        <div key={d.day} title={`${d.day}: ${d.total}`}
-                          style={{ minWidth: '8px', flex: 1, background: 'var(--accent)', opacity: 0.7 + pct / 300, height: `${Math.max(pct, 2)}%`, borderRadius: '2px 2px 0 0' }} />
-                      );
-                    })}
-                  </div>
-                </div>
-              </div>
-            )}
-          </div>
-        )}
+        {tab === 'reports' && <ReportsPage />}
 
         {/* RESPOSTAS RÁPIDAS */}
         {tab === 'quickreplies' && (

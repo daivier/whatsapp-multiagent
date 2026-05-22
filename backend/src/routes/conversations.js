@@ -232,6 +232,7 @@ router.post('/:id/send-media', authMiddleware, (req, res, next) => {
 }, async (req, res) => {
   const conv = db.prepare('SELECT conv.*, con.phone, con.wa_id FROM conversations conv JOIN contacts con ON con.id = conv.contact_id WHERE conv.id = ?').get(req.params.id);
   if (!conv) return res.status(404).json({ error: 'Conversa não encontrada' });
+  if (conv.status === 'closed') return res.status(409).json({ error: 'Conversa fechada. Reabre para responder.' });
   if (req.user.role === 'attendant' && conv.assigned_to !== req.user.id) return res.status(403).json({ error: 'Sem permissão' });
 
   const file = req.file;
@@ -473,32 +474,44 @@ router.get('/transfer-logs', authMiddleware, ownerOnly, (req, res) => {
   res.json(logs);
 });
 
-// GET /conversations/reports
+// GET /conversations/reports?period=today|week|month|all
 router.get('/reports', authMiddleware, ownerOnly, (req, res) => {
-  const byAttendant = db.prepare(`
-    SELECT u.name, COUNT(c.id) as total,
-      COUNT(CASE WHEN c.status = 'open' THEN 1 END) as open,
-      COUNT(CASE WHEN c.status = 'closed' THEN 1 END) as closed
-    FROM users u
-    LEFT JOIN conversations c ON c.assigned_to = u.id
-    WHERE u.role = 'attendant'
-    GROUP BY u.id ORDER BY total DESC
-  `).all();
+  const VALID = ['today', 'week', 'month', 'all'];
+  const period = VALID.includes(req.query.period) ? req.query.period : 'month';
 
-  const byHour = db.prepare(`
-    SELECT strftime('%H', created_at) as hour, COUNT(*) as total
-    FROM conversations
-    WHERE created_at >= datetime('now', '-7 days')
-    GROUP BY hour ORDER BY hour ASC
-  `).all();
+  // Period WHERE clause (applied directly to conversations table)
+  const PERIOD = {
+    today: `date(created_at, 'localtime') = date('now', 'localtime')`,
+    week:  `created_at >= datetime('now', 'localtime', '-7 days')`,
+    month: `created_at >= datetime('now', 'localtime', '-30 days')`,
+    all:   '1=1',
+  };
+  // Same with table alias c.
+  const PERIOD_C = {
+    today: `date(c.created_at, 'localtime') = date('now', 'localtime')`,
+    week:  `c.created_at >= datetime('now', 'localtime', '-7 days')`,
+    month: `c.created_at >= datetime('now', 'localtime', '-30 days')`,
+    all:   '1=1',
+  };
 
-  const byDay = db.prepare(`
-    SELECT strftime('%Y-%m-%d', created_at) as day, COUNT(*) as total
-    FROM conversations
-    WHERE created_at >= datetime('now', '-30 days')
-    GROUP BY day ORDER BY day ASC
-  `).all();
+  const w   = PERIOD[period];
+  const wc  = PERIOD_C[period];
+  // For LEFT JOIN condition (no WHERE keyword)
+  const joinCond = period === 'all' ? '' : `AND ${PERIOD_C[period]}`;
 
+  // Summary metrics
+  const summary = db.prepare(`
+    SELECT
+      COUNT(*) as total_conversations,
+      COUNT(CASE WHEN status = 'closed' THEN 1 END) as closed_conversations,
+      COUNT(CASE WHEN status = 'open'   THEN 1 END) as open_conversations,
+      ROUND(AVG(CASE WHEN status = 'closed'
+        THEN (julianday(updated_at) - julianday(created_at)) * 24 * 60
+      END), 1) as avg_tma_minutes
+    FROM conversations WHERE ${w}
+  `).get();
+
+  // Average first response time (client msg → first agent reply)
   const avgResponse = db.prepare(`
     SELECT ROUND(AVG(response_seconds) / 60.0, 1) as avg_minutes
     FROM (
@@ -507,12 +520,42 @@ router.get('/reports', authMiddleware, ownerOnly, (req, res) => {
          strftime('%s', MIN(CASE WHEN m.from_me = 0 THEN m.timestamp END))) as response_seconds
       FROM conversations c
       JOIN messages m ON m.conversation_id = c.id
+      WHERE ${wc}
       GROUP BY c.id
       HAVING response_seconds > 0 AND response_seconds < 86400
     )
   `).get();
 
-  res.json({ byAttendant, byHour, byDay, avgResponse });
+  // Per attendant: count + TMA
+  const byAttendant = db.prepare(`
+    SELECT u.name,
+      COUNT(c.id)                                                     as total,
+      COUNT(CASE WHEN c.status = 'open'   THEN 1 END)                as open,
+      COUNT(CASE WHEN c.status = 'closed' THEN 1 END)                as closed,
+      ROUND(AVG(CASE WHEN c.status = 'closed'
+        THEN (julianday(c.updated_at) - julianday(c.created_at)) * 24 * 60
+      END), 1)                                                        as avg_tma_minutes
+    FROM users u
+    LEFT JOIN conversations c ON c.assigned_to = u.id ${joinCond}
+    WHERE u.role = 'attendant' AND u.active = 1
+    GROUP BY u.id ORDER BY total DESC
+  `).all();
+
+  // Volume by hour of day
+  const byHour = db.prepare(`
+    SELECT strftime('%H', created_at, 'localtime') as hour, COUNT(*) as total
+    FROM conversations WHERE ${w}
+    GROUP BY hour ORDER BY hour ASC
+  `).all();
+
+  // Volume by day
+  const byDay = db.prepare(`
+    SELECT strftime('%Y-%m-%d', created_at, 'localtime') as day, COUNT(*) as total
+    FROM conversations WHERE ${w}
+    GROUP BY day ORDER BY day ASC
+  `).all();
+
+  res.json({ period, summary, byAttendant, byHour, byDay, avgResponse });
 });
 
 module.exports = router;

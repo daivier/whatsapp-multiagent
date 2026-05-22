@@ -199,12 +199,17 @@ export default function ChatWindow({ conversation: convProp, socket, onClose, on
       if (Number(conversation_id) !== conversation.id) return;
       setConvTags(tags);
     }
+    function onConversationUpdated(conv) {
+      if (!conv?.id || conv.id !== conversation?.id) return;
+      setConversation(prev => ({ ...prev, ...conv }));
+    }
     socket.on('message:new', onMessage);
     socket.on('typing:update', onTyping);
     socket.on('message:edited', onEdited);
     socket.on('message:failed', onFailed);
     socket.on('message:deleted', onDeleted);
     socket.on('conversation:tags_updated', onTagsUpdated);
+    socket.on('conversation:updated', onConversationUpdated);
     return () => {
       socket.off('message:new', onMessage);
       socket.off('typing:update', onTyping);
@@ -212,6 +217,7 @@ export default function ChatWindow({ conversation: convProp, socket, onClose, on
       socket.off('message:failed', onFailed);
       socket.off('message:deleted', onDeleted);
       socket.off('conversation:tags_updated', onTagsUpdated);
+      socket.off('conversation:updated', onConversationUpdated);
     };
   }, [socket, conversation]);
 
@@ -301,6 +307,7 @@ export default function ChatWindow({ conversation: convProp, socket, onClose, on
 
   async function send() {
     if (!text.trim() || sending) return;
+    if (conversation?.status === 'closed') return;
     setSending(true);
     setWarning('');
     const body = sanitizeZalgo(text);
