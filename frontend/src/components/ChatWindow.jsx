@@ -367,7 +367,7 @@ export default function ChatWindow({ conversation: convProp, socket, onClose, on
       });
     } catch (err) {
       setMessages(prev => prev.filter(m => m.id !== tempId));
-      setWarning(err.response?.data?.error || 'Erro ao enviar ficheiro');
+      setWarning(err.response?.data?.error || err.message || 'Erro ao enviar ficheiro');
     }
     setUploadingFile(false);
   }

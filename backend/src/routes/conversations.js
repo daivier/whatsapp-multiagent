@@ -253,8 +253,10 @@ router.post('/:id/send-media', authMiddleware, (req, res, next) => {
     ioInstance.get()?.emit('message:new', { message, conversation: fullConv });
     res.json(message);
   } catch (err) {
+    console.error(`[send-media] Erro ao enviar ficheiro "${file?.originalname}" (${file?.mimetype}):`, err.message || err);
     try { fs.unlinkSync(file.path); } catch (_) {}
-    res.status(500).json({ error: err.message });
+    const msg = err?.message || err?.toString() || 'Erro desconhecido ao enviar ficheiro';
+    res.status(500).json({ error: msg });
   }
 });
 
