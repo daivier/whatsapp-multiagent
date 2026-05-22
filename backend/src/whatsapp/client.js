@@ -190,19 +190,7 @@ async function initWhatsApp(socketIO) {
   });
 
   sock.ev.on('messages.upsert', async ({ messages, type }) => {
-    console.log(`[upsert] type=${type} count=${messages.length} fromMe=${messages.map(m=>m.key.fromMe).join(',')}`);
     for (const msg of messages) {
-      // Debug fromMe — logar sempre
-      if (msg.key.fromMe) {
-        const age = Math.round((Date.now()-(msg.messageTimestamp||0)*1000)/1000);
-        if (msg.message) {
-          const keys = Object.keys(msg.message);
-          console.log(`[fromme-debug] type=${type} allKeys=${keys.join(',')} age=${age}s`);
-        } else {
-          console.log(`[fromme-debug] type=${type} message=NULL age=${age}s`);
-        }
-      }
-
       // Detetar apagamento via protocolMessage (type 0 = REVOKE = apagar para todos)
       const proto = msg.message?.protocolMessage;
       if (proto && proto.type === 0 && proto.key?.id) {
