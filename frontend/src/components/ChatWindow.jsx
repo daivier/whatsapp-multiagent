@@ -331,6 +331,8 @@ export default function ChatWindow({ conversation: convProp, socket, onClose, on
       const { data: message } = await api.post(`/conversations/${conversation.id}/send-media`, formData, {
         headers: { 'Content-Type': 'multipart/form-data' },
       });
+      // Registar ID para evitar que o socket 'message:new' adicione duplicado
+      seenMsgIds.current.add(message.id);
       setMessages(prev => [...prev, message]);
     } catch (err) {
       setWarning(err.response?.data?.error || 'Erro ao enviar ficheiro');

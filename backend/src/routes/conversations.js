@@ -231,10 +231,10 @@ router.post('/:id/send-media', authMiddleware, upload.single('file'), async (req
   const mediaUrl = `/uploads/${file.filename}`;
 
   try {
-    await sendMedia(conv.wa_id || conv.phone, file.path, file.originalname, caption);
+    const waMessageId = await sendMedia(conv.wa_id || conv.phone, file.path, file.originalname, caption);
 
-    const result = db.prepare('INSERT INTO messages (conversation_id, from_me, sender_id, body, media_url, media_type) VALUES (?, 1, ?, ?, ?, ?)')
-      .run(conv.id, req.user.id, caption, mediaUrl, file.mimetype);
+    const result = db.prepare('INSERT INTO messages (conversation_id, from_me, sender_id, body, media_url, media_type, wa_message_id) VALUES (?, 1, ?, ?, ?, ?, ?)')
+      .run(conv.id, req.user.id, caption, mediaUrl, file.mimetype, waMessageId || null);
     db.prepare('UPDATE conversations SET updated_at = CURRENT_TIMESTAMP WHERE id = ?').run(conv.id);
 
     const message = db.prepare('SELECT m.*, u.name as sender_name FROM messages m LEFT JOIN users u ON u.id = m.sender_id WHERE m.id = ?').get(result.lastInsertRowid);

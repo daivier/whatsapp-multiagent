@@ -593,10 +593,11 @@ async function sendMedia(phone, filePath, filename, caption) {
   };
   const mimetype = mimeMap[ext] || 'application/octet-stream';
   const opts = caption ? { caption } : {};
+  let result;
   if (mimetype.startsWith('image/')) {
-    await sock.sendMessage(jid, { image: buffer, mimetype, ...opts });
+    result = await sock.sendMessage(jid, { image: buffer, mimetype, ...opts });
   } else if (mimetype.startsWith('video/')) {
-    await sock.sendMessage(jid, { video: buffer, mimetype, ...opts });
+    result = await sock.sendMessage(jid, { video: buffer, mimetype, ...opts });
   } else if (mimetype.startsWith('audio/')) {
     // WhatsApp exige OGG Opus para voice notes (PTT)
     // Converter sempre para garantir compatibilidade
@@ -610,15 +611,15 @@ async function sendMedia(phone, filePath, filename, caption) {
         console.log(`[sendMedia] Conversão concluída (${audioBuffer.length} bytes)`);
       } catch (convErr) {
         console.error(`[sendMedia] Falha na conversão ffmpeg: ${convErr.message} — a enviar como documento`);
-        // Fallback: enviar como documento se a conversão falhar
-        await sock.sendMessage(jid, { document: buffer, mimetype, fileName: filename || path.basename(filePath) });
-        return;
+        result = await sock.sendMessage(jid, { document: buffer, mimetype, fileName: filename || path.basename(filePath) });
+        return result?.key?.id || null;
       }
     }
-    await sock.sendMessage(jid, { audio: audioBuffer, mimetype: finalMime, ptt: true });
+    result = await sock.sendMessage(jid, { audio: audioBuffer, mimetype: finalMime, ptt: true });
   } else {
-    await sock.sendMessage(jid, { document: buffer, mimetype, fileName: filename || path.basename(filePath), ...opts });
+    result = await sock.sendMessage(jid, { document: buffer, mimetype, fileName: filename || path.basename(filePath), ...opts });
   }
+  return result?.key?.id || null;
 }
 
 async function disconnectWhatsApp() {
