@@ -36,6 +36,11 @@ router.get('/', (req, res) => {
 router.post('/', (req, res) => {
   const { conversation_id, wa_id, body, scheduled_at } = req.body;
   if (!wa_id || !body || !scheduled_at) return res.status(400).json({ error: 'Campos obrigatórios em falta' });
+  // Validar que a data é no futuro (scheduled_at vem como hora local sem timezone)
+  const isPast = db.prepare(
+    `SELECT replace(?, 'T', ' ') < datetime('now', 'localtime', '-1 minute') AS result`
+  ).get(scheduled_at)?.result;
+  if (isPast) return res.status(400).json({ error: 'Não é possível agendar para o passado' });
   const r = db.prepare(
     'INSERT INTO scheduled_messages (conversation_id, wa_id, body, scheduled_at, created_by) VALUES (?, ?, ?, ?, ?)'
   ).run(conversation_id || null, wa_id, body, scheduled_at, req.user.id);
@@ -54,6 +59,13 @@ router.patch('/:id', (req, res) => {
 
   const newBody = body?.trim() || sm.body;
   const newAt = scheduled_at || sm.scheduled_at;
+  // Validar que a nova data é no futuro (só se foi enviada uma nova data)
+  if (scheduled_at) {
+    const isPast = db.prepare(
+      `SELECT replace(?, 'T', ' ') < datetime('now', 'localtime', '-1 minute') AS result`
+    ).get(scheduled_at)?.result;
+    if (isPast) return res.status(400).json({ error: 'Não é possível agendar para o passado' });
+  }
   db.prepare('UPDATE scheduled_messages SET body = ?, scheduled_at = ? WHERE id = ?').run(newBody, newAt, sm.id);
   const updated = db.prepare('SELECT * FROM scheduled_messages WHERE id = ?').get(sm.id);
   res.json(updated);

@@ -446,6 +446,10 @@ export default function ChatWindow({ conversation: convProp, socket, onClose, on
 
   async function saveSchedule() {
     if (!scheduleBody.trim() || !scheduleAt) return;
+    if (new Date(scheduleAt) <= new Date()) {
+      setWarning('A data/hora do agendamento deve ser no futuro');
+      return;
+    }
     setScheduleSaving(true);
     try {
       await api.post('/scheduled-messages', {

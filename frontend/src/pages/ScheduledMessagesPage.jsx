@@ -68,6 +68,10 @@ export default function ScheduledMessagesPage({ socket }) {
 
   async function saveEdit(id) {
     if (!editForm.body.trim() || !editForm.scheduled_at) return;
+    if (new Date(editForm.scheduled_at) <= new Date()) {
+      setError('A data/hora deve ser no futuro');
+      return;
+    }
     setSaving(true);
     setError('');
     try {
