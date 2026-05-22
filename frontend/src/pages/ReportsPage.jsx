@@ -48,20 +48,17 @@ function HourChart({ byHour }) {
       <h3 style={S.chartTitle}>⏰ Volume por Hora</h3>
       <div style={{ display: 'flex', alignItems: 'flex-end', gap: '3px', height: '90px', marginTop: '0.75rem' }}>
         {bars.map(({ h, hr, count, pct }) => (
-          <div key={h} style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
-            <div
-              title={`${hr}h: ${count} conversa${count !== 1 ? 's' : ''}`}
-              style={{
-                width: '100%',
-                height: `${Math.max(pct, 2)}%`,
-                minHeight: pct > 0 ? '4px' : '2px',
-                background: pct > 0 ? 'var(--accent)' : 'var(--accent-l)',
-                borderRadius: '3px 3px 0 0',
-                transition: 'height 0.3s ease',
-                cursor: count > 0 ? 'default' : undefined,
-              }}
-            />
-          </div>
+          <div
+            key={h}
+            title={`${hr}h: ${count} conversa${count !== 1 ? 's' : ''}`}
+            style={{
+              flex: 1,
+              height: `${Math.max((pct / 100) * 90, count > 0 ? 4 : 2)}px`,
+              background: count > 0 ? 'var(--accent)' : 'var(--accent-l)',
+              borderRadius: '3px 3px 0 0',
+              transition: 'height 0.3s ease',
+            }}
+          />
         ))}
       </div>
       <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.62rem', color: 'var(--hint)', marginTop: '4px' }}>
@@ -97,12 +94,10 @@ function DayChart({ byDay }) {
               style={{
                 minWidth: '10px',
                 flex: 1,
-                height: `${Math.max(pct, 2)}%`,
-                minHeight: '2px',
+                height: `${Math.max((pct / 100) * 80, d.total > 0 ? 4 : 2)}px`,
                 background: 'var(--accent)',
                 borderRadius: '2px 2px 0 0',
-                opacity: 0.65 + (pct / max) * 0.35,
-                cursor: 'default',
+                opacity: 0.5 + (pct / 100) * 0.5,
                 transition: 'height 0.3s ease',
               }}
             />
