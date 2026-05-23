@@ -2,8 +2,23 @@ const express = require('express');
 const router = express.Router();
 const db = require('../db/schema');
 const { authMiddleware } = require('../middleware/auth');
+const { runLidMerge } = require('../whatsapp/client');
 
 router.use(authMiddleware);
+
+// Criar contacto individual
+router.post('/', (req, res) => {
+  const { phone, name } = req.body;
+  if (!phone?.trim()) return res.status(400).json({ error: 'Número obrigatório' });
+  const cleanPhone = phone.trim().replace(/[\s\-().]/g, '');
+  const existing = db.prepare('SELECT id FROM contacts WHERE phone = ?').get(cleanPhone);
+  if (existing) return res.status(409).json({ error: 'Contacto já existe', id: existing.id });
+  db.prepare('INSERT INTO contacts (phone, name) VALUES (?, ?)').run(cleanPhone, name?.trim() || cleanPhone);
+  const contact = db.prepare('SELECT * FROM contacts WHERE phone = ?').get(cleanPhone);
+  // Verificar se há LID pendente para este número e fundir imediatamente
+  setTimeout(runLidMerge, 200);
+  res.json(contact);
+});
 
 // Listar contactos com info da última conversa
 router.get('/', (req, res) => {

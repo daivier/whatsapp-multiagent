@@ -27,6 +27,8 @@ function formatWait(dateStr) {
 const WAIT_COLORS = { ok: 'var(--success)', warn: 'var(--warn)', danger: 'var(--danger)' };
 const WAIT_BGS    = { ok: 'var(--success-l)', warn: 'var(--warn-l)', danger: 'var(--danger-l)' };
 
+const PRIORITY_LABEL = { urgent: '🔴 Urgente', normal: '🟡 Normal', low: '🔵 Baixa' };
+
 export default function ConversationList({ socket, selected, onSelect }) {
   const { user } = useAuth();
   const [conversations, setConversations] = useState([]);
@@ -37,7 +39,26 @@ export default function ConversationList({ socket, selected, onSelect }) {
   const [showNewModal, setShowNewModal] = useState(false);
   const searchTimer = useRef(null);
 
-  useEffect(() => { load(); }, [filter]);
+  // Filtros avançados
+  const [showFilters, setShowFilters] = useState(false);
+  const [filterPriority, setFilterPriority] = useState('');
+  const [filterAttendant, setFilterAttendant] = useState('');
+  const [filterTag, setFilterTag] = useState('');
+  const [tags, setTags] = useState([]);
+  const [attendants, setAttendants] = useState([]);
+
+  // Atribuição manual
+  const [assignPickerId, setAssignPickerId] = useState(null); // id da conversa com picker aberto
+  const [assigning, setAssigning] = useState(false);
+
+  useEffect(() => {
+    api.get('/tags').then(({ data }) => setTags(Array.isArray(data) ? data : [])).catch(() => {});
+    if (user.role === 'owner') {
+      api.get('/users').then(({ data }) => setAttendants(Array.isArray(data) ? data.filter(u => u.role === 'attendant' && u.active) : [])).catch(() => {});
+    }
+  }, []);
+
+  useEffect(() => { load(); }, [filter, filterPriority, filterAttendant, filterTag]);
 
   useEffect(() => {
     if (!socket) return;
@@ -98,8 +119,16 @@ export default function ConversationList({ socket, selected, onSelect }) {
   }, [selected?.id]);
 
   async function load() {
-    const { data } = await api.get('/conversations', { params: { status: filter || undefined } });
+    const params = { status: filter || undefined };
+    if (filterPriority) params.priority = filterPriority;
+    if (filterAttendant) params.attendant_id = filterAttendant;
+    if (filterTag) params.tag_id = filterTag;
+    const { data } = await api.get('/conversations', { params });
     setConversations(Array.isArray(data) ? data : []);
+  }
+
+  function clearFilters() {
+    setFilterPriority(''); setFilterAttendant(''); setFilterTag('');
   }
 
   function handleSearch(val) {
@@ -118,7 +147,20 @@ export default function ConversationList({ socket, selected, onSelect }) {
 
   function clearSearch() { setSearchQ(''); setSearchResults(null); setSearching(false); }
 
+  async function assignConversation(convId, attendantId) {
+    setAssigning(true);
+    try {
+      await api.patch(`/conversations/${convId}/assign`, { attendant_id: parseInt(attendantId) });
+      setAssignPickerId(null);
+      load();
+    } catch (err) {
+      alert(err.response?.data?.error || 'Erro ao atribuir');
+    }
+    setAssigning(false);
+  }
+
   const FILTERS = [['open','Abertas'],['waiting','Aguarda'],['closed','Fechadas'],['snoozed','💤 Snooze'],['','Todas']];
+  const activeFilterCount = [filterPriority, filterAttendant, filterTag].filter(Boolean).length;
 
   const isSearching = searchResults !== null;
 
@@ -148,8 +190,75 @@ export default function ConversationList({ socket, selected, onSelect }) {
           <div style={S.header}>
             <span style={S.headerTitle}>Conversas</span>
             <span style={S.count}>{conversations.length}</span>
+            <button
+              onClick={() => setShowFilters(v => !v)}
+              style={{ ...S.newBtn, background: activeFilterCount > 0 ? 'var(--accent)' : 'var(--border)', color: activeFilterCount > 0 ? '#fff' : 'var(--muted)', marginLeft: 0, fontSize: '0.75rem', width: 'auto', padding: '0 8px', gap: '3px', display: 'flex', alignItems: 'center' }}
+              title="Filtros avançados"
+            >
+              ⚙️{activeFilterCount > 0 && <span style={{ background: '#fff', color: 'var(--accent)', borderRadius: '999px', fontSize: '0.65rem', fontWeight: 700, minWidth: 14, height: 14, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', padding: '0 3px' }}>{activeFilterCount}</span>}
+            </button>
             <button onClick={() => setShowNewModal(true)} style={S.newBtn} title="Nova conversa">✏️</button>
           </div>
+
+          {/* Painel de filtros avançados */}
+          {showFilters && (
+            <div style={{ padding: '0.5rem 0.75rem', borderBottom: '1px solid var(--border)', background: 'var(--bg)', display: 'flex', flexDirection: 'column', gap: '0.4rem' }}>
+              <div style={{ display: 'flex', gap: '0.4rem', flexWrap: 'wrap', alignItems: 'center' }}>
+                {/* Prioridade */}
+                <select value={filterPriority} onChange={e => setFilterPriority(e.target.value)} style={S.filterSelect}>
+                  <option value="">Prioridade</option>
+                  <option value="urgent">🔴 Urgente</option>
+                  <option value="normal">🟡 Normal</option>
+                  <option value="low">🔵 Baixa</option>
+                </select>
+
+                {/* Atendente (owner only) */}
+                {user.role === 'owner' && (
+                  <select value={filterAttendant} onChange={e => setFilterAttendant(e.target.value)} style={S.filterSelect}>
+                    <option value="">Atendente</option>
+                    {attendants.map(a => <option key={a.id} value={a.id}>{a.name}</option>)}
+                  </select>
+                )}
+
+                {/* Etiqueta */}
+                {tags.length > 0 && (
+                  <select value={filterTag} onChange={e => setFilterTag(e.target.value)} style={S.filterSelect}>
+                    <option value="">Etiqueta</option>
+                    {tags.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
+                  </select>
+                )}
+
+                {activeFilterCount > 0 && (
+                  <button onClick={clearFilters} style={{ ...S.filterBtn, color: 'var(--danger)', borderColor: 'var(--danger)', fontSize: '0.72rem' }}>
+                    ✕ Limpar
+                  </button>
+                )}
+              </div>
+
+              {/* Chips de filtros activos */}
+              {activeFilterCount > 0 && (
+                <div style={{ display: 'flex', gap: '0.3rem', flexWrap: 'wrap' }}>
+                  {filterPriority && (
+                    <span style={S.chip} onClick={() => setFilterPriority('')}>
+                      {PRIORITY_LABEL[filterPriority]} ✕
+                    </span>
+                  )}
+                  {filterAttendant && (
+                    <span style={S.chip} onClick={() => setFilterAttendant('')}>
+                      👤 {attendants.find(a => String(a.id) === String(filterAttendant))?.name || '?'} ✕
+                    </span>
+                  )}
+                  {filterTag && (
+                    <span style={{ ...S.chip, background: (tags.find(t => String(t.id) === String(filterTag))?.color || 'var(--accent)') + '22', color: tags.find(t => String(t.id) === String(filterTag))?.color || 'var(--accent)', borderColor: (tags.find(t => String(t.id) === String(filterTag))?.color || 'var(--accent)') + '55' }}
+                      onClick={() => setFilterTag('')}>
+                      🏷️ {tags.find(t => String(t.id) === String(filterTag))?.name || '?'} ✕
+                    </span>
+                  )}
+                </div>
+              )}
+            </div>
+          )}
+
           <div style={S.filters}>
             {FILTERS.map(([val, label]) => (
               <button key={val} style={{ ...S.filterBtn, ...(filter === val ? S.filterActive : {}) }}
@@ -202,7 +311,7 @@ export default function ConversationList({ socket, selected, onSelect }) {
               const wait = (conv.status !== 'closed') ? formatWait(conv.last_client_at) : null;
               const priorityColor = conv.priority === 'urgent' ? '#ef4444' : conv.priority === 'low' ? '#3b82f6' : null;
               return (
-                <div key={conv.id} style={{ ...S.item, ...(isSelected ? S.itemActive : {}), ...(priorityColor ? { boxShadow: `inset 3px 0 0 ${priorityColor}` } : {}) }} onClick={() => onSelect(conv)}>
+                <div key={conv.id} style={{ ...S.item, ...(isSelected ? S.itemActive : {}), ...(priorityColor ? { boxShadow: `inset 3px 0 0 ${priorityColor}` } : {}) }} onClick={() => { setAssignPickerId(null); onSelect(conv); }}>
                   <div style={{ position: 'relative', flexShrink: 0 }}>
                     <div style={{ ...S.avatar, background: isSelected ? 'var(--accent)' : 'var(--accent-l)', color: isSelected ? '#fff' : 'var(--accent)' }}>
                       {initial}
@@ -221,7 +330,36 @@ export default function ConversationList({ socket, selected, onSelect }) {
                       </span>
                     </div>
                     {user.role === 'owner' && (
-                      <span style={S.sub}>{conv.attendant_name || 'Sem atendente'}</span>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                        <span style={S.sub}>{conv.attendant_name || 'Sem atendente'}</span>
+                        {conv.status === 'waiting' && (
+                          <div style={{ position: 'relative' }} onClick={e => e.stopPropagation()}>
+                            <button
+                              style={{ background: 'var(--accent)', color: '#fff', border: 'none', borderRadius: '4px', fontSize: '0.65rem', fontWeight: 700, padding: '1px 5px', cursor: 'pointer', lineHeight: '1.4' }}
+                              title="Atribuir a atendente"
+                              onClick={e => { e.stopPropagation(); setAssignPickerId(assignPickerId === conv.id ? null : conv.id); }}
+                            >
+                              👤 Atribuir
+                            </button>
+                            {assignPickerId === conv.id && (
+                              <div style={{ position: 'absolute', left: 0, top: '110%', zIndex: 200, background: 'var(--card)', border: '1px solid var(--border)', borderRadius: 'var(--r-md)', boxShadow: 'var(--sh-md)', minWidth: '160px', padding: '0.3rem' }}>
+                                {attendants.length === 0 && <p style={{ margin: 0, fontSize: '0.75rem', color: 'var(--hint)', padding: '0.3rem 0.5rem' }}>Sem atendentes activos</p>}
+                                {attendants.map(a => (
+                                  <div key={a.id}
+                                    onClick={() => assignConversation(conv.id, a.id)}
+                                    style={{ padding: '0.35rem 0.6rem', cursor: assigning ? 'wait' : 'pointer', fontSize: '0.8rem', borderRadius: 'var(--r-sm)', display: 'flex', alignItems: 'center', gap: '0.4rem' }}
+                                    onMouseEnter={e => e.currentTarget.style.background = 'var(--bg)'}
+                                    onMouseLeave={e => e.currentTarget.style.background = 'none'}
+                                  >
+                                    <span style={{ width: 8, height: 8, borderRadius: '50%', background: a.status === 'online' ? 'var(--success)' : a.status === 'busy' ? 'var(--warn)' : 'var(--hint)', flexShrink: 0 }} />
+                                    {a.name}
+                                  </div>
+                                ))}
+                              </div>
+                            )}
+                          </div>
+                        )}
+                      </div>
                     )}
                     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                       <span style={S.phone}>{conv.phone}</span>
@@ -271,4 +409,6 @@ const S = {
   badge: { borderRadius: '20px', padding: '1px 7px', fontSize: '0.7rem', fontWeight: 600, flexShrink: 0 },
   sub: { display: 'block', fontSize: '0.75rem', color: 'var(--muted)', marginTop: '1px' },
   phone: { display: 'block', fontSize: '0.72rem', color: 'var(--hint)' },
+  filterSelect: { padding: '0.25rem 0.5rem', border: '1px solid var(--border-m)', borderRadius: 'var(--r-sm)', fontSize: '0.78rem', background: 'var(--card)', color: 'var(--text)', outline: 'none', cursor: 'pointer' },
+  chip: { display: 'inline-flex', alignItems: 'center', gap: '0.2rem', padding: '1px 7px', borderRadius: '999px', fontSize: '0.7rem', fontWeight: 600, background: 'var(--accent-l)', color: 'var(--accent)', border: '1px solid var(--accent)33', cursor: 'pointer', userSelect: 'none' },
 };

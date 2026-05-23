@@ -32,6 +32,10 @@ let isReady = false;
 // Populado pelos eventos contacts.upsert do Baileys
 const lidToJidMap = new Map();
 
+// Cache de contactos da agenda do WhatsApp (populado pelo contacts.upsert)
+// Chave: phone normalizado; Valor: { phone, name, wa_id }
+const waContactsCache = new Map();
+
 // Fila de reenvio: msgId → { jid, body, opts, sentAt }
 // Guarda mensagens enviadas nos últimos RETRY_TTL_MS ms para reenvio se a ligação cair
 const pendingQueue = new Map();
@@ -70,6 +74,58 @@ function getPhoneFromJid(jid) {
   return jid.split('@')[0];
 }
 
+/**
+ * Varre todo o mapa lidToJidMap e funde contactos LID duplicados com o contacto real.
+ * Chamado: no arranque, após contacts.upsert, após criar novo contacto, ao reconectar.
+ */
+function runLidMerge() {
+  if (lidToJidMap.size === 0) return 0;
+  let merged = 0;
+  for (const [lidJid, realJid] of lidToJidMap) {
+    try {
+      const lidNum = lidJid.split('@')[0];
+      const realPhone = realJid.split('@')[0];
+
+      // Contacto criado com número LID como phone (ou com wa_id = LID)
+      const lidContact = db.prepare(
+        'SELECT * FROM contacts WHERE wa_id = ? OR phone = ? LIMIT 1'
+      ).get(lidJid, lidNum);
+
+      if (!lidContact) continue; // Não há contacto LID — nada a fundir
+
+      // Contacto real (pelo número real, sem prefixo 55 ou com, ou pelo wa_id real)
+      const realContact = db.prepare(
+        'SELECT * FROM contacts WHERE (wa_id = ? OR phone = ? OR phone = ?) AND id != ? LIMIT 1'
+      ).get(realJid, realPhone, realPhone.replace(/^55/, ''), lidContact.id);
+
+      if (!realContact) {
+        // Só existe o contacto LID → actualizar phone para o real
+        db.prepare('UPDATE contacts SET phone = ?, wa_id = ? WHERE id = ?')
+          .run(realPhone, lidJid, lidContact.id);
+        console.log(`[lid-merge-scan] Contacto LID ${lidContact.id} actualizado: phone ${lidNum} → ${realPhone}`);
+        merged++;
+        continue;
+      }
+
+      // Ambos existem → fundir: mover conversas + apagar LID
+      db.prepare('UPDATE conversations SET contact_id = ? WHERE contact_id = ?')
+        .run(realContact.id, lidContact.id);
+      // Garantir que o contacto real tem o wa_id LID para routing futuro
+      if (!realContact.wa_id || !realContact.wa_id.endsWith('@lid')) {
+        db.prepare('UPDATE contacts SET wa_id = ? WHERE id = ?').run(lidJid, realContact.id);
+      }
+      db.prepare('DELETE FROM contacts WHERE id = ?').run(lidContact.id);
+      console.log(`[lid-merge-scan] Fundido: LID ${lidNum} (contact ${lidContact.id}) → ${realPhone} (contact ${realContact.id})`);
+      merged++;
+      if (io) io.emit('conversation:updated', {});
+    } catch (err) {
+      console.error(`[lid-merge-scan] Erro ao fundir ${lidJid}:`, err.message);
+    }
+  }
+  if (merged > 0) console.log(`[lid-merge-scan] Total fundidos: ${merged}`);
+  return merged;
+}
+
 // Remove caracteres Zalgo (combinações excessivas de diacríticos Unicode)
 // Mantém no máximo 2 combining marks consecutivos (suficiente para texto legítimo)
 function sanitizeZalgo(text) {
@@ -81,11 +137,37 @@ function normalizeJid(jid) {
   if (!jid) return null;
   // Se é um LID (@lid ou número identificado como LID na BD), resolver para o número real
   if (jid.endsWith('@lid') || jid.endsWith('@c.us')) {
+    // 1. Consultar mapa em memória (mais fiável — populado na sessão)
+    const mapped = lidToJidMap.get(jid);
+    if (mapped) return mapped;
+
     const lidNum = jid.split('@')[0];
-    const contact = db.prepare('SELECT phone FROM contacts WHERE wa_id = ? OR wa_id = ?')
-      .get(jid, `${lidNum}@lid`);
+
+    // 2. Tentar também pelo número sem sufixo
+    const mappedNum = lidToJidMap.get(`${lidNum}@lid`);
+    if (mappedNum) return mappedNum;
+
+    // 3. Tentar nos ficheiros de sessão directamente
+    try {
+      const sessionPath = process.env.WA_SESSION_PATH || './baileys-session';
+      const reverseFile = require('path').join(sessionPath, `lid-mapping-${lidNum}_reverse.json`);
+      if (require('fs').existsSync(reverseFile)) {
+        const phone = JSON.parse(require('fs').readFileSync(reverseFile, 'utf8'));
+        if (phone && typeof phone === 'string') {
+          lidToJidMap.set(jid, `${phone}@s.whatsapp.net`);
+          return `${phone}@s.whatsapp.net`;
+        }
+      }
+    } catch (_) {}
+
+    // 4. Fallback: procurar na BD um contacto cujo phone seja diferente do LID
+    const contact = db.prepare(`
+      SELECT phone FROM contacts
+      WHERE (wa_id = ? OR wa_id = ?) AND phone != ?
+    `).get(jid, `${lidNum}@lid`, lidNum);
     if (contact?.phone) return `${contact.phone}@s.whatsapp.net`;
-    // Fallback: usar o número do LID directamente (pode não funcionar mas é o melhor que temos)
+
+    // 5. Último recurso: usar o número do LID directamente
     return `${lidNum}@s.whatsapp.net`;
   }
   if (jid.includes('@')) return jid;
@@ -135,15 +217,42 @@ async function initWhatsApp(socketIO) {
         }
       } catch (_) {}
     }
-    if (count > 0) console.log(`[lid-map] ${count} mapeamentos LID→JID carregados da sessão`);
+    if (count > 0) {
+      console.log(`[lid-map] ${count} mapeamentos LID→JID carregados da sessão`);
+      // Fundir duplicados que possam existir da sessão anterior
+      setTimeout(runLidMerge, 1500);
+    }
   } catch (_) {}
 
   // Actualizar mapa quando chegam novos contactos + fundir duplicados LID
   sock.ev.on('contacts.upsert', (contacts) => {
     for (const c of contacts) {
+      // Guardar na cache de contactos WA (apenas contactos reais, não grupos/broadcasts)
+      if (c.id && !c.id.endsWith('@g.us') && !c.id.endsWith('@newsletter') && c.id !== 'status@broadcast') {
+        const phone = c.id.split('@')[0];
+        if (/^\d+$/.test(phone)) {
+          waContactsCache.set(phone, {
+            phone,
+            name: c.name || c.notify || null,
+            wa_id: c.id,
+          });
+        }
+      }
+
       if (c.id && c.lid) {
         lidToJidMap.set(c.lid, c.id);
         console.log(`[lid-map] novo: ${c.lid} → ${c.id}`);
+
+        // Gravar mapeamento em disco para sobreviver a reinícios do processo
+        try {
+          const lidNum = c.lid.split('@')[0];
+          const realPhone = c.id.split('@')[0];
+          const sp = process.env.WA_SESSION_PATH || './baileys-session';
+          fs.writeFileSync(
+            path.join(sp, `lid-mapping-${lidNum}_reverse.json`),
+            JSON.stringify(realPhone)
+          );
+        } catch (_) {}
 
         // Tentar fundir contacto LID com contacto real para eliminar duplicados
         try {
@@ -164,9 +273,9 @@ async function initWhatsApp(socketIO) {
             // Mover todas as conversas do contacto LID para o contacto real
             db.prepare('UPDATE conversations SET contact_id = ? WHERE contact_id = ?')
               .run(realContact.id, lidContact.id);
-            // Garantir que o contacto real tem o wa_id correcto
-            if (!realContact.wa_id || realContact.wa_id === c.lid) {
-              db.prepare('UPDATE contacts SET wa_id = ? WHERE id = ?').run(c.id, realContact.id);
+            // Garantir que o contacto real tem o wa_id LID correcto
+            if (!realContact.wa_id || realContact.wa_id === c.id) {
+              db.prepare('UPDATE contacts SET wa_id = ? WHERE id = ?').run(c.lid, realContact.id);
             }
             // Eliminar contacto LID duplicado
             db.prepare('DELETE FROM contacts WHERE id = ?').run(lidContact.id);
@@ -175,14 +284,23 @@ async function initWhatsApp(socketIO) {
           } else if (lidContact && !realContact) {
             // Actualizar contacto LID com o número real
             db.prepare('UPDATE contacts SET wa_id = ?, phone = ? WHERE id = ?')
-              .run(c.id, realPhone, lidContact.id);
+              .run(c.lid, realPhone, lidContact.id);
             console.log(`[lid-merge] Contacto LID ${lidContact.id} actualizado para ${realPhone}`);
+          } else if (!lidContact && realContact) {
+            // Contacto real existe mas wa_id ainda não é LID → actualizar
+            // Isto garante que mensagens vindas com LID encontram este contacto via BD
+            if (!realContact.wa_id || !realContact.wa_id.endsWith('@lid')) {
+              db.prepare('UPDATE contacts SET wa_id = ? WHERE id = ?').run(c.lid, realContact.id);
+              console.log(`[lid-merge] Contacto real ${realContact.id} (${realPhone}) actualizado com LID ${c.lid}`);
+            }
           }
         } catch (mergeErr) {
           console.error('[lid-merge] Erro ao fundir:', mergeErr.message);
         }
       }
     }
+    // Após processar todos os contactos upsert, varrer mapa completo para apanhar casos tardios
+    setTimeout(runLidMerge, 500);
   });
 
   sock.ev.on('connection.update', async (update) => {
@@ -204,6 +322,8 @@ async function initWhatsApp(socketIO) {
       console.log('WhatsApp conectado');
       // Reenviar mensagens que ficaram pendentes antes da desconexão
       setTimeout(retryPendingMessages, 2000);
+      // Varrer mapa LID e fundir quaisquer duplicados
+      setTimeout(runLidMerge, 3000);
     }
 
     if (connection === 'close') {
@@ -294,7 +414,7 @@ async function handleIncomingMessage(msg) {
     } else {
       // Tentar resolver via BD (contacto com este LID pode ter phone real registado)
       const lidNum = waId.split('@')[0];
-      const dbContact = db.prepare('SELECT phone FROM contacts WHERE wa_id = ? AND phone NOT LIKE ?').get(waId, lidNum);
+      const dbContact = db.prepare('SELECT phone FROM contacts WHERE wa_id = ? AND phone != ? AND phone != ?').get(waId, lidNum, `${lidNum}@lid`);
       if (dbContact?.phone) {
         waId = `${dbContact.phone}@s.whatsapp.net`;
         console.log(`[lid] ${remoteJid} → ${waId} (via BD)`);
@@ -302,6 +422,17 @@ async function handleIncomingMessage(msg) {
     }
   }
   const phone = getPhoneFromJid(waId);
+
+  // Verificar blacklist — ignorar silenciosamente mensagens de números bloqueados
+  if (!fromMe) {
+    const blocked = db.prepare('SELECT id FROM blacklist WHERE phone = ? OR phone = ? OR wa_id = ?')
+      .get(phone, phone.replace(/^55/, ''), waId);
+    if (blocked) {
+      console.log(`[blacklist] Mensagem ignorada de ${phone} (bloqueado)`);
+      return;
+    }
+  }
+
   const msgContent = msg.message;
 
   // Mensagem com conteúdo nulo — Baileys apaga o conteúdo de mensagens view-once
@@ -359,12 +490,38 @@ async function handleIncomingMessage(msg) {
         db.prepare('UPDATE contacts SET wa_id = ? WHERE id = ?').run(waId, contact.id);
         contact = db.prepare('SELECT * FROM contacts WHERE id = ?').get(contact.id);
       }
+    } else if (remoteJid.endsWith('@lid')) {
+      // Mensagem LID sem contacto encontrado — tentar via mapa reverso
+      // Se o mapa já conhece o número real para este LID, usar esse contacto
+      const realJidFromMap = lidToJidMap.get(remoteJid);
+      if (realJidFromMap) {
+        const realPhone = realJidFromMap.split('@')[0];
+        contact = db.prepare('SELECT * FROM contacts WHERE phone = ? OR phone = ? OR wa_id = ?')
+          .get(realPhone, realPhone.replace(/^55/, ''), realJidFromMap);
+        if (contact) {
+          // Actualizar wa_id para o LID para matching futuro
+          db.prepare('UPDATE contacts SET wa_id = ? WHERE id = ?').run(remoteJid, contact.id);
+          contact = db.prepare('SELECT * FROM contacts WHERE id = ?').get(contact.id);
+          console.log(`[lid] Contacto real encontrado via mapa: ${remoteJid} → ${contact.phone}`);
+        }
+      }
+      // Se ainda não encontrado, criar novo (LID sem mapeamento conhecido)
+      if (!contact) {
+        if (fromMe) return;
+        const name = pushName || phone;
+        db.prepare('INSERT INTO contacts (phone, name, wa_id) VALUES (?, ?, ?)').run(phone, name, remoteJid);
+        contact = db.prepare('SELECT * FROM contacts WHERE wa_id = ?').get(remoteJid);
+        // Varrer mapa após criar — se entretanto o mapeamento chegou, fundir imediatamente
+        setTimeout(runLidMerge, 200);
+      }
     } else if (fromMe) {
       return;
     } else {
       const name = pushName || phone;
       db.prepare('INSERT INTO contacts (phone, name, wa_id) VALUES (?, ?, ?)').run(phone, name, waId);
       contact = db.prepare('SELECT * FROM contacts WHERE wa_id = ?').get(waId);
+      // Varrer mapa após criar novo contacto — apanhar LID pendente
+      setTimeout(runLidMerge, 200);
     }
   }
 
@@ -390,18 +547,84 @@ async function handleIncomingMessage(msg) {
     if (fromMe) {
       return;
     } else {
+      // Verificar se é resposta de avaliação — NÃO reabrir nesse caso
+      if (body && body.trim()) {
+        const ratingConv = db.prepare(
+          "SELECT * FROM conversations WHERE contact_id = ? AND status = 'closed' AND awaiting_rating = 1 ORDER BY id DESC LIMIT 1"
+        ).get(contact.id);
+        if (ratingConv) {
+          const score = parseInt(body.trim(), 10);
+          if (score >= 1 && score <= 5) {
+            try {
+              db.prepare('INSERT OR IGNORE INTO ratings (conversation_id, contact_id, attendant_id, score) VALUES (?, ?, ?, ?)')
+                .run(ratingConv.id, ratingConv.contact_id, ratingConv.assigned_to, score);
+              db.prepare('UPDATE conversations SET awaiting_rating = 0, updated_at = CURRENT_TIMESTAMP WHERE id = ?').run(ratingConv.id);
+              // Guardar a mensagem na conversa fechada (para histórico)
+              const inWaId = msg.key.id || null;
+              if (inWaId) {
+                const dup = db.prepare('SELECT id FROM messages WHERE wa_message_id = ?').get(inWaId);
+                if (!dup) {
+                  db.prepare('INSERT INTO messages (conversation_id, from_me, body, wa_message_id) VALUES (?, 0, ?, ?)')
+                    .run(ratingConv.id, sanitizeZalgo(body), inWaId);
+                }
+              }
+              console.log(`[rating] Avaliação ${score}/5 registada para conversa ${ratingConv.id} — conversa mantida fechada`);
+              if (io) io.emit('message:new', {
+                message: db.prepare('SELECT * FROM messages WHERE conversation_id = ? ORDER BY id DESC LIMIT 1').get(ratingConv.id),
+                conversation: getConversationWithContact(ratingConv.id),
+              });
+            } catch (err) {
+              console.error('[rating] Erro ao guardar avaliação:', err.message);
+            }
+            return; // Não reabrir
+          }
+        }
+      }
+
       // Mensagem recebida do cliente
-      const recentClosed = db
-        .prepare(`SELECT * FROM conversations WHERE contact_id = ? AND status = 'closed' AND updated_at >= datetime('now', '-24 hours') ORDER BY id DESC LIMIT 1`)
-        .get(contact.id);
+      // Reabertura inteligente: janela configurável via setting reopen_window_days
+      const reopenDays = parseInt(db.prepare("SELECT value FROM settings WHERE key = 'reopen_window_days'").get()?.value ?? '1', 10);
+      let closedToReopen = null;
+      if (reopenDays > 0) {
+        const windowExpr = reopenDays >= 9999
+          ? '1=1' // sempre
+          : `updated_at >= datetime('now', '-${reopenDays} days')`;
+        closedToReopen = db
+          .prepare(`SELECT * FROM conversations WHERE contact_id = ? AND status = 'closed' AND ${windowExpr} ORDER BY id DESC LIMIT 1`)
+          .get(contact.id);
+      }
 
       let reopened = false;
-      if (recentClosed) {
-        db.prepare(`UPDATE conversations SET status = 'waiting', snoozed_until = NULL, updated_at = CURRENT_TIMESTAMP WHERE id = ?`)
-          .run(recentClosed.id);
-        conversation = db.prepare('SELECT * FROM conversations WHERE id = ?').get(recentClosed.id);
+      let keptAttendant = false;
+      if (closedToReopen) {
+        // Verificar se atendente anterior ainda está activo e disponível
+        const prevAttendant = closedToReopen.assigned_to
+          ? db.prepare('SELECT id, name, status, active, on_shift FROM users WHERE id = ?').get(closedToReopen.assigned_to)
+          : null;
+        const prevAvailable = prevAttendant && prevAttendant.active && prevAttendant.status !== 'offline';
+
+        if (prevAvailable) {
+          // Reabrir e manter atendente anterior directamente como 'open'
+          db.prepare(`UPDATE conversations SET status = 'open', awaiting_rating = 0, snoozed_until = NULL, updated_at = CURRENT_TIMESTAMP WHERE id = ?`)
+            .run(closedToReopen.id);
+          conversation = db.prepare('SELECT * FROM conversations WHERE id = ?').get(closedToReopen.id);
+          keptAttendant = true;
+          // Notificar o atendente anterior que a conversa foi reaberta
+          if (io) {
+            io.to(`user:${prevAttendant.id}`).emit('conversation:reopened', {
+              conversation_id: closedToReopen.id,
+              contact_name: contact.name || contact.phone,
+            });
+          }
+          console.log(`[conv] Conversa ${closedToReopen.id} reaberta → atendente ${prevAttendant.name} (disponível)`);
+        } else {
+          // Reabrir mas sem atendente (vai para waiting para ser re-atribuído)
+          db.prepare(`UPDATE conversations SET status = 'waiting', assigned_to = NULL, awaiting_rating = 0, snoozed_until = NULL, updated_at = CURRENT_TIMESTAMP WHERE id = ?`)
+            .run(closedToReopen.id);
+          conversation = db.prepare('SELECT * FROM conversations WHERE id = ?').get(closedToReopen.id);
+          console.log(`[conv] Conversa ${closedToReopen.id} reaberta → sem atendente disponível, a aguardar atribuição`);
+        }
         reopened = true;
-        console.log(`[conv] Conversa ${conversation.id} reaberta por nova mensagem do contacto`);
       } else {
         db.prepare(`INSERT INTO conversations (contact_id, status) VALUES (?, 'waiting')`).run(contact.id);
         conversation = db
@@ -411,7 +634,7 @@ async function handleIncomingMessage(msg) {
 
       // Auto-assign (só para mensagens do cliente)
       // Apenas atribui se houver atendente online/no turno — sem fallback para offline
-      if (!reopened || !conversation.assigned_to) {
+      if (!keptAttendant && (!reopened || !conversation.assigned_to)) {
         const attendant = db.prepare(`
           SELECT u.id, COUNT(c.id) as load FROM users u
           LEFT JOIN conversations c ON c.assigned_to = u.id AND c.status = 'open'
@@ -422,6 +645,24 @@ async function handleIncomingMessage(msg) {
           db.prepare(`UPDATE conversations SET assigned_to = ?, status = 'open', updated_at = CURRENT_TIMESTAMP WHERE id = ?`)
             .run(attendant.id, conversation.id);
           conversation = db.prepare('SELECT * FROM conversations WHERE id = ?').get(conversation.id);
+
+          // Assinatura automática — apenas em conversas novas (não em reabertura)
+          const sigEnabled = !reopened && db.prepare("SELECT value FROM settings WHERE key = 'signature_enabled'").get()?.value === '1';
+          if (sigEnabled) {
+            const sigTemplate = db.prepare("SELECT value FROM settings WHERE key = 'signature_message'").get()?.value || '';
+            const attendantUser = db.prepare('SELECT name FROM users WHERE id = ?').get(attendant.id);
+            const sigBody = sigTemplate.replace(/\{\{nome\}\}/gi, attendantUser?.name || '').trim();
+            if (sigBody) {
+              try {
+                const sigWaId = await sendMessage(waId, sigBody);
+                db.prepare('INSERT INTO messages (conversation_id, from_me, body, wa_message_id) VALUES (?, 1, ?, ?)')
+                  .run(conversation.id, sigBody, sigWaId || null);
+                console.log(`[signature] Assinatura enviada para conversa ${conversation.id} (atendente: ${attendantUser?.name})`);
+              } catch (err) {
+                console.error('[signature] Erro ao enviar assinatura:', err.message);
+              }
+            }
+          }
         }
         // Se não há ninguém disponível, conversa fica 'waiting' sem atribuição
       }
@@ -693,4 +934,10 @@ function getConversationWithContact(conversationId) {
   `).get(conversationId);
 }
 
-module.exports = { initWhatsApp, sendMessage, sendMedia, editMessage, getStatus, disconnectWhatsApp };
+function getWAContacts() {
+  return Array.from(waContactsCache.values())
+    .filter(c => c.phone && /^\d{6,}$/.test(c.phone))
+    .sort((a, b) => (a.name || a.phone).localeCompare(b.name || b.phone, 'pt-BR'));
+}
+
+module.exports = { initWhatsApp, sendMessage, sendMedia, editMessage, getStatus, disconnectWhatsApp, getWAContacts, runLidMerge };

@@ -84,6 +84,36 @@ router.patch('/:id/shift', authMiddleware, ownerOnly, (req, res) => {
   res.json(user);
 });
 
+// GET /users/supervisor — dados em tempo real para painel supervisor (owner only)
+router.get('/supervisor', authMiddleware, ownerOnly, (req, res) => {
+  const attendants = db.prepare(`
+    SELECT u.id, u.name, u.status, u.on_shift,
+      COUNT(CASE WHEN c.status = 'open'    THEN 1 END) as open_count,
+      COUNT(CASE WHEN c.status = 'waiting' THEN 1 END) as waiting_count
+    FROM users u
+    LEFT JOIN conversations c ON c.assigned_to = u.id AND c.status IN ('open','waiting')
+    WHERE u.role = 'attendant' AND u.active = 1
+    GROUP BY u.id ORDER BY u.name ASC
+  `).all();
+
+  const result = attendants.map(a => {
+    const conversations = db.prepare(`
+      SELECT conv.id, con.name as contact_name, con.phone,
+        conv.status, conv.created_at, conv.updated_at, conv.priority,
+        (SELECT body FROM messages WHERE conversation_id = conv.id ORDER BY id DESC LIMIT 1) as last_message,
+        (SELECT COUNT(*) FROM messages WHERE conversation_id = conv.id AND from_me = 0 AND read = 0) as unread_count
+      FROM conversations conv
+      JOIN contacts con ON con.id = conv.contact_id
+      WHERE conv.assigned_to = ? AND conv.status IN ('open','waiting')
+      ORDER BY conv.updated_at DESC
+      LIMIT 10
+    `).all(a.id);
+    return { ...a, conversations };
+  });
+
+  res.json(result);
+});
+
 // GET /users/stats — métricas por atendente (owner only)
 router.get('/stats', authMiddleware, ownerOnly, (req, res) => {
   const stats = db

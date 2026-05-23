@@ -6,7 +6,7 @@ const cors = require('cors');
 const bcrypt = require('bcryptjs');
 
 const db = require('./db/schema');
-const { initWhatsApp, getStatus, disconnectWhatsApp } = require('./whatsapp/client');
+const { initWhatsApp, getStatus, disconnectWhatsApp, getWAContacts } = require('./whatsapp/client');
 const { initSocket } = require('./socket/handlers');
 const { authMiddleware, ownerOnly } = require('./middleware/auth');
 
@@ -21,6 +21,8 @@ const scheduledMessagesRoutes = require('./routes/scheduled-messages');
 const contactsRoutes = require('./routes/contacts');
 const searchRoutes = require('./routes/search');
 const keywordRulesRoutes = require('./routes/keyword-rules');
+const blacklistRoutes = require('./routes/blacklist');
+const broadcastRoutes = require('./routes/broadcast');
 const { startScheduledMessagesCron } = require('./scheduled/cron');
 
 const app = express();
@@ -54,6 +56,8 @@ app.use('/scheduled-messages', scheduledMessagesRoutes);
 app.use('/contacts', contactsRoutes);
 app.use('/search', searchRoutes);
 app.use('/keyword-rules', keywordRulesRoutes);
+app.use('/blacklist', blacklistRoutes);
+app.use('/broadcast', broadcastRoutes);
 
 // WhatsApp status
 app.get('/whatsapp/status', authMiddleware, (req, res) => {
@@ -64,6 +68,35 @@ app.get('/whatsapp/status', authMiddleware, (req, res) => {
 app.post('/whatsapp/disconnect', authMiddleware, ownerOnly, async (req, res) => {
   await disconnectWhatsApp();
   res.json({ ok: true });
+});
+
+// Listar contactos da agenda do WhatsApp (em memória, populado pelo contacts.upsert)
+app.get('/whatsapp/contacts', authMiddleware, ownerOnly, (req, res) => {
+  const all = getWAContacts();
+  // Marcar quais já existem na BD
+  const existing = new Set(
+    db.prepare('SELECT phone FROM contacts').all().map(r => r.phone)
+  );
+  const result = all.map(c => ({ ...c, already_imported: existing.has(c.phone) }));
+  res.json(result);
+});
+
+// Importar contactos seleccionados da agenda WA para a BD
+app.post('/whatsapp/contacts/import', authMiddleware, ownerOnly, (req, res) => {
+  const { contacts } = req.body; // [{ phone, name, wa_id }]
+  if (!Array.isArray(contacts) || contacts.length === 0)
+    return res.status(400).json({ error: 'Lista de contactos vazia' });
+
+  let imported = 0;
+  let skipped = 0;
+  const stmt = db.prepare('INSERT OR IGNORE INTO contacts (phone, name, wa_id) VALUES (?, ?, ?)');
+  for (const c of contacts) {
+    if (!c.phone) continue;
+    const result = stmt.run(c.phone, c.name || c.phone, c.wa_id || null);
+    if (result.changes > 0) imported++;
+    else skipped++;
+  }
+  res.json({ imported, skipped });
 });
 
 // Disponibiliza o io globalmente para rotas

@@ -34,13 +34,17 @@ function conversationQuery(extraWhere = '') {
 
 // GET /conversations
 router.get('/', authMiddleware, (req, res) => {
-  const { status } = req.query;
+  const { status, priority, attendant_id, tag_id } = req.query;
   const conditions = [];
   const params = [];
 
   if (req.user.role === 'attendant') {
     conditions.push('conv.assigned_to = ?');
     params.push(req.user.id);
+  } else if (attendant_id) {
+    // Owner a filtrar por atendente específico
+    conditions.push('conv.assigned_to = ?');
+    params.push(parseInt(attendant_id));
   }
 
   if (status === 'snoozed') {
@@ -48,6 +52,16 @@ router.get('/', authMiddleware, (req, res) => {
   } else {
     conditions.push("(conv.snoozed_until IS NULL OR conv.snoozed_until <= CURRENT_TIMESTAMP)");
     if (status) { conditions.push('conv.status = ?'); params.push(status); }
+  }
+
+  if (priority && ['urgent','normal','low'].includes(priority)) {
+    conditions.push('conv.priority = ?');
+    params.push(priority);
+  }
+
+  if (tag_id) {
+    conditions.push('EXISTS (SELECT 1 FROM conversation_tags ct WHERE ct.conversation_id = conv.id AND ct.tag_id = ?)');
+    params.push(parseInt(tag_id));
   }
 
   const where = conditions.length ? 'WHERE ' + conditions.join(' AND ') : '';
@@ -66,11 +80,18 @@ router.post('/outbound', authMiddleware, async (req, res) => {
   // Variante sem prefixo 55 para pesquisa
   const phoneNoPrefix = cleanPhone.replace(/^55/, '');
 
-  // Upsert contacto — procura também por número sem prefixo e por wa_id
+  // Upsert contacto — procura por número (com/sem prefixo) ou wa_id exacto
+  // Usar LIKE causava falsos positivos com contactos LID (ex: wa_id='559691412115@lid')
   let contact = db.prepare(`
     SELECT * FROM contacts
-    WHERE phone = ? OR phone = ? OR wa_id LIKE ? OR wa_id LIKE ?
-  `).get(cleanPhone, phoneNoPrefix, `${cleanPhone}%`, `${phoneNoPrefix}%`);
+    WHERE phone = ? OR phone = ?
+       OR wa_id = ? OR wa_id = ?
+       OR wa_id = ? OR wa_id = ?
+  `).get(
+    cleanPhone, phoneNoPrefix,
+    `${cleanPhone}@s.whatsapp.net`, `${phoneNoPrefix}@s.whatsapp.net`,
+    `${cleanPhone}@c.us`, `${phoneNoPrefix}@c.us`
+  );
 
   let isNewContact = false;
   if (!contact) {
@@ -109,7 +130,8 @@ router.post('/outbound', authMiddleware, async (req, res) => {
 
   // Extrair wa_id real do destinatário a partir do ID da mensagem enviada
   // Formato: "true_<waId>_<hash>" — permite detectar se é @lid ou @c.us diferente do que temos
-  if (waMessageId && isNewContact) {
+  // Corre sempre (não apenas para contactos novos) para manter wa_id actualizado quando muda para LID
+  if (waMessageId) {
     const parts = waMessageId.split('_');
     if (parts.length >= 2) {
       const recipientWaId = parts[1]; // ex: "88244750422224@lid" ou "559684078116@c.us"
@@ -123,9 +145,24 @@ router.post('/outbound', authMiddleware, async (req, res) => {
           db.prepare('DELETE FROM contacts WHERE id = ?').run(contact.id);
           contact = existingContact;
           conversation = db.prepare('SELECT * FROM conversations WHERE id = ?').get(conversation.id);
-        } else {
-          // Actualizar o wa_id do contacto novo com o valor real
+        } else if (isNewContact || recipientWaId.endsWith('@lid') || !contact.wa_id) {
+          // Actualizar wa_id: sempre para contactos novos, ou quando Baileys devolve LID (mais autoritativo)
           db.prepare('UPDATE contacts SET wa_id = ? WHERE id = ?').run(recipientWaId, contact.id);
+          contact = { ...contact, wa_id: recipientWaId };
+          // Guardar mapeamento LID em disco para sobreviver a reinícios
+          if (recipientWaId.endsWith('@lid')) {
+            try {
+              const lidNum = recipientWaId.split('@')[0];
+              const sp = process.env.WA_SESSION_PATH || './baileys-session';
+              const fs = require('fs');
+              const path = require('path');
+              fs.writeFileSync(
+                path.join(sp, `lid-mapping-${lidNum}_reverse.json`),
+                JSON.stringify(contact.phone)
+              );
+              console.log(`[outbound] LID mapeado: ${recipientWaId} → ${contact.phone}`);
+            } catch (_) {}
+          }
         }
       }
     }
@@ -318,6 +355,29 @@ router.post('/:id/transfer', authMiddleware, async (req, res) => {
   res.json(conv);
 });
 
+// PATCH /conversations/:id/assign — atribuição directa (owner only, sem log de transferência)
+router.patch('/:id/assign', authMiddleware, ownerOnly, (req, res) => {
+  const { attendant_id } = req.body;
+  if (!attendant_id) return res.status(400).json({ error: 'attendant_id obrigatório' });
+
+  const conv = db.prepare('SELECT * FROM conversations WHERE id = ?').get(req.params.id);
+  if (!conv) return res.status(404).json({ error: 'Conversa não encontrada' });
+
+  const attendant = db.prepare("SELECT id, name FROM users WHERE id = ? AND role = 'attendant' AND active = 1").get(attendant_id);
+  if (!attendant) return res.status(404).json({ error: 'Atendente não encontrado' });
+
+  db.prepare("UPDATE conversations SET assigned_to = ?, status = 'open', updated_at = CURRENT_TIMESTAMP WHERE id = ?")
+    .run(attendant_id, req.params.id);
+
+  const updated = db.prepare(conversationQuery('WHERE conv.id = ?')).get(req.params.id);
+  const io = ioInstance.get();
+  if (io) {
+    io.emit('conversation:updated', updated);
+    io.to(`user:${attendant_id}`).emit('conversation:assigned', { conversation: updated });
+  }
+  res.json(updated);
+});
+
 // PATCH /conversations/:id/close
 router.patch('/:id/close', authMiddleware, async (req, res) => {
   const conv = db.prepare('SELECT conv.*, con.wa_id, con.phone FROM conversations conv JOIN contacts con ON con.id = conv.contact_id WHERE conv.id = ?').get(req.params.id);
@@ -443,6 +503,91 @@ router.delete('/:id', authMiddleware, ownerOnly, (req, res) => {
   db.prepare('DELETE FROM messages WHERE conversation_id = ?').run(req.params.id);
   db.prepare('DELETE FROM conversations WHERE id = ?').run(req.params.id);
   res.json({ ok: true });
+});
+
+// GET /conversations/dashboard — dados ao vivo para o dashboard principal
+router.get('/dashboard', authMiddleware, ownerOnly, (req, res) => {
+  const slaMinutes = parseInt(db.prepare("SELECT value FROM settings WHERE key = 'sla_minutes'").get()?.value || '30', 10);
+
+  // Contagens ao vivo
+  const live = db.prepare(`
+    SELECT
+      COUNT(CASE WHEN status = 'waiting' THEN 1 END) as waiting,
+      COUNT(CASE WHEN status = 'open'    THEN 1 END) as open,
+      COUNT(CASE WHEN date(created_at,'localtime') = date('now','localtime') THEN 1 END) as total_today,
+      COUNT(CASE WHEN status = 'closed' AND date(updated_at,'localtime') = date('now','localtime') THEN 1 END) as closed_today
+    FROM conversations
+    WHERE snoozed_until IS NULL OR snoozed_until <= CURRENT_TIMESTAMP
+  `).get();
+
+  // SLA: conversas abertas/em espera há mais de X minutos sem resposta do atendente
+  const slaBreached = db.prepare(`
+    SELECT COUNT(*) as c FROM conversations
+    WHERE status IN ('open','waiting')
+    AND (snoozed_until IS NULL OR snoozed_until <= CURRENT_TIMESTAMP)
+    AND sla_alerted_at IS NULL
+    AND (julianday('now') - julianday(created_at)) * 24 * 60 > ?
+  `).get(slaMinutes)?.c || 0;
+
+  // TMA médio hoje
+  const tmaToday = db.prepare(`
+    SELECT ROUND(AVG((julianday(updated_at)-julianday(created_at))*24*60),1) as avg
+    FROM conversations
+    WHERE status='closed' AND date(updated_at,'localtime')=date('now','localtime')
+  `).get()?.avg || null;
+
+  // Tempo médio 1ª resposta hoje
+  const firstResponseToday = db.prepare(`
+    SELECT ROUND(AVG(response_seconds)/60.0,1) as avg FROM (
+      SELECT (strftime('%s', MIN(CASE WHEN m.from_me=1 THEN m.timestamp END))
+             -strftime('%s', MIN(CASE WHEN m.from_me=0 THEN m.timestamp END))) as response_seconds
+      FROM conversations c JOIN messages m ON m.conversation_id=c.id
+      WHERE date(c.created_at,'localtime')=date('now','localtime')
+      GROUP BY c.id HAVING response_seconds>0 AND response_seconds<86400
+    )
+  `).get()?.avg || null;
+
+  // Volume por hora hoje
+  const hourly = db.prepare(`
+    SELECT strftime('%H',created_at,'localtime') as hour, COUNT(*) as total
+    FROM conversations WHERE date(created_at,'localtime')=date('now','localtime')
+    GROUP BY hour ORDER BY hour ASC
+  `).all();
+
+  // Atendentes com contagem de conversas abertas
+  const attendants = db.prepare(`
+    SELECT u.id, u.name, u.status, u.on_shift,
+      COUNT(CASE WHEN c.status IN ('open','waiting') THEN 1 END) as active_count
+    FROM users u
+    LEFT JOIN conversations c ON c.assigned_to=u.id AND c.status IN ('open','waiting')
+    WHERE u.role='attendant' AND u.active=1
+    GROUP BY u.id ORDER BY u.status='online' DESC, active_count DESC
+  `).all();
+
+  // Últimas 5 conversas abertas/espera mais antigas (SLA risk)
+  const atRisk = db.prepare(`
+    SELECT conv.id, con.name as contact_name, con.phone,
+      conv.status, conv.created_at,
+      u.name as attendant_name,
+      ROUND((julianday('now')-julianday(conv.created_at))*24*60,0) as minutes_open
+    FROM conversations conv
+    JOIN contacts con ON con.id=conv.contact_id
+    LEFT JOIN users u ON u.id=conv.assigned_to
+    WHERE conv.status IN ('open','waiting')
+    AND (conv.snoozed_until IS NULL OR conv.snoozed_until<=CURRENT_TIMESTAMP)
+    ORDER BY conv.created_at ASC LIMIT 5
+  `).all();
+
+  // Totais históricos (todos os tempos)
+  const totals = db.prepare(`
+    SELECT COUNT(*) as total,
+      COUNT(CASE WHEN status='waiting' THEN 1 END) as waiting,
+      COUNT(CASE WHEN status='open'    THEN 1 END) as open,
+      COUNT(CASE WHEN status='closed'  THEN 1 END) as closed
+    FROM conversations
+  `).get();
+
+  res.json({ live: { ...live, sla_breached: slaBreached }, tmaToday, firstResponseToday, hourly, attendants, atRisk, slaMinutes, totals });
 });
 
 // GET /conversations/metrics

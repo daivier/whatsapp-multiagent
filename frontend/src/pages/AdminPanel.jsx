@@ -5,6 +5,7 @@ import ChatWindow from '../components/ChatWindow';
 import { useAuth } from '../context/AuthContext';
 import { useNotifications } from '../hooks/useNotifications';
 import ReportsPage from './ReportsPage';
+import DashboardPage from './DashboardPage';
 
 const COLORS = ['#ef4444','#f97316','#eab308','#22c55e','#3b82f6','#8b5cf6','#ec4899','#6b7280'];
 
@@ -24,7 +25,7 @@ function SimpleBar({ label, value, max, color }) {
 
 export default function AdminPanel({ socket }) {
   const { user, logout } = useAuth();
-  const [tab, setTab] = useState('conversations');
+  const [tab, setTab] = useState('dashboard');
   const [selectedConv, setSelectedConv] = useState(null);
   const [takenNotice, setTakenNotice] = useState(null);
   useNotifications(socket, selectedConv, user);
@@ -49,7 +50,6 @@ export default function AdminPanel({ socket }) {
   }, []);
 
   const [attendants, setAttendants] = useState([]);
-  const [metrics, setMetrics] = useState(null);
   // reports state managed by ReportsPage component
   const [qrCode, setQrCode] = useState(null);
   const [whatsappReady, setWhatsappReady] = useState(false);
@@ -69,13 +69,37 @@ export default function AdminPanel({ socket }) {
   const [contactSearch, setContactSearch] = useState('');
   const [editingContact, setEditingContact] = useState(null);
 
+  // Novo contacto individual
+  const [showNewContact, setShowNewContact] = useState(false);
+  const [newContact, setNewContact] = useState({ phone: '', name: '' });
+  const [newContactError, setNewContactError] = useState('');
+
+  // Importar CSV
+  const [showCsvModal, setShowCsvModal] = useState(false);
+  const [csvRows, setCsvRows] = useState([]); // [{ phone, name }]
+  const [csvError, setCsvError] = useState('');
+  const [csvImportResult, setCsvImportResult] = useState(null);
+
   const [scheduled, setScheduled] = useState([]);
   const [transferLogs, setTransferLogs] = useState([]);
   const [keywordRules, setKeywordRules] = useState([]);
   const [newKR, setNewKR] = useState({ keyword: '', response: '' });
 
+  const [blacklist, setBlacklist] = useState([]);
+  const [newBlocked, setNewBlocked] = useState({ phone: '', reason: '' });
+
+  // Broadcast state
+  const [broadcastContacts, setBroadcastContacts] = useState([]);
+  const [broadcastSearch, setBroadcastSearch] = useState('');
+  const [broadcastSelected, setBroadcastSelected] = useState(new Set());
+  const [broadcastMessage, setBroadcastMessage] = useState('');
+  const [broadcastSending, setBroadcastSending] = useState(false);
+  const [broadcastProgress, setBroadcastProgress] = useState(null); // { sent, failed, total }
+  const [broadcastDone, setBroadcastDone] = useState(null); // { sent, failed, total }
+
   const [settings, setSettings] = useState({
     bot_enabled: '0', bot_message: '', rating_enabled: '0', rating_message: '',
+    signature_enabled: '0', signature_message: '', reopen_window_days: '1',
     hours_0: 'closed', hours_1: '08:00-18:00', hours_2: '08:00-18:00',
     hours_3: '08:00-18:00', hours_4: '08:00-18:00', hours_5: '08:00-18:00',
     hours_6: '09:00-13:00',
@@ -83,7 +107,7 @@ export default function AdminPanel({ socket }) {
   const [settingsSaved, setSettingsSaved] = useState(false);
 
   useEffect(() => {
-    loadAttendants(); loadMetrics(); checkWhatsapp();
+    loadAttendants(); checkWhatsapp();
     loadQuickReplies(); loadTags(); loadSettings();
   }, []);
 
@@ -92,6 +116,8 @@ export default function AdminPanel({ socket }) {
     if (tab === 'contacts') loadContacts();
     if (tab === 'transfers') loadTransferLogs();
     if (tab === 'automation') { loadKeywordRules(); loadAttendants(); }
+    if (tab === 'blacklist') loadBlacklist();
+    if (tab === 'broadcast') loadBroadcastContacts();
   }, [tab]);
 
   useEffect(() => {
@@ -101,20 +127,27 @@ export default function AdminPanel({ socket }) {
     socket.on('whatsapp:disconnected', () => setWhatsappReady(false));
     socket.on('user:status', ({ userId, status }) => setUserStatuses(prev => ({ ...prev, [userId]: status })));
     socket.on('user:shift', () => loadAttendants());
+    socket.on('conversation:reopened', ({ contact_name }) => {
+      setTakenNotice(`🔁 Conversa com "${contact_name}" foi reaberta — o cliente voltou!`);
+      setTimeout(() => setTakenNotice(null), 7000);
+    });
+    socket.on('broadcast:progress', (data) => setBroadcastProgress(data));
+    socket.on('broadcast:done', (data) => {
+      setBroadcastProgress(null);
+      setBroadcastDone(data);
+      setBroadcastSending(false);
+    });
     return () => {
       socket.off('whatsapp:qr'); socket.off('whatsapp:ready');
       socket.off('whatsapp:disconnected'); socket.off('user:status');
-      socket.off('user:shift');
+      socket.off('user:shift'); socket.off('conversation:reopened');
+      socket.off('broadcast:progress'); socket.off('broadcast:done');
     };
   }, [socket]);
 
   async function loadAttendants() {
     const { data } = await api.get('/users');
     setAttendants(Array.isArray(data) ? data.filter(u => u.role === 'attendant') : []);
-  }
-  async function loadMetrics() {
-    const { data } = await api.get('/conversations/metrics');
-    setMetrics(data);
   }
   async function checkWhatsapp() {
     const { data } = await api.get('/whatsapp/status');
@@ -151,6 +184,65 @@ export default function AdminPanel({ socket }) {
     if (!confirm('Remover todos os contactos inválidos (grupos, broadcasts, newsletters) sem conversas?')) return;
     const { data } = await api.delete('/contacts/cleanup/invalid');
     alert(`${data.deleted} contacto(s) removido(s).`);
+    loadContacts(contactSearch);
+  }
+  async function saveNewContact() {
+    setNewContactError('');
+    const phone = newContact.phone.trim().replace(/[\s\-().]/g, '');
+    if (!phone) return setNewContactError('Número obrigatório');
+    try {
+      await api.post('/contacts', { phone, name: newContact.name.trim() || phone });
+      setShowNewContact(false);
+      setNewContact({ phone: '', name: '' });
+      loadContacts(contactSearch);
+    } catch (e) {
+      setNewContactError(e.response?.data?.error || 'Erro ao criar contacto');
+    }
+  }
+
+  function parseCsv(text) {
+    const lines = text.split(/\r?\n/).filter(l => l.trim());
+    if (lines.length === 0) return [];
+    // Detectar separador: ; ou ,
+    const sep = lines[0].includes(';') ? ';' : ',';
+    const rows = lines.map(l => l.split(sep).map(c => c.trim().replace(/^"|"$/g, '')));
+    // Detectar se primeira linha é cabeçalho
+    const first = rows[0];
+    const isHeader = first.some(c => /nome|name|telefone|phone|número|numero/i.test(c));
+    const data = isHeader ? rows.slice(1) : rows;
+    // Tentar identificar colunas phone e name
+    let phoneIdx = 0, nameIdx = 1;
+    if (isHeader) {
+      first.forEach((c, i) => {
+        if (/telefone|phone|número|numero/i.test(c)) phoneIdx = i;
+        if (/nome|name/i.test(c)) nameIdx = i;
+      });
+    }
+    return data
+      .map(r => ({ phone: (r[phoneIdx] || '').replace(/[\s\-().+]/g, ''), name: r[nameIdx] || '' }))
+      .filter(r => r.phone && /\d{6,}/.test(r.phone));
+  }
+
+  function handleCsvFile(e) {
+    setCsvError('');
+    setCsvImportResult(null);
+    const file = e.target.files[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = ev => {
+      const rows = parseCsv(ev.target.result);
+      if (rows.length === 0) setCsvError('Nenhum número válido encontrado no ficheiro.');
+      else setCsvRows(rows);
+    };
+    reader.readAsText(file, 'UTF-8');
+    e.target.value = '';
+  }
+
+  async function doCsvImport() {
+    if (csvRows.length === 0) return;
+    const { data } = await api.post('/whatsapp/contacts/import', { contacts: csvRows });
+    setCsvImportResult(data);
+    setCsvRows([]);
     loadContacts(contactSearch);
   }
   async function loadTransferLogs() {
@@ -239,12 +331,57 @@ export default function AdminPanel({ socket }) {
     loadAttendants();
   }
 
+  async function loadBroadcastContacts(q = '') {
+    const { data } = await api.get('/contacts', { params: q ? { q } : {} });
+    setBroadcastContacts(Array.isArray(data) ? data.filter(c => c.phone && !c.phone.includes('@')) : []);
+  }
+  async function sendBroadcast() {
+    if (broadcastSelected.size === 0 || !broadcastMessage.trim()) return;
+    if (!confirm(`Enviar mensagem para ${broadcastSelected.size} contacto(s)?`)) return;
+    setBroadcastSending(true);
+    setBroadcastDone(null);
+    setBroadcastProgress({ sent: 0, failed: 0, total: broadcastSelected.size });
+    try {
+      await api.post('/broadcast', {
+        contact_ids: Array.from(broadcastSelected),
+        message: broadcastMessage.trim(),
+      });
+    } catch (err) {
+      alert('Erro ao iniciar envio: ' + (err.response?.data?.error || err.message));
+      setBroadcastSending(false);
+      setBroadcastProgress(null);
+    }
+  }
+
+  async function loadBlacklist() {
+    const { data } = await api.get('/blacklist');
+    setBlacklist(Array.isArray(data) ? data : []);
+  }
+  async function addToBlacklist(e) {
+    e.preventDefault();
+    if (!newBlocked.phone.trim()) return;
+    try {
+      await api.post('/blacklist', newBlocked);
+      setNewBlocked({ phone: '', reason: '' });
+      loadBlacklist();
+    } catch (err) {
+      alert(err.response?.data?.error || 'Erro ao adicionar à blacklist');
+    }
+  }
+  async function removeFromBlacklist(id, phone) {
+    if (!confirm(`Remover ${phone} da blacklist?`)) return;
+    await api.delete(`/blacklist/${id}`);
+    loadBlacklist();
+  }
+
   const activeAttendants = attendants.filter(a => a.active);
   const TABS = [
-    ['conversations','Conversas'],['attendants','Atendentes'],['contacts','Contactos'],
-    ['metrics','Métricas'],['reports','Relatórios'],['scheduled','Agendamentos'],
+    ['dashboard','📊 Dashboard'],['conversations','Conversas'],['attendants','Atendentes'],['contacts','Contactos'],
+    ['reports','Relatórios'],['scheduled','Agendamentos'],
     ['transfers','Transferências'],['quickreplies','Respostas Rápidas'],
-    ['tags','Etiquetas'],['automation','🤖 Automação'],['bot','Bot'],['rating','⭐ Avaliação'],['whatsapp','WhatsApp'],
+    ['tags','Etiquetas'],['automation','🤖 Automação'],['bot','Bot'],
+    ['signature','🔔 Assinatura'],['rating','⭐ Avaliação'],
+    ['blacklist','🚫 Blacklist'],['broadcast','📣 Envio em Massa'],['whatsapp','WhatsApp'],
   ];
 
   function selectTab(key) {
@@ -367,12 +504,103 @@ export default function AdminPanel({ socket }) {
         {/* CONTACTOS */}
         {tab === 'contacts' && (
           <div style={S.section}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', marginBottom: '1.5rem', flexWrap: 'wrap' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginBottom: '1.5rem', flexWrap: 'wrap' }}>
               <h2 style={{ margin: 0, fontSize: '1.15rem', fontWeight: 700, color: 'var(--text)' }}>Contactos</h2>
-              <button style={{ ...S.outlineBtn, color: 'var(--danger)', borderColor: 'var(--danger)', fontSize: '0.8rem' }} onClick={cleanupInvalidContacts}>
+              <button style={{ ...S.addBtn, fontSize: '0.82rem' }} onClick={() => { setShowNewContact(true); setNewContactError(''); setNewContact({ phone: '', name: '' }); }}>
+                ➕ Novo contacto
+              </button>
+              <button style={{ ...S.outlineBtn, fontSize: '0.82rem' }} onClick={() => { setShowCsvModal(true); setCsvRows([]); setCsvError(''); setCsvImportResult(null); }}>
+                📥 Importar CSV
+              </button>
+              <button style={{ ...S.outlineBtn, color: 'var(--danger)', borderColor: 'var(--danger)', fontSize: '0.82rem' }} onClick={cleanupInvalidContacts}>
                 🧹 Limpar inválidos
               </button>
             </div>
+
+            {/* Modal novo contacto */}
+            {showNewContact && (
+              <div style={S.modalOverlay}>
+                <div style={{ ...S.modal, maxWidth: '400px' }}>
+                  <h3 style={{ margin: '0 0 1.25rem', fontSize: '1rem', color: 'var(--text)' }}>➕ Novo Contacto</h3>
+                  <label style={S.fieldLabel}>Número de telefone *</label>
+                  <input style={{ ...S.input, width: '100%', boxSizing: 'border-box', marginBottom: '0.75rem' }}
+                    placeholder="Ex: 5596912345678"
+                    value={newContact.phone}
+                    onChange={e => setNewContact(p => ({ ...p, phone: e.target.value }))}
+                    onKeyDown={e => e.key === 'Enter' && saveNewContact()}
+                    autoFocus
+                  />
+                  <label style={S.fieldLabel}>Nome</label>
+                  <input style={{ ...S.input, width: '100%', boxSizing: 'border-box', marginBottom: '1rem' }}
+                    placeholder="Nome do contacto (opcional)"
+                    value={newContact.name}
+                    onChange={e => setNewContact(p => ({ ...p, name: e.target.value }))}
+                    onKeyDown={e => e.key === 'Enter' && saveNewContact()}
+                  />
+                  {newContactError && <p style={{ color: 'var(--danger)', fontSize: '0.82rem', margin: '0 0 0.75rem' }}>{newContactError}</p>}
+                  <div style={{ display: 'flex', gap: '0.5rem', justifyContent: 'flex-end' }}>
+                    <button style={S.outlineBtn} onClick={() => setShowNewContact(false)}>Cancelar</button>
+                    <button style={S.addBtn} onClick={saveNewContact}>Guardar</button>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Modal importar CSV */}
+            {showCsvModal && (
+              <div style={S.modalOverlay}>
+                <div style={{ ...S.modal, width: '100%', maxWidth: '560px', maxHeight: '80vh', display: 'flex', flexDirection: 'column' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '1rem' }}>
+                    <h3 style={{ margin: 0, fontSize: '1rem', color: 'var(--text)' }}>📥 Importar Contactos por CSV</h3>
+                    <button style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: '1.1rem', color: 'var(--muted)' }} onClick={() => setShowCsvModal(false)}>✕</button>
+                  </div>
+
+                  {csvImportResult ? (
+                    <div style={{ textAlign: 'center', padding: '1.5rem 0' }}>
+                      <div style={{ fontSize: '2rem', marginBottom: '0.5rem' }}>✅</div>
+                      <p style={{ fontWeight: 700, color: 'var(--text)', margin: '0 0 0.25rem' }}>{csvImportResult.imported} contacto(s) importado(s)</p>
+                      <p style={{ color: 'var(--hint)', fontSize: '0.85rem', margin: 0 }}>{csvImportResult.skipped} já existiam</p>
+                      <button style={{ ...S.addBtn, marginTop: '1.25rem' }} onClick={() => setShowCsvModal(false)}>Fechar</button>
+                    </div>
+                  ) : csvRows.length > 0 ? (
+                    <>
+                      <p style={{ color: 'var(--muted)', fontSize: '0.85rem', margin: '0 0 0.75rem' }}>{csvRows.length} contacto(s) detectado(s) — confirma a importação:</p>
+                      <div style={{ overflowY: 'auto', flex: 1, border: '1px solid var(--border-m)', borderRadius: 'var(--r-sm)', marginBottom: '1rem' }}>
+                        <table style={{ ...S.table, margin: 0 }}>
+                          <thead><tr><th>Nome</th><th>Número</th></tr></thead>
+                          <tbody>
+                            {csvRows.slice(0, 50).map((r, i) => (
+                              <tr key={i}>
+                                <td>{r.name || '—'}</td>
+                                <td style={{ color: 'var(--muted)', fontSize: '0.85rem' }}>{r.phone}</td>
+                              </tr>
+                            ))}
+                            {csvRows.length > 50 && <tr><td colSpan={2} style={{ color: 'var(--hint)', textAlign: 'center', fontSize: '0.8rem' }}>...e mais {csvRows.length - 50}</td></tr>}
+                          </tbody>
+                        </table>
+                      </div>
+                      <div style={{ display: 'flex', gap: '0.5rem', justifyContent: 'flex-end' }}>
+                        <button style={S.outlineBtn} onClick={() => setCsvRows([])}>← Voltar</button>
+                        <button style={S.addBtn} onClick={doCsvImport}>📥 Importar {csvRows.length} contacto(s)</button>
+                      </div>
+                    </>
+                  ) : (
+                    <>
+                      <p style={{ color: 'var(--muted)', fontSize: '0.85rem', margin: '0 0 1rem' }}>
+                        Seleciona um ficheiro <strong>.csv</strong> com colunas <code>nome</code> e <code>telefone</code> (separador <code>,</code> ou <code>;</code>).
+                        O cabeçalho é opcional.<br />
+                        Exemplo: <code>João Silva;5596912345678</code>
+                      </p>
+                      {csvError && <p style={{ color: 'var(--danger)', fontSize: '0.82rem', margin: '0 0 0.75rem' }}>{csvError}</p>}
+                      <label style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem', border: '2px dashed var(--border-m)', borderRadius: 'var(--r-sm)', padding: '2rem', cursor: 'pointer', color: 'var(--muted)', fontSize: '0.9rem' }}>
+                        📂 Clica para escolher o ficheiro CSV
+                        <input type="file" accept=".csv,.txt" style={{ display: 'none' }} onChange={handleCsvFile} />
+                      </label>
+                    </>
+                  )}
+                </div>
+              </div>
+            )}
 
             {editingContact && (
               <div style={S.modalOverlay}>
@@ -435,20 +663,10 @@ export default function AdminPanel({ socket }) {
           </div>
         )}
 
-        {/* MÉTRICAS */}
-        {tab === 'metrics' && metrics && (
-          <div style={S.section}>
-            <h2 style={S.sectionTitle}>Métricas</h2>
-            <div style={S.cards}>
-              {[['Total', metrics.total, 'var(--accent)'], ['Aguarda', metrics.waiting, 'var(--warn)'], ['Abertas', metrics.open, 'var(--success)'], ['Fechadas', metrics.closed, 'var(--hint)']].map(([label, value, color]) => (
-                <div key={label} style={{ ...S.card, borderTop: `3px solid ${color}` }}>
-                  <p style={{ ...S.cardValue, color }}>{value}</p>
-                  <p style={S.cardLabel}>{label}</p>
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
+
+        {/* DASHBOARD */}
+        {tab === 'dashboard' && <DashboardPage socket={socket} />}
+
 
         {/* RELATÓRIOS */}
         {tab === 'reports' && <ReportsPage />}
@@ -646,6 +864,29 @@ export default function AdminPanel({ socket }) {
                 {settingsSaved ? '✓ Guardado' : 'Guardar'}
               </button>
             </div>
+
+            {/* --- Reabertura inteligente --- */}
+            <h3 style={{ ...S.subTitle, marginTop: '2rem' }}>🔁 Reabertura Inteligente</h3>
+            <p style={{ color: 'var(--muted)', fontSize: '0.85rem', marginBottom: '1rem' }}>
+              Quando um cliente responde a uma conversa fechada, dentro da janela definida, a conversa é reaberta automaticamente.
+              Se o atendente anterior estiver disponível, a conversa volta directamente para ele; caso contrário vai para a fila de espera.
+            </p>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', flexWrap: 'wrap' }}>
+              <label style={{ fontSize: '0.85rem', color: 'var(--text)', fontWeight: 500 }}>Janela de reabertura:</label>
+              <select style={{ ...S.select, fontSize: '0.85rem' }}
+                value={settings.reopen_window_days || '1'}
+                onChange={e => setSettings(s => ({ ...s, reopen_window_days: e.target.value }))}>
+                <option value="0">Nunca reabrir (sempre nova conversa)</option>
+                <option value="1">1 dia (24 horas)</option>
+                <option value="3">3 dias</option>
+                <option value="7">7 dias</option>
+                <option value="30">30 dias</option>
+                <option value="9999">Sempre reabrir</option>
+              </select>
+              <button style={S.addBtn} onClick={saveSettings}>
+                {settingsSaved ? '✓ Guardado' : 'Guardar'}
+              </button>
+            </div>
           </div>
         )}
 
@@ -703,6 +944,40 @@ export default function AdminPanel({ socket }) {
           </div>
         )}
 
+        {/* ASSINATURA */}
+        {tab === 'signature' && (
+          <div style={S.section}>
+            <h2 style={S.sectionTitle}>🔔 Assinatura Automática</h2>
+            <p style={{ color: 'var(--muted)', fontSize: '0.85rem', marginBottom: '1.5rem' }}>
+              Quando uma nova conversa é atribuída a um atendente, é enviada automaticamente uma mensagem de saudação com o nome do atendente.
+              Use <strong style={{ color: 'var(--accent)' }}>{'{{nome}}'}</strong> para inserir o nome do atendente.
+            </p>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem', maxWidth: '560px' }}>
+              <label style={S.settingRow}>
+                <span style={{ fontWeight: 500 }}>Ativar assinatura automática</span>
+                <input type="checkbox" checked={settings.signature_enabled === '1'}
+                  onChange={e => setSettings(s => ({ ...s, signature_enabled: e.target.checked ? '1' : '0' }))} />
+              </label>
+              <div>
+                <label style={{ fontSize: '0.85rem', color: 'var(--muted)', display: 'block', marginBottom: '0.35rem', fontWeight: 600 }}>
+                  Mensagem de saudação
+                </label>
+                <textarea
+                  style={{ ...S.input, width: '100%', resize: 'vertical', minHeight: '90px', boxSizing: 'border-box', fontFamily: 'inherit' }}
+                  value={settings.signature_message || ''}
+                  onChange={e => setSettings(s => ({ ...s, signature_message: e.target.value }))}
+                />
+                <p style={{ fontSize: '0.75rem', color: 'var(--hint)', margin: '0.35rem 0 0' }}>
+                  Exemplo: <em>Olá! 😊 Meu nome é <strong>{'{{nome}}'}</strong> e estou aqui para ajudá-lo.</em>
+                </p>
+              </div>
+              <button style={{ ...S.addBtn, alignSelf: 'flex-start' }} onClick={saveSettings}>
+                {settingsSaved ? '✓ Guardado' : 'Guardar'}
+              </button>
+            </div>
+          </div>
+        )}
+
         {/* AVALIAÇÃO */}
         {tab === 'rating' && (
           <div style={S.section}>
@@ -735,6 +1010,172 @@ export default function AdminPanel({ socket }) {
             </div>
           </div>
         )}
+
+        {/* BLACKLIST */}
+        {tab === 'blacklist' && (
+          <div style={S.section}>
+            <h2 style={S.sectionTitle}>🚫 Blacklist de Contactos</h2>
+            <p style={{ color: 'var(--muted)', fontSize: '0.85rem', marginBottom: '1.5rem' }}>
+              Números nesta lista são silenciosamente ignorados — as mensagens não criam conversas nem são processadas.
+            </p>
+            <form onSubmit={addToBlacklist} style={{ ...S.form, flexWrap: 'wrap', marginBottom: '1.5rem' }}>
+              <input style={{ ...S.input, width: '180px' }} placeholder="Número (ex: 5511999999999)" value={newBlocked.phone}
+                onChange={e => setNewBlocked(p => ({ ...p, phone: e.target.value }))} required />
+              <input style={{ ...S.input, flex: 1, minWidth: '180px' }} placeholder="Motivo (opcional)" value={newBlocked.reason}
+                onChange={e => setNewBlocked(p => ({ ...p, reason: e.target.value }))} />
+              <button style={S.addBtn} type="submit">Bloquear</button>
+            </form>
+            {blacklist.length === 0 ? (
+              <p style={{ color: 'var(--hint)', fontSize: '0.88rem' }}>Nenhum número bloqueado.</p>
+            ) : (
+              <table style={S.table}>
+                <thead>
+                  <tr>
+                    <th style={{ textAlign: 'left', padding: '0.5rem', borderBottom: '1px solid var(--border)', color: 'var(--muted)', fontWeight: 600, fontSize: '0.8rem' }}>Número</th>
+                    <th style={{ textAlign: 'left', padding: '0.5rem', borderBottom: '1px solid var(--border)', color: 'var(--muted)', fontWeight: 600, fontSize: '0.8rem' }}>Motivo</th>
+                    <th style={{ textAlign: 'left', padding: '0.5rem', borderBottom: '1px solid var(--border)', color: 'var(--muted)', fontWeight: 600, fontSize: '0.8rem' }}>Bloqueado por</th>
+                    <th style={{ textAlign: 'left', padding: '0.5rem', borderBottom: '1px solid var(--border)', color: 'var(--muted)', fontWeight: 600, fontSize: '0.8rem' }}>Data</th>
+                    <th></th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {blacklist.map(b => (
+                    <tr key={b.id} style={{ borderBottom: '1px solid var(--border)' }}>
+                      <td style={{ padding: '0.6rem 0.5rem', fontWeight: 600, color: 'var(--danger)', fontSize: '0.88rem' }}>🚫 {b.phone}</td>
+                      <td style={{ padding: '0.6rem 0.5rem', color: 'var(--muted)', fontSize: '0.85rem', maxWidth: '220px', wordBreak: 'break-word' }}>{b.reason || '—'}</td>
+                      <td style={{ padding: '0.6rem 0.5rem', color: 'var(--muted)', fontSize: '0.85rem' }}>{b.created_by_name || '—'}</td>
+                      <td style={{ padding: '0.6rem 0.5rem', color: 'var(--hint)', fontSize: '0.8rem', whiteSpace: 'nowrap' }}>
+                        {new Date(b.created_at).toLocaleDateString('pt-BR')}
+                      </td>
+                      <td style={{ padding: '0.6rem 0.5rem' }}>
+                        <button style={{ ...S.outlineBtn, color: 'var(--danger)', borderColor: 'var(--danger)' }}
+                          onClick={() => removeFromBlacklist(b.id, b.phone)}>
+                          Desbloquear
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            )}
+          </div>
+        )}
+
+        {/* ENVIO EM MASSA */}
+        {tab === 'broadcast' && (() => {
+          const filtered = broadcastContacts.filter(c => {
+            const q = broadcastSearch.toLowerCase();
+            return !q || (c.name || '').toLowerCase().includes(q) || (c.phone || '').includes(q);
+          });
+          const allFilteredSelected = filtered.length > 0 && filtered.every(c => broadcastSelected.has(c.id));
+          const pct = broadcastProgress ? Math.round(((broadcastProgress.sent + broadcastProgress.failed) / broadcastProgress.total) * 100) : 0;
+          return (
+            <div style={S.section}>
+              <h2 style={S.sectionTitle}>📣 Envio em Massa</h2>
+              <p style={{ color: 'var(--muted)', fontSize: '0.85rem', marginBottom: '1.5rem' }}>
+                Selecciona os contactos e escreve a mensagem. O envio é feito com intervalo de 1,5s entre cada mensagem para evitar bloqueios.
+              </p>
+
+              <div style={{ display: 'flex', gap: '1.5rem', flexWrap: 'wrap', alignItems: 'flex-start' }}>
+                {/* Painel esquerdo: lista de contactos */}
+                <div style={{ flex: '1 1 300px', minWidth: '260px', maxWidth: '420px' }}>
+                  <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '0.75rem', alignItems: 'center' }}>
+                    <input style={{ ...S.input, flex: 1 }} placeholder="Pesquisar contacto..."
+                      value={broadcastSearch}
+                      onChange={e => { setBroadcastSearch(e.target.value); loadBroadcastContacts(e.target.value); }} />
+                    <button style={S.outlineBtn} onClick={() => {
+                      if (allFilteredSelected) {
+                        setBroadcastSelected(prev => { const next = new Set(prev); filtered.forEach(c => next.delete(c.id)); return next; });
+                      } else {
+                        setBroadcastSelected(prev => { const next = new Set(prev); filtered.forEach(c => next.add(c.id)); return next; });
+                      }
+                    }}>
+                      {allFilteredSelected ? 'Desmarcar todos' : 'Selec. todos'}
+                    </button>
+                  </div>
+                  <div style={{ fontSize: '0.78rem', color: 'var(--hint)', marginBottom: '0.5rem' }}>
+                    {broadcastSelected.size} seleccionado(s) · {filtered.length} visível(is)
+                  </div>
+                  <div style={{ maxHeight: '380px', overflowY: 'auto', border: '1px solid var(--border)', borderRadius: 'var(--r-md)', background: 'var(--bg)' }}>
+                    {filtered.length === 0 && (
+                      <div style={{ padding: '1rem', color: 'var(--hint)', textAlign: 'center', fontSize: '0.85rem' }}>Sem contactos</div>
+                    )}
+                    {filtered.map(c => (
+                      <label key={c.id} style={{ display: 'flex', alignItems: 'center', gap: '0.65rem', padding: '0.55rem 0.75rem', cursor: 'pointer', borderBottom: '1px solid var(--border)', background: broadcastSelected.has(c.id) ? 'var(--accent-l)' : 'transparent', transition: 'background 0.1s' }}>
+                        <input type="checkbox" checked={broadcastSelected.has(c.id)}
+                          onChange={e => setBroadcastSelected(prev => { const next = new Set(prev); e.target.checked ? next.add(c.id) : next.delete(c.id); return next; })} />
+                        <div style={{ minWidth: 28, height: 28, borderRadius: '50%', background: 'var(--accent-l)', color: 'var(--accent)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 700, fontSize: '0.75rem', flexShrink: 0 }}>
+                          {(c.name || c.phone || '?')[0].toUpperCase()}
+                        </div>
+                        <div style={{ minWidth: 0 }}>
+                          <div style={{ fontWeight: 600, fontSize: '0.85rem', color: 'var(--text)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{c.name || c.phone}</div>
+                          {c.name && <div style={{ fontSize: '0.75rem', color: 'var(--muted)' }}>{c.phone}</div>}
+                        </div>
+                      </label>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Painel direito: mensagem + envio */}
+                <div style={{ flex: '1 1 320px', minWidth: '280px', display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+                  <div>
+                    <label style={{ ...S.fieldLabel, marginBottom: '0.4rem' }}>Mensagem a enviar</label>
+                    <textarea
+                      style={{ ...S.input, width: '100%', boxSizing: 'border-box', minHeight: '140px', resize: 'vertical', fontFamily: 'inherit', fontSize: '0.9rem' }}
+                      placeholder="Escreve a mensagem aqui..."
+                      value={broadcastMessage}
+                      disabled={broadcastSending}
+                      onChange={e => setBroadcastMessage(e.target.value)}
+                    />
+                    <div style={{ fontSize: '0.75rem', color: 'var(--hint)', marginTop: '0.3rem' }}>
+                      {broadcastMessage.length} caracteres
+                    </div>
+                  </div>
+
+                  <button
+                    style={{ ...S.addBtn, opacity: (broadcastSelected.size === 0 || !broadcastMessage.trim() || broadcastSending) ? 0.5 : 1, cursor: (broadcastSelected.size === 0 || !broadcastMessage.trim() || broadcastSending) ? 'not-allowed' : 'pointer', fontSize: '0.95rem', padding: '0.65rem 1.5rem', alignSelf: 'flex-start' }}
+                    disabled={broadcastSelected.size === 0 || !broadcastMessage.trim() || broadcastSending}
+                    onClick={sendBroadcast}>
+                    {broadcastSending ? '⏳ A enviar...' : `📤 Enviar para ${broadcastSelected.size} contacto(s)`}
+                  </button>
+
+                  {/* Barra de progresso */}
+                  {broadcastSending && broadcastProgress && (
+                    <div style={{ background: 'var(--card)', border: '1px solid var(--border)', borderRadius: 'var(--r-md)', padding: '1rem' }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.82rem', color: 'var(--muted)', marginBottom: '0.5rem' }}>
+                        <span>✅ {broadcastProgress.sent} enviadas · ❌ {broadcastProgress.failed} falhas</span>
+                        <span style={{ fontWeight: 600 }}>{pct}%</span>
+                      </div>
+                      <div style={{ background: 'var(--border)', borderRadius: '4px', height: '8px', overflow: 'hidden' }}>
+                        <div style={{ width: `${pct}%`, background: 'var(--accent)', height: '8px', borderRadius: '4px', transition: 'width 0.4s ease' }} />
+                      </div>
+                      <div style={{ fontSize: '0.78rem', color: 'var(--hint)', marginTop: '0.4rem' }}>
+                        {broadcastProgress.sent + broadcastProgress.failed} / {broadcastProgress.total} processadas
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Resultado final */}
+                  {broadcastDone && (
+                    <div style={{ background: broadcastDone.failed === 0 ? '#f0fdf4' : '#fff7ed', border: `1px solid ${broadcastDone.failed === 0 ? 'var(--success)' : 'var(--warn)'}`, borderRadius: 'var(--r-md)', padding: '1rem' }}>
+                      <div style={{ fontWeight: 700, fontSize: '0.95rem', marginBottom: '0.35rem', color: broadcastDone.failed === 0 ? 'var(--success)' : 'var(--warn)' }}>
+                        {broadcastDone.failed === 0 ? '✅ Envio concluído!' : '⚠️ Envio concluído com falhas'}
+                      </div>
+                      <div style={{ fontSize: '0.85rem', color: 'var(--muted)' }}>
+                        Enviadas: <strong style={{ color: 'var(--success)' }}>{broadcastDone.sent}</strong> &nbsp;·&nbsp;
+                        Falhas: <strong style={{ color: 'var(--danger)' }}>{broadcastDone.failed}</strong> &nbsp;·&nbsp;
+                        Total: <strong>{broadcastDone.total}</strong>
+                      </div>
+                      <button style={{ ...S.outlineBtn, marginTop: '0.75rem', fontSize: '0.8rem' }} onClick={() => { setBroadcastDone(null); setBroadcastSelected(new Set()); setBroadcastMessage(''); }}>
+                        Nova campanha
+                      </button>
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+          );
+        })()}
 
         {/* WHATSAPP */}
         {tab === 'whatsapp' && (

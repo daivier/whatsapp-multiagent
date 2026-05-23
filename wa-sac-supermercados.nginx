@@ -1,0 +1,29 @@
+server {
+    server_name sac.supermercadosfortaleza.com.br;
+
+    client_max_body_size 50m;
+
+    location /socket.io/ {
+        proxy_pass http://localhost:3007/socket.io/;
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection "upgrade";
+        proxy_set_header Host $host;
+        proxy_read_timeout 86400;
+    }
+    location /uploads/ {
+        proxy_pass http://localhost:3007/uploads/;
+    }
+    location ~ ^/(auth|users|conversations|messages|whatsapp|quick-replies|tags|settings|scheduled-messages|contacts|search|keyword-rules|blacklist|ratings|broadcast) {
+        proxy_pass http://localhost:3007;
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+    }
+    location / {
+        root /home/daivier/clientes/sac-supermercados/dist;
+        try_files $uri $uri/ /index.html;
+    }
+
+    listen 80;
+}

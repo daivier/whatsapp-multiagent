@@ -1,7 +1,8 @@
 const Database = require('better-sqlite3');
 const path = require('path');
 
-const db = new Database(path.join(__dirname, '../../../database.sqlite'));
+const DB_PATH = process.env.DB_PATH || path.join(__dirname, '../../../database.sqlite');
+const db = new Database(DB_PATH);
 
 db.pragma('journal_mode = WAL');
 db.pragma('foreign_keys = ON');
@@ -101,6 +102,15 @@ db.exec(`
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP
   );
 
+  CREATE TABLE IF NOT EXISTS blacklist (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    phone TEXT NOT NULL UNIQUE,
+    wa_id TEXT,
+    reason TEXT,
+    created_by INTEGER REFERENCES users(id),
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+  );
+
   CREATE TABLE IF NOT EXISTS ratings (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     conversation_id INTEGER NOT NULL REFERENCES conversations(id) ON DELETE CASCADE,
@@ -150,6 +160,9 @@ const settingsDefaults = [
   ['hours_6', '09:00-13:00'],     // Sábado
   ['rating_enabled', '0'],
   ['rating_message', 'Obrigado pelo atendimento! 😊 Como avaliaria o nosso serviço?\n\nResponda apenas com um número:\n1 - 😞 Muito mau\n2 - 😕 Mau\n3 - 😐 Razoável\n4 - 😊 Bom\n5 - 😄 Excelente'],
+  ['signature_enabled', '0'],
+  ['signature_message', 'Olá! 😊 Meu nome é *{{nome}}* e estou aqui para ajudá-lo. Como posso ser útil?'],
+  ['reopen_window_days', '1'],
 ];
 const insertSetting = db.prepare(`INSERT OR IGNORE INTO settings (key, value) VALUES (?, ?)`);
 for (const [key, value] of settingsDefaults) insertSetting.run(key, value);

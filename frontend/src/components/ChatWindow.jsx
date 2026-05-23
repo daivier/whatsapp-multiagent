@@ -128,6 +128,8 @@ export default function ChatWindow({ conversation: convProp, socket, onClose, on
   const [availableAttendants, setAvailableAttendants] = useState([]);
   const [transferToId, setTransferToId] = useState('');
   const [transferring, setTransferring] = useState(false);
+  // Export
+  const [showExport, setShowExport] = useState(false);
   // @mention autocomplete
   const [teamUsers, setTeamUsers] = useState([]);
   const [mentionActive, setMentionActive] = useState(false);
@@ -516,6 +518,82 @@ export default function ChatWindow({ conversation: convProp, socket, onClose, on
 
   const typerNames = Object.values(typers).filter(Boolean);
   const isClosed = conversation?.status === 'closed';
+
+  function exportCSV() {
+    const contactName = conversation.contact_name || conversation.phone;
+    const escape = v => `"${String(v ?? '').replace(/"/g, '""')}"`;
+    const header = ['Data/Hora', 'De', 'Tipo', 'Mensagem', 'Media'];
+    const rows = messages.map(m => [
+      utc(m.timestamp).toLocaleString('pt-BR', { day:'2-digit', month:'2-digit', year:'numeric', hour:'2-digit', minute:'2-digit' }),
+      m.from_me ? (m.sender_name || 'Atendente') : contactName,
+      m.is_internal ? 'Nota interna' : 'Mensagem',
+      m.deleted ? '[Apagada]' : (m.body || ''),
+      m.media_url || '',
+    ]);
+    const csv = [header, ...rows].map(r => r.map(escape).join(',')).join('\r\n');
+    const blob = new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `conversa-${conversation.id}-${contactName.replace(/\s+/g,'-')}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+  }
+
+  function exportPDF() {
+    const contactName = conversation.contact_name || conversation.phone;
+    const exported = new Date().toLocaleString('pt-BR', { day:'2-digit', month:'2-digit', year:'numeric', hour:'2-digit', minute:'2-digit' });
+    const APIURL = import.meta.env.VITE_API_URL || window.location.origin;
+
+    const msgsHtml = messages.map(m => {
+      const time = utc(m.timestamp).toLocaleString('pt-BR', { day:'2-digit', month:'2-digit', hour:'2-digit', minute:'2-digit' });
+      const isMe = !!m.from_me;
+      const sender = isMe ? (m.sender_name || 'Atendente') : contactName;
+      const bodyText = m.deleted ? '<em style="color:#9ca3af">[Mensagem apagada]</em>'
+        : m.media_url && !m.body ? '<em style="color:#6b7280">[Media]</em>'
+        : (m.body || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/\n/g,'<br>');
+      const bgColor = m.is_internal ? '#fffbeb' : isMe ? '#dcf8c6' : '#ffffff';
+      const align = isMe ? 'flex-end' : 'flex-start';
+      const noteLabel = m.is_internal ? '<div style="font-size:10px;color:#b45309;font-weight:600;margin-bottom:3px">📝 Nota interna</div>' : '';
+      const mediaLine = m.media_url ? `<div style="font-size:11px;color:#3b82f6;margin-top:3px">📎 ${m.media_url.split('/').pop()}</div>` : '';
+      return `<div style="display:flex;flex-direction:column;align-items:${align};margin:3px 0">
+        <div style="background:${bgColor};border:1px solid #e5e7eb;border-radius:8px;padding:6px 10px;max-width:72%">
+          ${noteLabel}<div style="font-size:10px;color:#6b7280;font-weight:600;margin-bottom:2px">${sender}</div>
+          <div style="font-size:13px;line-height:1.4">${bodyText}</div>${mediaLine}
+        </div>
+        <div style="font-size:10px;color:#9ca3af;margin-top:2px">${time}</div>
+      </div>`;
+    }).join('');
+
+    const STATUS_PT = { open: 'Aberta', waiting: 'Em espera', closed: 'Fechada' };
+    const html = `<!DOCTYPE html><html lang="pt"><head><meta charset="utf-8">
+<title>Conversa #${conversation.id} — ${contactName}</title>
+<style>
+  * { box-sizing: border-box; }
+  body { font-family: Arial, sans-serif; max-width: 820px; margin: 0 auto; padding: 20px; color: #111827; font-size: 14px; }
+  h1 { font-size: 17px; margin: 0 0 6px; color: #111827; }
+  .meta { font-size: 12px; color: #6b7280; margin-bottom: 14px; padding-bottom: 12px; border-bottom: 1px solid #e5e7eb; }
+  .meta span { margin-right: 14px; }
+  .messages { background: #f9fafb; border: 1px solid #e5e7eb; border-radius: 10px; padding: 14px; }
+  @media print { body { padding: 10px; } button { display: none; } }
+</style></head><body>
+<h1>💬 Conversa com ${contactName}</h1>
+<div class="meta">
+  <span>📱 ${conversation.phone}</span>
+  <span>👤 ${conversation.attendant_name || 'Sem atendente'}</span>
+  <span>📋 ${STATUS_PT[conversation.status] || conversation.status}</span>
+  <span>💬 ${messages.length} mensagens</span>
+  <span>🕒 Exportado: ${exported}</span>
+</div>
+<div class="messages">${msgsHtml}</div>
+<script>window.onload = () => window.print();<\/script>
+</body></html>`;
+
+    const win = window.open('', '_blank');
+    if (!win) { alert('Permite popups para exportar PDF.'); return; }
+    win.document.write(html);
+    win.document.close();
+  }
   const isSnoozed = conversation?.snoozed_until && new Date(conversation.snoozed_until) > new Date();
 
   const PRIORITY_OPTIONS = [
@@ -608,17 +686,56 @@ export default function ChatWindow({ conversation: convProp, socket, onClose, on
             )}
           </div>
 
+          {/* Exportar */}
+          <div style={{ position: 'relative' }}>
+            <button style={S.iconBtn} onClick={() => setShowExport(v => !v)} title="Exportar histórico">📥</button>
+            {showExport && (
+              <div style={{ ...S.tagPicker, right: 0, minWidth: '150px' }}>
+                <div onClick={() => { exportCSV(); setShowExport(false); }}
+                  style={{ padding: '0.4rem 0.65rem', cursor: 'pointer', fontSize: '0.83rem', borderRadius: 'var(--r-sm)', display: 'flex', alignItems: 'center', gap: '0.4rem' }}
+                  onMouseEnter={e => e.currentTarget.style.background = 'var(--bg)'}
+                  onMouseLeave={e => e.currentTarget.style.background = 'none'}>
+                  📊 Exportar CSV
+                </div>
+                <div onClick={() => { exportPDF(); setShowExport(false); }}
+                  style={{ padding: '0.4rem 0.65rem', cursor: 'pointer', fontSize: '0.83rem', borderRadius: 'var(--r-sm)', display: 'flex', alignItems: 'center', gap: '0.4rem' }}
+                  onMouseEnter={e => e.currentTarget.style.background = 'var(--bg)'}
+                  onMouseLeave={e => e.currentTarget.style.background = 'none'}>
+                  🖨️ Imprimir / PDF
+                </div>
+              </div>
+            )}
+          </div>
+
           <button style={S.iconBtn} onClick={loadHistory} title="Histórico">🕐</button>
+          {user.role === 'owner' && (
+            <button style={{ ...S.iconBtn, color: 'var(--danger)', borderColor: 'var(--danger)' }}
+              title="Bloquear contacto"
+              onClick={async () => {
+                const phone = conversation.phone;
+                if (!confirm(`Bloquear ${conversation.contact_name || phone}?\nAs mensagens futuras deste número serão silenciosamente ignoradas.`)) return;
+                try {
+                  await api.post('/blacklist', { phone, reason: 'Bloqueado via chat' });
+                  alert(`${phone} adicionado à blacklist.`);
+                } catch (err) {
+                  const msg = err.response?.data?.error;
+                  if (msg === 'Número já está na blacklist') alert('Este número já está bloqueado.');
+                  else alert('Erro: ' + (msg || err.message));
+                }
+              }}>
+              🚫
+            </button>
+          )}
           {!isClosed && user.role === 'attendant' && (
-            <button style={{ ...S.iconBtn, color: 'var(--accent)', borderColor: 'var(--accent)' }} onClick={openTransfer} title="Transferir conversa">🔄 Transferir</button>
+            <button style={{ ...S.iconBtn, color: 'var(--accent)', borderColor: 'var(--accent)' }} onClick={openTransfer} title="Transferir conversa">🔄</button>
           )}
           {isClosed ? (
-            <button style={{ ...S.iconBtn, color: 'var(--success)', borderColor: 'var(--success)' }} onClick={reopenConversation}>Reabrir</button>
+            <button style={{ ...S.iconBtn, color: 'var(--success)', borderColor: 'var(--success)' }} onClick={reopenConversation} title="Reabrir conversa">🔓</button>
           ) : (
-            <button style={{ ...S.iconBtn, color: 'var(--warn)', borderColor: 'var(--warn)' }} onClick={closeConversation}>Fechar</button>
+            <button style={{ ...S.iconBtn, color: 'var(--warn)', borderColor: 'var(--warn)' }} onClick={closeConversation} title="Fechar conversa">🔒</button>
           )}
-          {onDelete && <button style={S.dangerBtn} onClick={onDelete}>Eliminar</button>}
-          <button style={S.closeBtn} onClick={onClose}>✕</button>
+          {onDelete && <button style={{ ...S.iconBtn, color: 'var(--danger)', borderColor: 'var(--danger)' }} onClick={onDelete} title="Eliminar conversa">🗑️</button>}
+          <button style={S.closeBtn} onClick={onClose} title="Minimizar">✕</button>
         </div>
       </div>
 
@@ -878,7 +995,7 @@ export default function ChatWindow({ conversation: convProp, socket, onClose, on
       {isClosed ? (
         <div style={S.closedBar}>
           <span>Conversa fechada.</span>
-          <button style={{ ...S.iconBtn, color: 'var(--success)', borderColor: 'var(--success)', marginLeft: '0.75rem' }} onClick={reopenConversation}>Reabrir para responder</button>
+          <button style={S.reopenBtn} onClick={reopenConversation}>🔓 Reabrir para responder</button>
         </div>
       ) : (
         <div style={S.inputArea}>
@@ -940,10 +1057,10 @@ const S = {
   phone: { display: 'block', fontSize: '0.75rem', color: 'var(--hint)', marginTop: '1px' },
   headerActions: { display: 'flex', gap: '0.4rem', alignItems: 'center', flexShrink: 0, flexWrap: 'wrap' },
   attendantBadge: { background: 'var(--accent-l)', color: 'var(--accent)', padding: '0.2rem 0.65rem', borderRadius: '999px', fontSize: '0.75rem', fontWeight: 600 },
-  iconBtn: { background: 'none', border: '1px solid var(--border-m)', padding: '0.25rem 0.5rem', borderRadius: 'var(--r-sm)', cursor: 'pointer', fontSize: '0.82rem', color: 'var(--muted)' },
+  iconBtn: { background: 'none', border: '1px solid var(--border-m)', padding: '0', width: '30px', height: '30px', borderRadius: 'var(--r-sm)', cursor: 'pointer', fontSize: '0.9rem', color: 'var(--muted)', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 },
   tagPicker: { position: 'absolute', right: 0, top: '110%', background: 'var(--card)', border: '1px solid var(--border)', borderRadius: 'var(--r-md)', boxShadow: 'var(--sh-md)', padding: '0.4rem', minWidth: '170px', zIndex: 100 },
-  dangerBtn: { background: 'none', border: '1px solid var(--danger)', color: 'var(--danger)', padding: '0.25rem 0.65rem', borderRadius: 'var(--r-sm)', cursor: 'pointer', fontSize: '0.8rem' },
-  closeBtn: { background: 'none', border: '1px solid var(--border-m)', color: 'var(--muted)', padding: '0.25rem 0.5rem', borderRadius: 'var(--r-sm)', cursor: 'pointer', fontSize: '0.82rem' },
+  dangerBtn: { background: 'none', border: '1px solid var(--danger)', color: 'var(--danger)', padding: '0', width: '30px', height: '30px', borderRadius: 'var(--r-sm)', cursor: 'pointer', fontSize: '0.9rem', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 },
+  closeBtn: { background: 'none', border: '1px solid var(--border-m)', color: 'var(--muted)', padding: '0', width: '30px', height: '30px', borderRadius: 'var(--r-sm)', cursor: 'pointer', fontSize: '0.82rem', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 },
   historyPanel: { background: 'var(--warn-l)', borderBottom: '1px solid rgba(217,119,6,0.2)', padding: '0.75rem 1rem', maxHeight: '150px', overflowY: 'auto' },
   historyItem: { display: 'flex', alignItems: 'center', padding: '0.25rem 0', borderBottom: '1px solid rgba(217,119,6,0.12)' },
   messages: { flex: 1, overflowY: 'auto', padding: '1rem', display: 'flex', flexDirection: 'column', gap: '0.5rem' },
@@ -960,7 +1077,8 @@ const S = {
   schedulePanel: { background: 'var(--accent-l)', borderTop: '1px solid rgba(26,86,160,0.15)', padding: '0.75rem 1rem', display: 'flex', flexDirection: 'column', gap: '0.35rem', flexShrink: 0 },
   schedInput: { padding: '0.4rem 0.6rem', border: '1px solid var(--border-m)', borderRadius: 'var(--r-sm)', fontSize: '0.85rem', width: '100%', boxSizing: 'border-box', background: 'var(--card)', color: 'var(--text)' },
   schedBtn: { padding: '0.4rem 1rem', background: 'var(--accent)', color: '#fff', border: 'none', borderRadius: 'var(--r-sm)', cursor: 'pointer', fontWeight: 600, alignSelf: 'flex-start', fontSize: '0.85rem' },
-  closedBar: { padding: '0.75rem 1rem', background: '#f3f4f6', borderTop: '1px solid var(--border)', display: 'flex', alignItems: 'center', flexShrink: 0, fontSize: '0.85rem', color: 'var(--muted)' },
+  closedBar: { padding: '0.75rem 1rem', background: '#f3f4f6', borderTop: '1px solid var(--border)', display: 'flex', alignItems: 'center', gap: '0.75rem', flexShrink: 0, fontSize: '0.85rem', color: 'var(--muted)' },
+  reopenBtn: { padding: '0.35rem 0.9rem', background: 'var(--success)', color: '#fff', border: 'none', borderRadius: 'var(--r-sm)', cursor: 'pointer', fontSize: '0.85rem', fontWeight: 600, whiteSpace: 'nowrap', flexShrink: 0 },
   inputArea: { display: 'flex', gap: '0.5rem', padding: '0.75rem', background: 'var(--card)', borderTop: '1px solid var(--border)', alignItems: 'flex-end', flexShrink: 0 },
   modeBtn: { padding: '0.2rem 0.6rem', border: '1px solid var(--border-m)', borderRadius: 'var(--r-sm)', cursor: 'pointer', fontSize: '0.78rem', whiteSpace: 'nowrap', background: 'none', color: 'var(--muted)' },
   modeBtnInternal: { background: 'var(--warn-l)', borderColor: 'var(--warn)', color: '#92400e' },

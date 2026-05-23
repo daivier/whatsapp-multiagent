@@ -25,8 +25,23 @@ export default function AttendantPanel({ socket }) {
       setTakenNotice(`A conversa com "${contact_name}" foi assumida por ${taken_by_name}.`);
       setTimeout(() => setTakenNotice(null), 6000);
     };
+    const onReopened = ({ contact_name }) => {
+      setTakenNotice(`🔁 Conversa com "${contact_name}" foi reaberta — o cliente voltou!`);
+      setTimeout(() => setTakenNotice(null), 7000);
+    };
+    const onAssigned = ({ conversation }) => {
+      const name = conversation?.contact_name || conversation?.phone || 'cliente';
+      setTakenNotice(`📋 Foi-te atribuída a conversa com "${name}"`);
+      setTimeout(() => setTakenNotice(null), 7000);
+    };
     socket.on('conversation:taken', onTaken);
-    return () => socket.off('conversation:taken', onTaken);
+    socket.on('conversation:reopened', onReopened);
+    socket.on('conversation:assigned', onAssigned);
+    return () => {
+      socket.off('conversation:taken', onTaken);
+      socket.off('conversation:reopened', onReopened);
+      socket.off('conversation:assigned', onAssigned);
+    };
   }, [socket, selectedConv]);
   const [status, setStatus] = useState(() => {
     const s = user.status;
