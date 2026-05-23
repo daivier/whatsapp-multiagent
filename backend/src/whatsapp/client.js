@@ -543,6 +543,25 @@ async function handleIncomingMessage(msg) {
     .prepare(`SELECT * FROM conversations WHERE contact_id = ? AND status != 'closed' ORDER BY id DESC LIMIT 1`)
     .get(contact.id);
 
+  // Guardar contra race condition outbound+inbound simultâneos:
+  // se não há conversa aberta mas foi criada uma nos últimos 2 minutos (outbound do atendente),
+  // usar essa em vez de criar uma nova
+  if (!conversation && !fromMe) {
+    const recentOutbound = db.prepare(`
+      SELECT conv.* FROM conversations conv
+      JOIN messages m ON m.conversation_id = conv.id AND m.from_me = 1
+      WHERE conv.contact_id = ? AND conv.status = 'closed'
+        AND conv.updated_at >= datetime('now', '-2 minutes')
+      ORDER BY conv.id DESC LIMIT 1
+    `).get(contact.id);
+    if (recentOutbound) {
+      // Reabrir a conversa recente e usá-la para esta mensagem inbound
+      db.prepare(`UPDATE conversations SET status = 'open', updated_at = CURRENT_TIMESTAMP WHERE id = ?`).run(recentOutbound.id);
+      conversation = db.prepare('SELECT * FROM conversations WHERE id = ?').get(recentOutbound.id);
+      console.log(`[conv] Conversa recente ${recentOutbound.id} reaberta para inbound de ${phone} (race condition outbound)`);
+    }
+  }
+
   if (!conversation) {
     if (fromMe) {
       return;
