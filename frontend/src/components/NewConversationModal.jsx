@@ -30,7 +30,12 @@ export default function NewConversationModal({ onClose, onCreated }) {
 
   async function handleSubmit(e) {
     e.preventDefault();
-    if (!phone.trim() || !message.trim()) return;
+    const cleanPhone = phone.replace(/\D/g, '');
+    if (!cleanPhone || cleanPhone.length < 8) {
+      setError('Número de telefone inválido. Usa apenas dígitos (ex: 5585999990000).');
+      return;
+    }
+    if (!message.trim()) return;
     await submit(false);
   }
 
@@ -73,10 +78,11 @@ export default function NewConversationModal({ onClose, onCreated }) {
             style={S.input}
             placeholder="Ex: 5585999990000"
             value={phone}
-            onChange={e => setPhone(e.target.value)}
+            onChange={e => setPhone(e.target.value.replace(/\D/g, ''))}
+            inputMode="numeric"
             required
           />
-          <p style={S.hint}>Inclui o código do país (55 para Brasil). Sem espaços.</p>
+          <p style={S.hint}>Inclui o código do país (55 para Brasil). Apenas dígitos.</p>
 
           <label style={S.label}>Primeira mensagem</label>
           <textarea
