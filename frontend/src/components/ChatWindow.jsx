@@ -67,7 +67,16 @@ function MessageContent({ msg, onMediaLoad }) {
     );
   }
   if (msg.media_url && msg.media_type?.startsWith('audio/')) {
-    return <audio controls src={`${API}${msg.media_url}`} style={{ maxWidth: '100%', display: 'block' }} />;
+    return (
+      <>
+        <audio controls src={`${API}${msg.media_url}`} style={{ maxWidth: '100%', display: 'block' }} />
+        {msg.body && (
+          <p title="Transcrição automática" style={{ margin: '0.35rem 0 0', fontSize: '0.85rem', fontStyle: 'italic', color: 'var(--muted)', borderLeft: '2px solid var(--border-m)', paddingLeft: '0.5rem', whiteSpace: 'pre-wrap', overflowWrap: 'break-word' }}>
+            🎤 {msg.body}
+          </p>
+        )}
+      </>
+    );
   }
   if (msg.media_url && msg.media_type?.startsWith('video/')) {
     return (
@@ -189,6 +198,11 @@ export default function ChatWindow({ conversation: convProp, socket, onClose, on
       if (msg.conversation_id !== conversation.id) return;
       setMessages(prev => prev.map(m => m.id === msg.id ? msg : m));
     }
+    function onUpdated({ message: msg }) {
+      // Usado por transcrição de áudio: backend actualiza body e dispara este evento
+      if (!msg || msg.conversation_id !== conversation.id) return;
+      setMessages(prev => prev.map(m => m.id === msg.id ? { ...m, ...msg } : m));
+    }
     function onFailed({ message: msg }) {
       if (msg.conversation_id !== conversation.id) return;
       setMessages(prev => prev.map(m => m.id === msg.id ? { ...m, failed: msg.failed } : m));
@@ -208,6 +222,7 @@ export default function ChatWindow({ conversation: convProp, socket, onClose, on
     socket.on('message:new', onMessage);
     socket.on('typing:update', onTyping);
     socket.on('message:edited', onEdited);
+    socket.on('message:updated', onUpdated);
     socket.on('message:failed', onFailed);
     socket.on('message:deleted', onDeleted);
     socket.on('conversation:tags_updated', onTagsUpdated);
@@ -216,6 +231,7 @@ export default function ChatWindow({ conversation: convProp, socket, onClose, on
       socket.off('message:new', onMessage);
       socket.off('typing:update', onTyping);
       socket.off('message:edited', onEdited);
+      socket.off('message:updated', onUpdated);
       socket.off('message:failed', onFailed);
       socket.off('message:deleted', onDeleted);
       socket.off('conversation:tags_updated', onTagsUpdated);

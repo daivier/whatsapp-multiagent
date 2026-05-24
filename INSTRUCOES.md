@@ -71,6 +71,64 @@ Quando chega uma mensagem nova de um cliente sem conversa aberta, o sistema atri
 
 ---
 
+## Transcrição automática de áudios (opcional)
+
+Mensagens de áudio recebidas podem ser transcritas para texto automaticamente
+usando [whisper.cpp](https://github.com/ggerganov/whisper.cpp) — corre localmente
+na VM, sem custo recorrente nem chamadas a APIs externas.
+
+### Instalar na VM (Ubuntu/Debian)
+
+```bash
+sudo apt-get update
+sudo apt-get install -y build-essential git ffmpeg
+
+# Compilar whisper.cpp
+sudo git clone https://github.com/ggerganov/whisper.cpp /opt/whisper.cpp
+cd /opt/whisper.cpp
+sudo make -j
+
+# Descarregar modelo (base = ~150 MB, bom equilíbrio velocidade/qualidade)
+sudo bash ./models/download-ggml-model.sh base
+
+# Disponibilizar o binário no PATH
+sudo ln -sf /opt/whisper.cpp/build/bin/whisper-cli /usr/local/bin/whisper-cli
+```
+
+### Configurar no backend
+
+Adicionar ao `.env` (ou ao `env:` do `ecosystem.config.js` por tenant):
+
+```bash
+WHISPER_MODEL=/opt/whisper.cpp/models/ggml-base.bin
+# opcional — defaults indicados:
+# WHISPER_BIN=whisper-cli
+# WHISPER_LANG=pt
+# TRANSCRIBE_ENABLED=1
+```
+
+Reiniciar o backend (`pm2 restart wa-<tenant>`). Verifica no log:
+
+```
+[transcribe] activo — bin=whisper-cli, model=/opt/whisper.cpp/models/ggml-base.bin, lang=pt
+```
+
+Se aparecer `[transcribe] inactivo — ...` significa que algo não foi encontrado
+(binário, modelo ou ffmpeg). Áudios continuam a funcionar normalmente, apenas
+não são transcritos.
+
+### Modelos alternativos
+
+| Modelo | Tamanho | Velocidade | Qualidade |
+|---|---|---|---|
+| `tiny`  | 75 MB | mais rápido | ok |
+| `base`  | 150 MB | rápido | bom *(recomendado)* |
+| `small` | 500 MB | médio | melhor |
+
+Para mudar: descarregar (`download-ggml-model.sh small`) e actualizar `WHISPER_MODEL`.
+
+---
+
 ## Estrutura de ficheiros
 
 ```

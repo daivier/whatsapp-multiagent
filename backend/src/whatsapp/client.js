@@ -8,6 +8,7 @@ const {
 const qrcode = require('qrcode');
 const db = require('../db/schema');
 const { computeTargetDepartment, pickLeastBusyAttendant } = require('./routing');
+const { transcribeAudio } = require('./transcribe');
 const fs = require('fs');
 const path = require('path');
 const { spawn } = require('child_process');
@@ -765,9 +766,19 @@ async function handleIncomingMessage(msg) {
     if (existing) return;
   }
   const safeBody = sanitizeZalgo(body || '');
-  db.prepare('INSERT INTO messages (conversation_id, from_me, body, media_url, media_type, reply_to_id, wa_message_id) VALUES (?, ?, ?, ?, ?, ?, ?)')
+  const insRes = db.prepare('INSERT INTO messages (conversation_id, from_me, body, media_url, media_type, reply_to_id, wa_message_id) VALUES (?, ?, ?, ?, ?, ?, ?)')
     .run(conversation.id, fromMe ? 1 : 0, safeBody, mediaUrl, mediaType, replyToId, incomingWaId);
   db.prepare('UPDATE conversations SET updated_at = CURRENT_TIMESTAMP WHERE id = ?').run(conversation.id);
+
+  // Transcrição automática de áudios recebidos do cliente — fire-and-forget,
+  // não bloqueia o processamento da mensagem. Emite 'message:updated' quando completa.
+  if (!fromMe && mediaUrl && mediaType?.startsWith('audio/')) {
+    const filename = mediaUrl.split('/').pop();
+    const absPath = path.join(UPLOADS_DIR, filename);
+    transcribeAudio(absPath, insRes.lastInsertRowid).catch(err =>
+      console.error('[transcribe] erro inesperado:', err.message)
+    );
+  }
 
   const message = db.prepare('SELECT * FROM messages WHERE conversation_id = ? ORDER BY id DESC LIMIT 1').get(conversation.id);
   const fullConversation = getConversationWithContact(conversation.id);
