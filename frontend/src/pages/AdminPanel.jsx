@@ -912,6 +912,41 @@ export default function AdminPanel({ socket }) {
           <div style={S.section}>
             <h2 style={S.sectionTitle}>Respostas Rápidas</h2>
             <p style={{ color: 'var(--muted)', fontSize: '0.85rem', marginBottom: '1rem' }}>Os atendentes digitam <strong>/atalho</strong> no chat para usar. A categoria agrupa as sugestões.</p>
+
+            {/* Painel de variáveis disponíveis — clique para copiar para a área de transferência */}
+            <details style={{ marginBottom: '1rem', border: '1px solid var(--border)', borderRadius: 'var(--r-md)', padding: '0.6rem 0.85rem', background: 'var(--bg)' }}>
+              <summary style={{ cursor: 'pointer', fontSize: '0.85rem', fontWeight: 600, color: 'var(--text)' }}>
+                💡 Variáveis disponíveis no texto da resposta
+              </summary>
+              <p style={{ margin: '0.5rem 0', fontSize: '0.8rem', color: 'var(--muted)' }}>
+                Inclui qualquer destas no texto. São substituídas pelos valores reais quando o atendente carrega no atalho.
+              </p>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '0.4rem 1rem' }}>
+                {[
+                  ['{{nome}}',                     'Nome completo do contacto'],
+                  ['{{primeiro_nome}}',            'Primeira palavra do nome'],
+                  ['{{telefone}}',                 'Número de telefone'],
+                  ['{{atendente}}',                'Nome do atendente'],
+                  ['{{primeiro_nome_atendente}}',  '1º nome do atendente'],
+                  ['{{saudacao}}',                 'Bom dia / Boa tarde / Boa noite'],
+                  ['{{empresa}}',                  'Nome do tenant'],
+                ].map(([v, d]) => (
+                  <div key={v} style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', fontSize: '0.78rem' }}>
+                    <code
+                      title="Clique para copiar"
+                      onClick={() => navigator.clipboard?.writeText(v)}
+                      style={{ background: 'var(--accent-l)', color: 'var(--accent)', padding: '1px 6px', borderRadius: '4px', fontWeight: 600, cursor: 'pointer', userSelect: 'all' }}>
+                      {v}
+                    </code>
+                    <span style={{ color: 'var(--muted)' }}>{d}</span>
+                  </div>
+                ))}
+              </div>
+              <p style={{ margin: '0.5rem 0 0', fontSize: '0.75rem', color: 'var(--hint)' }}>
+                Exemplo: <code style={{ background: 'var(--card)', padding: '1px 4px', borderRadius: '3px' }}>{`{{saudacao}}, {{primeiro_nome}}! Aqui é a {{empresa}}.`}</code>
+              </p>
+            </details>
+
             <form onSubmit={addQuickReply} style={{ ...S.form, flexWrap: 'wrap' }}>
               <input style={{ ...S.input, width: '110px' }} placeholder="/atalho" value={newQR.shortcut}
                 onChange={e => setNewQR(p => ({ ...p, shortcut: e.target.value }))} required />

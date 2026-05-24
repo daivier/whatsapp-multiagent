@@ -27,6 +27,50 @@ function sanitizeZalgo(text) {
   return text.replace(/(\p{M}{3,})/gu, m => m.slice(0, 2));
 }
 
+// Variáveis suportadas em templates de respostas rápidas. Listadas explicitamente
+// para podermos documentá-las na UI de admin e validar de forma central.
+export const TEMPLATE_VARS = [
+  ['{{nome}}',                  'Nome completo do contacto'],
+  ['{{primeiro_nome}}',         'Primeira palavra do nome do contacto'],
+  ['{{telefone}}',              'Número de telefone do contacto'],
+  ['{{atendente}}',             'Nome do atendente atual'],
+  ['{{primeiro_nome_atendente}}','Primeira palavra do nome do atendente'],
+  ['{{saudacao}}',              'Bom dia / Boa tarde / Boa noite'],
+  ['{{empresa}}',               'Nome do tenant (VITE_TENANT_NAME)'],
+];
+
+// Em notas internas, realça @palavras (provavelmente menções a atendentes).
+// Não tentamos validar contra a lista de utilizadores aqui — qualquer @X é
+// realçado, o que cobre menções com nomes pouco usuais sem chamadas extra.
+function renderBodyWithMentions(body) {
+  if (!body) return body;
+  const parts = body.split(/(@\S+)/g);
+  return parts.map((part, i) =>
+    part.startsWith('@')
+      ? <strong key={i} style={{ color: '#b45309', background: '#fef3c7', padding: '0 4px', borderRadius: '4px', fontWeight: 700 }}>{part}</strong>
+      : part
+  );
+}
+
+function renderTemplate(body, conversation, user) {
+  if (!body || !body.includes('{{')) return body;
+  const contact = conversation?.contact_name || conversation?.phone || '';
+  const phone = conversation?.phone || '';
+  const att = user?.name || '';
+  const empresa = import.meta.env.VITE_TENANT_NAME || '';
+  const h = new Date().getHours();
+  const saudacao = h < 12 ? 'Bom dia' : h < 19 ? 'Boa tarde' : 'Boa noite';
+  const firstWord = s => (s || '').trim().split(/\s+/)[0] || '';
+  return body
+    .replace(/\{\{nome\}\}/gi, contact)
+    .replace(/\{\{primeiro_nome\}\}/gi, firstWord(contact))
+    .replace(/\{\{telefone\}\}/gi, phone)
+    .replace(/\{\{atendente\}\}/gi, att)
+    .replace(/\{\{primeiro_nome_atendente\}\}/gi, firstWord(att))
+    .replace(/\{\{saudacao\}\}/gi, saudacao)
+    .replace(/\{\{empresa\}\}/gi, empresa);
+}
+
 function MessageContent({ msg, onMediaLoad }) {
   if (msg.media_type === 'vcard') {
     const { fn, tel } = parseVcard(msg.body || '');
@@ -95,7 +139,9 @@ function MessageContent({ msg, onMediaLoad }) {
       </a>
     );
   }
-  return <p style={{ margin: 0, fontSize: '0.9rem', whiteSpace: 'pre-wrap', overflowWrap: 'break-word', wordBreak: 'break-word' }}>{msg.body}</p>;
+  return <p style={{ margin: 0, fontSize: '0.9rem', whiteSpace: 'pre-wrap', overflowWrap: 'break-word', wordBreak: 'break-word' }}>
+    {msg.is_internal ? renderBodyWithMentions(msg.body) : msg.body}
+  </p>;
 }
 
 export default function ChatWindow({ conversation: convProp, socket, onClose, onDelete, onConversationChange }) {
@@ -429,7 +475,7 @@ export default function ChatWindow({ conversation: convProp, socket, onClose, on
     typingTimer.current = setTimeout(() => socket.emit('typing:stop', { conversation_id: conversation.id }), 2000);
   }
 
-  function applyQuickReply(qr) { setText(qr.body); setQrSuggestions([]); }
+  function applyQuickReply(qr) { setText(renderTemplate(qr.body, conversation, user)); setQrSuggestions([]); }
 
   async function changePriority(priority) {
     try {
@@ -529,6 +575,12 @@ export default function ChatWindow({ conversation: convProp, socket, onClose, on
 
   function handleKey(e) {
     if (e.key === 'Escape') { setQrSuggestions([]); setMentionActive(false); return; }
+    // Tab ou Enter no dropdown de menções: aceita o primeiro match
+    if (mentionActive && mentionFiltered.length > 0 && (e.key === 'Tab' || e.key === 'Enter')) {
+      e.preventDefault();
+      applyMention(mentionFiltered[0]);
+      return;
+    }
     if (e.key === 'Enter' && !e.shiftKey && !mentionActive) { e.preventDefault(); send(); }
   }
 
