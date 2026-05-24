@@ -6,6 +6,7 @@ const db = require('../db/schema');
 const { authMiddleware, ownerOnly } = require('../middleware/auth');
 const { sendMessage, sendMedia } = require('../whatsapp/client');
 const ioInstance = require('../io-instance');
+const push = require('../push');
 
 const router = express.Router();
 
@@ -255,6 +256,12 @@ router.post('/:id/notes', authMiddleware, (req, res) => {
         message,
         conversation: { id: conv.id, contact_name: conv.contact_name || conv.phone },
         mentioned_by: req.user.name,
+      });
+      push.sendToUser(u.id, {
+        title: `${req.user.name} mencionou-te`,
+        body: `${conv.contact_name || conv.phone}: ${body.slice(0, 140)}`,
+        tag: `mention-${conv.id}`,
+        url: `/?conv=${conv.id}`,
       });
     }
   }

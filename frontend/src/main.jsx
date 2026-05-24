@@ -8,3 +8,13 @@ ReactDOM.createRoot(document.getElementById('root')).render(
     <App />
   </React.StrictMode>
 );
+
+// Service Worker — necessário para Web Push notifications + PWA installable.
+// Falha silenciosamente em ambientes sem suporte (ex: dev server sem HTTPS).
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('/sw.js').catch(err =>
+      console.warn('[sw] registo falhou:', err.message)
+    );
+  });
+}

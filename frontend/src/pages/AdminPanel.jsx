@@ -4,6 +4,7 @@ import ConversationList from '../components/ConversationList';
 import ChatWindow from '../components/ChatWindow';
 import { useAuth } from '../context/AuthContext';
 import { useNotifications } from '../hooks/useNotifications';
+import PushNotificationsButton from '../components/PushNotificationsButton';
 import ReportsPage from './ReportsPage';
 import DashboardPage from './DashboardPage';
 
@@ -499,6 +500,9 @@ export default function AdminPanel({ socket }) {
               <button key={key} style={{ ...S.navBtn, ...(tab === key ? S.navActive : {}) }} onClick={() => selectTab(key)}>{label}</button>
             ))}
           </nav>
+        </div>
+        <div style={{ margin: '0 1rem 0.5rem', display: 'flex', justifyContent: 'center' }}>
+          <PushNotificationsButton />
         </div>
         <button style={S.logoutBtn} onClick={logout}>Sair</button>
       </aside>

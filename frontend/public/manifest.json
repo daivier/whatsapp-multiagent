@@ -1,0 +1,20 @@
+{
+  "name": "WhatsApp Multi-Atendente",
+  "short_name": "WhatsApp SAC",
+  "description": "Painel de atendimento multi-equipa",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#ffffff",
+  "theme_color": "#25D366",
+  "lang": "pt-PT",
+  "icons": [
+    {
+      "src": "/icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}

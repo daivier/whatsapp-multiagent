@@ -1,5 +1,6 @@
 const db = require('../db/schema');
 const { sendMessage } = require('../whatsapp/client');
+const push = require('../push');
 
 function startScheduledMessagesCron(io) {
   setInterval(async () => {
@@ -76,6 +77,16 @@ function startScheduledMessagesCron(io) {
       io.to('owners').emit('sla:alert', payload);
       // Também emite conversation:updated para forçar refresh do badge na lista
       io.emit('conversation:updated', { id: conv.id, sla_alerted_at: new Date().toISOString() });
+      // Push para devices offline — atendente assignado + owners
+      const pushPayload = {
+        title: `⏰ SLA excedido${conv.department_name ? ` (${conv.department_name})` : ''}`,
+        body: `${payload.contact_name} — sem resposta há ${payload.sla_minutes}min`,
+        tag: `sla-${conv.id}`,
+        url: `/?conv=${conv.id}`,
+      };
+      if (conv.assigned_to) push.sendToUser(conv.assigned_to, pushPayload);
+      const owners = db.prepare("SELECT id FROM users WHERE role = 'owner' AND active = 1").all();
+      for (const o of owners) push.sendToUser(o.id, pushPayload);
     }
 
     const now = new Date().toISOString().slice(0, 16); // "YYYY-MM-DDTHH:MM"

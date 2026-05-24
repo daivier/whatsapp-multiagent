@@ -4,6 +4,7 @@ import ChatWindow from '../components/ChatWindow';
 import ScheduledMessagesPage from './ScheduledMessagesPage';
 import { useAuth } from '../context/AuthContext';
 import { useNotifications } from '../hooks/useNotifications';
+import PushNotificationsButton from '../components/PushNotificationsButton';
 import api from '../api';
 
 const STATUS_OPTIONS = [
@@ -132,6 +133,7 @@ export default function AttendantPanel({ socket }) {
             style={{ padding: '0.3rem 0.7rem', borderRadius: 'var(--r-sm)', border: '1px solid', cursor: 'pointer', fontSize: '0.82rem', fontWeight: 600, background: onShift ? 'var(--success)' : 'none', color: onShift ? '#fff' : 'var(--muted)', borderColor: onShift ? 'var(--success)' : 'var(--border-m)', transition: 'all .15s' }}>
             {onShift ? '🟢 Turno' : '⚪ Turno'}
           </button>
+          <PushNotificationsButton compact={isMobile} />
           <button style={S.logoutBtn} onClick={logout}>Sair</button>
         </div>
       </header>

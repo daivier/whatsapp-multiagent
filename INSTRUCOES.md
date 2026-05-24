@@ -129,6 +129,62 @@ Para mudar: descarregar (`download-ggml-model.sh small`) e actualizar `WHISPER_M
 
 ---
 
+## Notificações push (PWA)
+
+Atendentes podem instalar a app no telemóvel (Android/Chrome: menu → "Adicionar
+ao ecrã principal"; iOS Safari: "Adicionar ao ecrã principal") e receber
+notificações push **mesmo com o browser fechado** — nova mensagem do cliente,
+@menção em nota interna, alerta de SLA excedido.
+
+### Configurar VAPID (uma vez por tenant)
+
+```bash
+cd /home/daivier/whatsapp-multiagent/backend   # ou o caminho do tenant
+npx web-push generate-vapid-keys
+```
+
+Copia os dois valores para o `.env` (ou `env:` do `ecosystem.config.js`):
+
+```bash
+VAPID_PUBLIC_KEY=BL...
+VAPID_PRIVATE_KEY=xy...
+VAPID_CONTACT=mailto:dono@loja.com
+```
+
+Reinicia o backend (`pm2 restart wa-<tenant>`). Log esperado:
+```
+[push] activo — VAPID configurado
+```
+
+Se aparecer `[push] inactivo — VAPID_PUBLIC_KEY/VAPID_PRIVATE_KEY ausentes`,
+o sistema continua a funcionar normalmente — só o botão "🔕 Activar" no painel
+fica escondido.
+
+### Requisitos do browser
+
+- **Android Chrome / Edge / Firefox:** suporte completo, push funciona com browser fechado.
+- **iOS Safari:** desde iOS 16.4 — utilizador tem de **instalar a app primeiro** ("Adicionar ao ecrã principal") antes do botão Activar aparecer.
+- **Desktop Chrome/Edge:** suporte completo, funciona até com tab fechado (browser tem que estar aberto).
+- **Site obrigatoriamente em HTTPS** — Service Workers não funcionam em HTTP excepto `localhost`.
+
+### Ícones para PWA
+
+O `public/icon.svg` é genérico. Para um logo personalizado por tenant,
+substitui-o ou adiciona PNGs de tamanho específico (192×192 e 512×512) ao
+`public/` e actualiza o `manifest.json`:
+
+```json
+"icons": [
+  { "src": "/icon-192.png", "sizes": "192x192", "type": "image/png" },
+  { "src": "/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+]
+```
+
+PNGs são necessários para suporte completo em iOS (Safari não renderiza SVG no
+ícone do home screen).
+
+---
+
 ## Estrutura de ficheiros
 
 ```

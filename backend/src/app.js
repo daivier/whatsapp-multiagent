@@ -24,6 +24,7 @@ const keywordRulesRoutes = require('./routes/keyword-rules');
 const blacklistRoutes = require('./routes/blacklist');
 const broadcastRoutes = require('./routes/broadcast');
 const departmentsRoutes = require('./routes/departments');
+const pushRoutes = require('./routes/push');
 const { startScheduledMessagesCron } = require('./scheduled/cron');
 
 const app = express();
@@ -60,6 +61,7 @@ app.use('/keyword-rules', keywordRulesRoutes);
 app.use('/blacklist', blacklistRoutes);
 app.use('/broadcast', broadcastRoutes);
 app.use('/departments', departmentsRoutes);
+app.use('/push', pushRoutes);
 
 // WhatsApp status
 app.get('/whatsapp/status', authMiddleware, (req, res) => {

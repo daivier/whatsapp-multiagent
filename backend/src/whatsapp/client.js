@@ -9,6 +9,7 @@ const qrcode = require('qrcode');
 const db = require('../db/schema');
 const { computeTargetDepartment, pickLeastBusyAttendant } = require('./routing');
 const { transcribeAudio } = require('./transcribe');
+const push = require('../push');
 const fs = require('fs');
 const path = require('path');
 const { spawn } = require('child_process');
@@ -787,6 +788,16 @@ async function handleIncomingMessage(msg) {
   if (!fromMe && conversation.assigned_to) {
     // Notificação de mensagem recebida (só para mensagens do cliente)
     io.to(`user:${conversation.assigned_to}`).emit('message:incoming', { message, conversation: fullConversation });
+    // Push para devices offline/com browser fechado
+    push.sendToUser(conversation.assigned_to, {
+      title: fullConversation.contact_name || fullConversation.phone || 'Nova mensagem',
+      body: safeBody || (mediaType?.startsWith('image/') ? '📷 Imagem'
+        : mediaType?.startsWith('audio/') ? '🎤 Áudio'
+        : mediaType?.startsWith('video/') ? '🎥 Vídeo'
+        : mediaType ? '📎 Ficheiro' : 'Mensagem nova'),
+      tag: `conv-${conversation.id}`,
+      url: `/?conv=${conversation.id}`,
+    });
   }
 
   // Avaliação: capturar resposta 1-5 se conversa aguarda avaliação

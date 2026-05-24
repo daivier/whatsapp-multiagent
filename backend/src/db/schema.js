@@ -166,6 +166,20 @@ try { db.exec(`ALTER TABLE keyword_rules ADD COLUMN department_id INTEGER REFERE
 try { db.exec(`ALTER TABLE keyword_rules ADD COLUMN priority INTEGER NOT NULL DEFAULT 100`); } catch (_) {}
 try { db.exec(`CREATE INDEX IF NOT EXISTS idx_conversations_department ON conversations(department_id)`); } catch (_) {}
 try { db.exec(`ALTER TABLE departments ADD COLUMN sla_minutes INTEGER`); } catch (_) {}
+try {
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS push_subscriptions (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      endpoint TEXT NOT NULL UNIQUE,
+      p256dh TEXT NOT NULL,
+      auth TEXT NOT NULL,
+      user_agent TEXT,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    );
+    CREATE INDEX IF NOT EXISTS idx_push_subs_user ON push_subscriptions(user_id);
+  `);
+} catch (_) {}
 
 // Seed default settings
 const settingsDefaults = [
