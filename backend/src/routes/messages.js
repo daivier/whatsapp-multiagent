@@ -25,7 +25,7 @@ router.post('/', authMiddleware, async (req, res) => {
   }
 
   try {
-    await sendMessage(conv.phone, body);
+    await sendMessage(conv.line_id, conv.phone, body);
   } catch (err) {
     return res.status(503).json({ error: 'WhatsApp não está conectado' });
   }
@@ -42,12 +42,12 @@ router.post('/', authMiddleware, async (req, res) => {
 
 // POST /messages/:id/retry — reenviar mensagem falhada
 router.post('/:id/retry', authMiddleware, async (req, res) => {
-  const msg = db.prepare('SELECT m.*, c.phone, c.wa_id FROM messages m JOIN conversations conv ON conv.id = m.conversation_id JOIN contacts c ON c.id = conv.contact_id WHERE m.id = ?').get(req.params.id);
+  const msg = db.prepare('SELECT m.*, c.phone, c.wa_id, conv.line_id FROM messages m JOIN conversations conv ON conv.id = m.conversation_id JOIN contacts c ON c.id = conv.contact_id WHERE m.id = ?').get(req.params.id);
   if (!msg) return res.status(404).json({ error: 'Mensagem não encontrada' });
   if (!msg.from_me) return res.status(400).json({ error: 'Só é possível reenviar mensagens enviadas' });
 
   try {
-    const waMessageId = await sendMessage(msg.wa_id || msg.phone, msg.body);
+    const waMessageId = await sendMessage(msg.line_id, msg.wa_id || msg.phone, msg.body);
     db.prepare('UPDATE messages SET failed = 0, wa_message_id = COALESCE(?, wa_message_id) WHERE id = ?').run(waMessageId, msg.id);
     const updated = db.prepare('SELECT * FROM messages WHERE id = ?').get(msg.id);
     const ioInstance = require('../io-instance').get();
@@ -72,10 +72,11 @@ router.patch('/:id', authMiddleware, async (req, res) => {
   const age = Date.now() - new Date(msg.timestamp.replace(' ', 'T') + 'Z').getTime();
   if (age > 15 * 60 * 1000) return res.status(400).json({ error: 'Só é possível editar mensagens enviadas nos últimos 15 minutos' });
 
-  // Editar no WhatsApp se houver wa_message_id
+  // Editar no WhatsApp se houver wa_message_id (linha da conversa decide qual instância)
   if (msg.wa_message_id) {
     try {
-      await editMessage(msg.wa_message_id, body.trim());
+      const convForEdit = db.prepare('SELECT line_id FROM conversations WHERE id = ?').get(msg.conversation_id);
+      await editMessage(convForEdit?.line_id, msg.wa_message_id, body.trim());
     } catch (err) {
       console.error('Erro ao editar no WhatsApp:', err.message);
       // Continua mesmo se o WhatsApp falhar — actualiza BD

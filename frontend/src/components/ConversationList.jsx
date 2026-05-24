@@ -55,19 +55,23 @@ export default function ConversationList({ socket, selected, onSelect }) {
   const [myDepartments, setMyDepartments] = useState([]);
   const [filterDept, setFilterDept] = useState(''); // '' = todos
 
+  // Linhas WhatsApp activas — chip strip aparece se houver >1
+  const [lines, setLines] = useState([]);
+  const [filterLine, setFilterLine] = useState('');
+
   useEffect(() => {
     api.get('/tags').then(({ data }) => setTags(Array.isArray(data) ? data : [])).catch(() => {});
     if (user.role === 'owner') {
       api.get('/users').then(({ data }) => setAttendants(Array.isArray(data) ? data.filter(u => u.role === 'attendant' && u.active) : [])).catch(() => {});
     }
-    // GET /departments inclui is_mine para o utilizador actual
     api.get('/departments').then(({ data }) => {
       const mine = Array.isArray(data) ? data.filter(d => d.is_mine) : [];
       setMyDepartments(mine);
     }).catch(() => {});
+    api.get('/lines').then(({ data }) => setLines(Array.isArray(data) ? data : [])).catch(() => {});
   }, []);
 
-  useEffect(() => { load(); }, [filter, filterPriority, filterAttendant, filterTag, filterDept]);
+  useEffect(() => { load(); }, [filter, filterPriority, filterAttendant, filterTag, filterDept, filterLine]);
 
   useEffect(() => {
     if (!socket) return;
@@ -133,6 +137,7 @@ export default function ConversationList({ socket, selected, onSelect }) {
     if (filterAttendant) params.attendant_id = filterAttendant;
     if (filterTag) params.tag_id = filterTag;
     if (filterDept) params.department_id = filterDept;
+    if (filterLine) params.line_id = filterLine;
     const { data } = await api.get('/conversations', { params });
     setConversations(Array.isArray(data) ? data : []);
   }
@@ -266,6 +271,30 @@ export default function ConversationList({ socket, selected, onSelect }) {
                   )}
                 </div>
               )}
+            </div>
+          )}
+
+          {/* Chip strip de linhas WhatsApp — só se houver ≥2 linhas activas */}
+          {lines.length >= 2 && (
+            <div style={{ display: 'flex', gap: '0.3rem', padding: '0.4rem 1rem 0.2rem', flexWrap: 'wrap', borderTop: '1px dashed var(--border)' }}>
+              <span style={{ fontSize: '0.65rem', color: 'var(--hint)', fontWeight: 700, padding: '0.3rem 0' }}>📱</span>
+              <button
+                style={{ ...S.filterBtn, ...(filterLine === '' ? S.filterActive : {}) }}
+                onClick={() => setFilterLine('')}>
+                Todas
+              </button>
+              {lines.map(l => (
+                <button key={l.id}
+                  style={{
+                    ...S.filterBtn,
+                    display: 'inline-flex', alignItems: 'center', gap: '0.3rem',
+                    ...(String(filterLine) === String(l.id) ? { background: l.color, color: '#fff', border: `1px solid ${l.color}` } : { borderColor: l.color + '55', color: l.color }),
+                  }}
+                  onClick={() => setFilterLine(String(filterLine) === String(l.id) ? '' : l.id)}>
+                  <span style={{ width: 7, height: 7, borderRadius: '50%', background: String(filterLine) === String(l.id) ? '#fff' : l.color }} />
+                  {l.name}
+                </button>
+              ))}
             </div>
           )}
 

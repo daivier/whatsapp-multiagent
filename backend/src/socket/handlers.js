@@ -40,7 +40,7 @@ function initSocket(io) {
     // Atendente envia mensagem via socket
     socket.on('message:send', async ({ conversation_id, body, reply_to_id }, callback) => {
       const conv = db
-        .prepare('SELECT conv.*, con.phone, con.wa_id FROM conversations conv JOIN contacts con ON con.id = conv.contact_id WHERE conv.id = ?')
+        .prepare('SELECT conv.*, con.phone, con.wa_id, conv.line_id FROM conversations conv JOIN contacts con ON con.id = conv.contact_id WHERE conv.id = ?')
         .get(conversation_id);
 
       if (!conv) return callback?.({ error: 'Conversa não encontrada' });
@@ -55,11 +55,13 @@ function initSocket(io) {
       const message = db.prepare('SELECT * FROM messages WHERE id = ?').get(result.lastInsertRowid);
       const fullConversation = db.prepare(`
         SELECT conv.*, con.phone, con.name as contact_name, con.email as contact_email, con.notes as contact_notes, con.id as contact_id, u.name as attendant_name,
-          d.name as department_name, d.color as department_color
+          d.name as department_name, d.color as department_color,
+          l.name as line_name, l.color as line_color
         FROM conversations conv
         JOIN contacts con ON con.id = conv.contact_id
         LEFT JOIN users u ON u.id = conv.assigned_to
         LEFT JOIN departments d ON d.id = conv.department_id
+        LEFT JOIN lines l ON l.id = conv.line_id
         WHERE conv.id = ?
       `).get(conversation_id);
 
@@ -74,9 +76,10 @@ function initSocket(io) {
         quotedWaId = quoted?.wa_message_id || null;
       }
 
-      // Usa wa_id (ex: @lid) se disponível, senão usa phone; guarda wa_message_id para edição futura
+      // Usa wa_id (ex: @lid) se disponível, senão usa phone; guarda wa_message_id para edição futura.
+      // line_id da conversa decide qual instância Baileys envia.
       try {
-        const waMessageId = await sendMessage(conv.wa_id || conv.phone, body, { quotedWaId });
+        const waMessageId = await sendMessage(conv.line_id, conv.wa_id || conv.phone, body, { quotedWaId });
         if (waMessageId) {
           db.prepare('UPDATE messages SET wa_message_id = ? WHERE id = ?').run(waMessageId, result.lastInsertRowid);
         }

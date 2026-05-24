@@ -24,12 +24,14 @@ function conversationQuery(extraWhere = '') {
   return `
     SELECT conv.*, con.phone, con.wa_id, con.id as contact_id, con.name as contact_name, con.email as contact_email, con.notes as contact_notes, u.name as attendant_name,
       d.name as department_name, d.color as department_color,
+      l.name as line_name, l.color as line_color,
       (SELECT COUNT(*) FROM messages WHERE conversation_id = conv.id AND from_me = 0 AND read = 0) as unread_count,
       (SELECT MAX(timestamp) FROM messages WHERE conversation_id = conv.id AND from_me = 0) as last_client_at
     FROM conversations conv
     JOIN contacts con ON con.id = conv.contact_id
     LEFT JOIN users u ON u.id = conv.assigned_to
     LEFT JOIN departments d ON d.id = conv.department_id
+    LEFT JOIN lines l ON l.id = conv.line_id
     ${extraWhere}
     ORDER BY conv.updated_at DESC
   `;
@@ -37,7 +39,7 @@ function conversationQuery(extraWhere = '') {
 
 // GET /conversations
 router.get('/', authMiddleware, (req, res) => {
-  const { status, priority, attendant_id, tag_id, department_id } = req.query;
+  const { status, priority, attendant_id, tag_id, department_id, line_id } = req.query;
   const conditions = [];
   const params = [];
 
@@ -72,16 +74,30 @@ router.get('/', authMiddleware, (req, res) => {
     params.push(parseInt(department_id));
   }
 
+  if (line_id) {
+    conditions.push('conv.line_id = ?');
+    params.push(parseInt(line_id));
+  }
+
   const where = conditions.length ? 'WHERE ' + conditions.join(' AND ') : '';
   const conversations = db.prepare(conversationQuery(where)).all(...params);
   res.json(conversations);
 });
 
 // POST /conversations/outbound — iniciar conversa sainte
+// body.line_id: opcional; sem isso usa a linha padrão
 router.post('/outbound', authMiddleware, async (req, res) => {
-  const { phone, message, force } = req.body;
+  const { phone, message, force, line_id } = req.body;
   if (!phone?.trim()) return res.status(400).json({ error: 'phone obrigatório' });
   if (!message?.trim()) return res.status(400).json({ error: 'message obrigatório' });
+
+  // Resolver line: do body ou default
+  let lineId = line_id ? parseInt(line_id, 10) : null;
+  if (!lineId) {
+    const def = db.prepare("SELECT id FROM lines WHERE is_default = 1 AND active = 1 LIMIT 1").get();
+    lineId = def?.id;
+  }
+  if (!lineId) return res.status(400).json({ error: 'Nenhuma linha activa para envio' });
 
   // Normaliza o número: remove espaços, traços, parênteses
   const cleanPhone = phone.trim().replace(/[\s\-().]/g, '');
@@ -108,8 +124,8 @@ router.post('/outbound', authMiddleware, async (req, res) => {
     isNewContact = true;
   }
 
-  // Cria conversa (ou reabre a última fechada)
-  let conversation = db.prepare(`SELECT * FROM conversations WHERE contact_id = ? AND status != 'closed' ORDER BY id DESC LIMIT 1`).get(contact.id);
+  // Cria conversa (ou reabre a última fechada) — filtrada por linha
+  let conversation = db.prepare(`SELECT * FROM conversations WHERE contact_id = ? AND line_id = ? AND status != 'closed' ORDER BY id DESC LIMIT 1`).get(contact.id, lineId);
 
   // Conflito: já existe conversa aberta atribuída a outro utilizador
   const originalAssigneeId = (conversation && conversation.assigned_to && conversation.assigned_to !== req.user.id) ? conversation.assigned_to : null;
@@ -124,14 +140,14 @@ router.post('/outbound', authMiddleware, async (req, res) => {
   }
 
   if (!conversation) {
-    db.prepare(`INSERT INTO conversations (contact_id, assigned_to, status) VALUES (?, ?, 'open')`).run(contact.id, req.user.id);
-    conversation = db.prepare('SELECT * FROM conversations WHERE contact_id = ? ORDER BY id DESC LIMIT 1').get(contact.id);
+    db.prepare(`INSERT INTO conversations (contact_id, assigned_to, status, line_id) VALUES (?, ?, 'open', ?)`).run(contact.id, req.user.id, lineId);
+    conversation = db.prepare('SELECT * FROM conversations WHERE contact_id = ? AND line_id = ? ORDER BY id DESC LIMIT 1').get(contact.id, lineId);
   }
 
-  // Envia mensagem pelo WhatsApp
+  // Envia mensagem pelo WhatsApp na linha escolhida
   let waMessageId;
   try {
-    waMessageId = await sendMessage(contact.wa_id || cleanPhone, message);
+    waMessageId = await sendMessage(lineId, contact.wa_id || cleanPhone, message);
   } catch (err) {
     return res.status(500).json({ error: 'Erro ao enviar: ' + err.message });
   }
@@ -293,7 +309,7 @@ router.post('/:id/send-media', authMiddleware, (req, res, next) => {
   const mediaUrl = `/uploads/${file.filename}`;
 
   try {
-    const waMessageId = await sendMedia(conv.wa_id || conv.phone, file.path, file.originalname, caption);
+    const waMessageId = await sendMedia(conv.line_id, conv.wa_id || conv.phone, file.path, file.originalname, caption);
 
     const result = db.prepare('INSERT INTO messages (conversation_id, from_me, sender_id, body, media_url, media_type, wa_message_id) VALUES (?, 1, ?, ?, ?, ?, ?)')
       .run(conv.id, req.user.id, caption, mediaUrl, file.mimetype, waMessageId || null);
@@ -348,7 +364,7 @@ router.post('/:id/transfer', authMiddleware, async (req, res) => {
   if (notify) {
     const notifyText = `Olá! O seu atendimento foi transferido para *${attendant.name.trim()}*, que irá continuar a ajudá-lo em breve. 😊`;
     try {
-      const waMessageId = await sendMessage(conv.wa_id || conv.phone, notifyText);
+      const waMessageId = await sendMessage(conv.line_id, conv.wa_id || conv.phone, notifyText);
       db.prepare('INSERT INTO messages (conversation_id, from_me, body, wa_message_id) VALUES (?, 1, ?, ?)')
         .run(conv.id, notifyText, waMessageId || null);
     } catch (err) {
@@ -409,7 +425,7 @@ router.patch('/:id/close', authMiddleware, async (req, res) => {
     const dest = conv.wa_id || conv.phone;
     if (dest) {
       try {
-        const waMessageId = await sendMessage(dest, ratingMsg);
+        const waMessageId = await sendMessage(conv.line_id, dest, ratingMsg);
         db.prepare('INSERT INTO messages (conversation_id, from_me, body, wa_message_id) VALUES (?, 1, ?, ?)')
           .run(conv.id, ratingMsg, waMessageId || null);
         db.prepare('UPDATE conversations SET awaiting_rating = 1 WHERE id = ?').run(conv.id);

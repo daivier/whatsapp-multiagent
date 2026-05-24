@@ -7,15 +7,27 @@ export default function NewConversationModal({ onClose, onCreated }) {
   const [sending, setSending] = useState(false);
   const [error, setError] = useState('');
   const [conflict, setConflict] = useState(null); // { assigned_to_name }
+  const [lines, setLines] = useState([]);
+  const [lineId, setLineId] = useState('');
   const phoneRef = useRef(null);
 
-  useEffect(() => { phoneRef.current?.focus(); }, []);
+  useEffect(() => {
+    phoneRef.current?.focus();
+    api.get('/lines').then(({ data }) => {
+      const arr = Array.isArray(data) ? data : [];
+      setLines(arr);
+      const def = arr.find(l => l.is_default) || arr[0];
+      if (def) setLineId(String(def.id));
+    }).catch(() => {});
+  }, []);
 
   async function submit(force = false) {
     setSending(true);
     setError('');
     try {
-      const { data } = await api.post('/conversations/outbound', { phone: phone.trim(), message: message.trim(), force });
+      const payload = { phone: phone.trim(), message: message.trim(), force };
+      if (lineId) payload.line_id = parseInt(lineId, 10);
+      const { data } = await api.post('/conversations/outbound', payload);
       onCreated(data);
     } catch (err) {
       console.log('[conflict-debug] caught error, status:', err.response?.status, 'data:', JSON.stringify(err.response?.data));
@@ -72,6 +84,17 @@ export default function NewConversationModal({ onClose, onCreated }) {
         </div>
 
         <form onSubmit={handleSubmit} style={S.form}>
+          {/* Seletor de linha — só aparece se houver >1 linha activa */}
+          {lines.length >= 2 && (
+            <>
+              <label style={S.label}>Linha (qual número usa)</label>
+              <select style={S.input} value={lineId} onChange={e => setLineId(e.target.value)}>
+                {lines.map(l => (
+                  <option key={l.id} value={l.id}>{l.name}{l.is_default ? ' (padrão)' : ''}</option>
+                ))}
+              </select>
+            </>
+          )}
           <label style={S.label}>Número de telefone</label>
           <input
             ref={phoneRef}

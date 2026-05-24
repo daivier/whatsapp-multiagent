@@ -89,6 +89,14 @@ export default function AdminPanel({ socket }) {
   const [blacklist, setBlacklist] = useState([]);
   const [newBlocked, setNewBlocked] = useState({ phone: '', reason: '' });
 
+  // Linhas WhatsApp
+  const [lines, setLines] = useState([]);
+  const [lineForm, setLineForm] = useState(null);          // { id?, name, color }
+  const [lineToArchive, setLineToArchive] = useState(null); // { id, name, open_count }
+  const [lineQrFor, setLineQrFor] = useState(null);        // line id whose QR modal is open
+  const [lineQrData, setLineQrData] = useState(null);
+  const [lineReassign, setLineReassign] = useState('');
+
   // Departamentos
   const [departments, setDepartments] = useState([]);
   const [deptForm, setDeptForm] = useState(null);        // { id?, name, color, is_default }
@@ -128,13 +136,23 @@ export default function AdminPanel({ socket }) {
     if (tab === 'blacklist') loadBlacklist();
     if (tab === 'broadcast') loadBroadcastContacts();
     if (tab === 'departments') { loadDepartments(); loadAttendants(); }
+    if (tab === 'lines') loadLines();
   }, [tab]);
 
   useEffect(() => {
     if (!socket) return;
-    socket.on('whatsapp:qr', (qr) => { setQrCode(qr); setWhatsappReady(false); });
-    socket.on('whatsapp:ready', () => { setWhatsappReady(true); setQrCode(null); });
-    socket.on('whatsapp:disconnected', () => setWhatsappReady(false));
+    // Novo payload tem {line_id, qr/ready}; tab antiga "WhatsApp" só mostra estado
+    // da linha padrão. Tab "Linhas" tem o seu próprio handler com tudo.
+    socket.on('whatsapp:qr', (data) => {
+      const qr = typeof data === 'string' ? data : data?.qr;
+      if (qr) { setQrCode(qr); setWhatsappReady(false); }
+      loadLines();
+    });
+    socket.on('whatsapp:ready', () => { setWhatsappReady(true); setQrCode(null); loadLines(); });
+    socket.on('whatsapp:disconnected', () => { setWhatsappReady(false); loadLines(); });
+    socket.on('line:created', () => loadLines());
+    socket.on('line:updated', () => loadLines());
+    socket.on('line:deleted', () => loadLines());
     socket.on('user:status', ({ userId, status }) => setUserStatuses(prev => ({ ...prev, [userId]: status })));
     socket.on('user:shift', () => loadAttendants());
     socket.on('conversation:reopened', ({ contact_name }) => {
@@ -150,6 +168,7 @@ export default function AdminPanel({ socket }) {
     return () => {
       socket.off('whatsapp:qr'); socket.off('whatsapp:ready');
       socket.off('whatsapp:disconnected'); socket.off('user:status');
+      socket.off('line:created'); socket.off('line:updated'); socket.off('line:deleted');
       socket.off('user:shift'); socket.off('conversation:reopened');
       socket.off('broadcast:progress'); socket.off('broadcast:done');
     };
@@ -356,6 +375,52 @@ export default function AdminPanel({ socket }) {
     loadAttendants();
   }
 
+  // --- Linhas WhatsApp ---
+  async function loadLines() {
+    try { const { data } = await api.get('/lines'); setLines(Array.isArray(data) ? data : []); }
+    catch (_) {}
+  }
+  async function saveLine() {
+    if (!lineForm?.name?.trim()) return;
+    try {
+      const payload = { name: lineForm.name.trim(), color: lineForm.color, is_default: !!lineForm.is_default };
+      if (lineForm.id) await api.put(`/lines/${lineForm.id}`, payload);
+      else await api.post('/lines', payload);
+      setLineForm(null);
+      loadLines();
+    } catch (err) { alert(err.response?.data?.error || 'Erro a guardar linha'); }
+  }
+  async function archiveLine() {
+    const url = lineReassign ? `/lines/${lineToArchive.id}?reassign_to=${lineReassign}` : `/lines/${lineToArchive.id}`;
+    try {
+      await api.delete(url);
+      setLineToArchive(null); setLineReassign('');
+      loadLines();
+    } catch (err) { alert(err.response?.data?.error || 'Erro a arquivar'); }
+  }
+  async function reconnectLine(id) {
+    try { await api.post(`/lines/${id}/connect`); loadLines(); }
+    catch (err) { alert(err.response?.data?.error || 'Erro a reconectar'); }
+  }
+  async function disconnectLine(id) {
+    if (!confirm('Desligar esta linha? O WhatsApp vai desconectar e precisa de re-scan para voltar.')) return;
+    try { await api.post(`/lines/${id}/disconnect`); loadLines(); }
+    catch (err) { alert(err.response?.data?.error || 'Erro a desconectar'); }
+  }
+  async function openLineQr(id) {
+    setLineQrFor(id); setLineQrData(null);
+    // Tentar várias vezes — QR pode demorar alguns segundos a aparecer
+    let attempts = 0;
+    const tryFetch = async () => {
+      try { const { data } = await api.get(`/lines/${id}/qr`); setLineQrData(data.qr); }
+      catch (err) {
+        if (err.response?.status === 409) { setLineQrData('READY'); return; }  // já conectada
+        if (attempts++ < 10) setTimeout(tryFetch, 1500);
+      }
+    };
+    tryFetch();
+  }
+
   // --- Departamentos ---
   async function loadDepartments() {
     const { data } = await api.get('/departments');
@@ -457,7 +522,7 @@ export default function AdminPanel({ socket }) {
 
   const activeAttendants = attendants.filter(a => a.active);
   const TABS = [
-    ['dashboard','📊 Dashboard'],['conversations','Conversas'],['attendants','Atendentes'],['departments','🏢 Departamentos'],['contacts','Contactos'],
+    ['dashboard','📊 Dashboard'],['conversations','Conversas'],['attendants','Atendentes'],['departments','🏢 Departamentos'],['lines','📱 Linhas WhatsApp'],['contacts','Contactos'],
     ['reports','Relatórios'],['scheduled','Agendamentos'],
     ['transfers','Transferências'],['quickreplies','Respostas Rápidas'],
     ['tags','Etiquetas'],['automation','🤖 Automação'],['bot','Bot'],
@@ -734,6 +799,147 @@ export default function AdminPanel({ socket }) {
                       onClick={archiveDept}>
                       Arquivar
                     </button>
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* LINHAS WHATSAPP */}
+        {tab === 'lines' && (
+          <div style={S.section}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '1rem' }}>
+              <h2 style={{ ...S.sectionTitle, margin: 0 }}>📱 Linhas WhatsApp</h2>
+              <button style={S.addBtn} onClick={() => setLineForm({ name: '', color: '#25D366' })}>+ Nova linha</button>
+            </div>
+            <p style={{ color: 'var(--muted)', fontSize: '0.85rem', marginBottom: '1rem' }}>
+              Cada linha = uma instância WhatsApp independente. Útil para separar Vendas / Suporte / Financeiro em números diferentes.
+            </p>
+
+            <div style={S.cards}>
+              {lines.map(l => {
+                const isReady = l.wa_ready;
+                const hasQr = l.has_qr;
+                const statusColor = isReady ? '#22c55e' : hasQr ? '#f97316' : '#9ca3af';
+                const statusLabel = isReady ? 'Conectada' : hasQr ? 'QR pendente' : 'Desligada';
+                return (
+                  <div key={l.id} style={{ ...S.card, minWidth: 260, maxWidth: 340, borderLeft: `5px solid ${l.color}`, position: 'relative', padding: '1.25rem' }}>
+                    {l.is_default ? (
+                      <span style={{ position: 'absolute', top: 10, right: 10, background: 'var(--accent-l)', color: 'var(--accent)', borderRadius: '999px', padding: '0.1rem 0.55rem', fontSize: '0.68rem', fontWeight: 700 }}>Padrão</span>
+                    ) : null}
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.4rem' }}>
+                      <span style={{ width: 12, height: 12, borderRadius: '50%', background: l.color }} />
+                      <strong style={{ fontSize: '1rem', color: 'var(--text)' }}>{l.name}</strong>
+                    </div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem', fontSize: '0.78rem', marginBottom: '0.4rem' }}>
+                      <span style={{ width: 8, height: 8, borderRadius: '50%', background: statusColor, flexShrink: 0 }} />
+                      <span style={{ color: statusColor, fontWeight: 600 }}>{statusLabel}</span>
+                    </div>
+                    <div style={{ fontSize: '0.78rem', color: 'var(--muted)', marginBottom: '0.9rem' }}>
+                      💬 {l.active_conversations} activa(s) · {l.total_conversations} total
+                    </div>
+                    <div style={{ display: 'flex', gap: '0.35rem', flexWrap: 'wrap' }}>
+                      <button style={S.outlineBtn} onClick={() => setLineForm({ id: l.id, name: l.name, color: l.color, is_default: !!l.is_default })}>Editar</button>
+                      {!isReady && <button style={{ ...S.outlineBtn, color: '#22c55e', borderColor: '#22c55e' }} onClick={() => openLineQr(l.id)}>📱 QR</button>}
+                      {isReady && <button style={S.outlineBtn} onClick={() => disconnectLine(l.id)}>Desligar</button>}
+                      {!isReady && !hasQr && <button style={S.outlineBtn} onClick={() => reconnectLine(l.id)}>Reconectar</button>}
+                      <button style={{ ...S.outlineBtn, color: 'var(--danger)', borderColor: 'var(--danger)' }} onClick={() => setLineToArchive({ id: l.id, name: l.name, open_count: l.active_conversations, is_default: l.is_default })}>Arquivar</button>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+
+            {/* Modal: criar/editar linha */}
+            {lineForm && (
+              <div style={S.modalOverlay} onClick={() => setLineForm(null)}>
+                <div style={S.modal} onClick={e => e.stopPropagation()}>
+                  <h3 style={{ marginTop: 0 }}>{lineForm.id ? 'Editar' : 'Nova'} linha</h3>
+                  <label style={S.fieldLabel}>Nome</label>
+                  <input style={{ ...S.input, width: '100%', marginBottom: '1rem', boxSizing: 'border-box' }}
+                    placeholder="Ex: Vendas, Suporte, Financeiro" autoFocus
+                    value={lineForm.name} onChange={e => setLineForm(p => ({ ...p, name: e.target.value }))} />
+                  <label style={S.fieldLabel}>Cor</label>
+                  <div style={{ display: 'flex', gap: '0.4rem', marginBottom: '1rem', flexWrap: 'wrap' }}>
+                    {['#25D366','#2563eb','#f97316','#dc2626','#a855f7','#0ea5e9','#84cc16','#ec4899'].map(c => (
+                      <button key={c} type="button" onClick={() => setLineForm(p => ({ ...p, color: c }))}
+                        style={{ width: 30, height: 30, borderRadius: '50%', background: c, border: lineForm.color === c ? '3px solid var(--text)' : '2px solid var(--border-m)', cursor: 'pointer', padding: 0 }} />
+                    ))}
+                  </div>
+                  {lineForm.id && (
+                    <label style={{ display: 'flex', alignItems: 'flex-start', gap: '0.5rem', marginBottom: '1rem', fontSize: '0.85rem', cursor: 'pointer' }}>
+                      <input type="checkbox" checked={!!lineForm.is_default} onChange={e => setLineForm(p => ({ ...p, is_default: e.target.checked }))} style={{ marginTop: 2 }} />
+                      <span>
+                        <strong>Linha padrão</strong>
+                        <br /><span style={{ color: 'var(--muted)', fontSize: '0.8rem' }}>Usada para outbound/broadcast quando nenhuma linha é explicitamente escolhida.</span>
+                      </span>
+                    </label>
+                  )}
+                  {!lineForm.id && (
+                    <p style={{ fontSize: '0.8rem', color: 'var(--muted)', marginTop: 0, marginBottom: '1rem' }}>
+                      Ao guardar, a linha vai gerar um QR Code que tens que escanear com um número WhatsApp <strong>diferente</strong> dos das outras linhas (cada linha = um número independente).
+                    </p>
+                  )}
+                  <div style={{ display: 'flex', gap: '0.5rem', justifyContent: 'flex-end' }}>
+                    <button style={S.outlineBtn} onClick={() => setLineForm(null)}>Cancelar</button>
+                    <button style={S.addBtn} onClick={saveLine}>Guardar</button>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Modal: QR de uma linha */}
+            {lineQrFor && (
+              <div style={S.modalOverlay} onClick={() => { setLineQrFor(null); setLineQrData(null); }}>
+                <div style={S.modal} onClick={e => e.stopPropagation()}>
+                  <h3 style={{ marginTop: 0 }}>QR — {lines.find(l => l.id === lineQrFor)?.name}</h3>
+                  {!lineQrData && <p style={{ color: 'var(--muted)' }}>A aguardar QR Code...</p>}
+                  {lineQrData === 'READY' && <p style={{ color: 'var(--success)', fontWeight: 600 }}>✓ Linha já conectada — sem QR.</p>}
+                  {lineQrData && lineQrData !== 'READY' && (
+                    <>
+                      <img src={lineQrData} alt="QR" style={{ width: '100%', maxWidth: 300, display: 'block', margin: '0 auto' }} />
+                      <p style={{ fontSize: '0.85rem', color: 'var(--muted)', textAlign: 'center', marginTop: '0.75rem' }}>
+                        WhatsApp → Definições → Aparelhos conectados → Conectar aparelho
+                      </p>
+                    </>
+                  )}
+                  <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '1rem' }}>
+                    <button style={S.outlineBtn} onClick={() => { setLineQrFor(null); setLineQrData(null); }}>Fechar</button>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Modal: arquivar */}
+            {lineToArchive && (
+              <div style={S.modalOverlay} onClick={() => { setLineToArchive(null); setLineReassign(''); }}>
+                <div style={S.modal} onClick={e => e.stopPropagation()}>
+                  <h3 style={{ marginTop: 0 }}>Arquivar linha</h3>
+                  <p>Arquivar <strong>{lineToArchive.name}</strong>?</p>
+                  {lineToArchive.is_default && (
+                    <p style={{ background: 'var(--danger-l)', color: 'var(--danger)', padding: '0.6rem', borderRadius: 'var(--r-sm)', fontSize: '0.85rem' }}>
+                      ⚠️ Esta é a linha padrão. Marca outra como padrão antes de arquivar.
+                    </p>
+                  )}
+                  {lineToArchive.open_count > 0 && (
+                    <>
+                      <p style={{ background: 'var(--warn-l)', color: 'var(--warn)', padding: '0.6rem', borderRadius: 'var(--r-sm)', fontSize: '0.85rem' }}>
+                        ⚠️ Existem {lineToArchive.open_count} conversa(s) abertas. Escolhe uma linha de destino:
+                      </p>
+                      <select style={{ ...S.input, width: '100%', marginBottom: '1rem', boxSizing: 'border-box' }} value={lineReassign} onChange={e => setLineReassign(e.target.value)}>
+                        <option value="">— Escolher linha —</option>
+                        {lines.filter(l => l.id !== lineToArchive.id).map(l => (
+                          <option key={l.id} value={l.id}>{l.name}</option>
+                        ))}
+                      </select>
+                    </>
+                  )}
+                  <div style={{ display: 'flex', gap: '0.5rem', justifyContent: 'flex-end' }}>
+                    <button style={S.outlineBtn} onClick={() => { setLineToArchive(null); setLineReassign(''); }}>Cancelar</button>
+                    <button style={{ ...S.addBtn, background: 'var(--danger)' }}
+                      disabled={lineToArchive.is_default || (lineToArchive.open_count > 0 && !lineReassign)}
+                      onClick={archiveLine}>Arquivar</button>
                   </div>
                 </div>
               </div>

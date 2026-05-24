@@ -98,7 +98,8 @@ function startScheduledMessagesCron(io) {
 
     for (const sm of pending) {
       try {
-        const waMessageId = await sendMessage(sm.wa_id, sm.body);
+        // line_id da mensagem agendada decide qual linha envia (default se NULL)
+        const waMessageId = await sendMessage(sm.line_id, sm.wa_id, sm.body);
 
         db.prepare('UPDATE scheduled_messages SET sent_at = CURRENT_TIMESTAMP WHERE id = ?').run(sm.id);
 

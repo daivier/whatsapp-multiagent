@@ -169,6 +169,22 @@ try { db.exec(`ALTER TABLE departments ADD COLUMN sla_minutes INTEGER`); } catch
 try { db.exec(`ALTER TABLE keyword_rules ADD COLUMN tag_id INTEGER REFERENCES tags(id)`); } catch (_) {}
 try {
   db.exec(`
+    CREATE TABLE IF NOT EXISTS lines (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      name TEXT NOT NULL UNIQUE,
+      color TEXT NOT NULL DEFAULT '#25D366',
+      session_path TEXT NOT NULL UNIQUE,
+      is_default INTEGER NOT NULL DEFAULT 0,
+      active INTEGER NOT NULL DEFAULT 1,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    );
+  `);
+} catch (_) {}
+try { db.exec(`ALTER TABLE conversations ADD COLUMN line_id INTEGER REFERENCES lines(id)`); } catch (_) {}
+try { db.exec(`ALTER TABLE scheduled_messages ADD COLUMN line_id INTEGER REFERENCES lines(id)`); } catch (_) {}
+try { db.exec(`CREATE INDEX IF NOT EXISTS idx_conversations_line ON conversations(line_id)`); } catch (_) {}
+try {
+  db.exec(`
     CREATE TABLE IF NOT EXISTS push_subscriptions (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,

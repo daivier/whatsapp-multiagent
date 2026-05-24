@@ -6,7 +6,7 @@ const cors = require('cors');
 const bcrypt = require('bcryptjs');
 
 const db = require('./db/schema');
-const { initWhatsApp, getStatus, disconnectWhatsApp, getWAContacts } = require('./whatsapp/client');
+const { initWhatsApp, getStatus, getAllStatuses, disconnectWhatsApp, getWAContacts } = require('./whatsapp/client');
 const { initSocket } = require('./socket/handlers');
 const { authMiddleware, ownerOnly } = require('./middleware/auth');
 
@@ -25,6 +25,7 @@ const blacklistRoutes = require('./routes/blacklist');
 const broadcastRoutes = require('./routes/broadcast');
 const departmentsRoutes = require('./routes/departments');
 const pushRoutes = require('./routes/push');
+const linesRoutes = require('./routes/lines');
 const { startScheduledMessagesCron } = require('./scheduled/cron');
 
 const app = express();
@@ -46,6 +47,24 @@ if (!owner) {
   console.log('Conta do dono criada:', process.env.OWNER_EMAIL || 'dono@loja.com', '/ senha:', process.env.OWNER_PASSWORD || 'admin123');
 }
 
+// Seed/migration: garantir que existe pelo menos uma linha. Para tenants
+// existentes (single-line antes desta feature), cria "Linha principal" usando
+// o WA_SESSION_PATH legado e atribui todas as conversas órfãs a ela.
+// Para tenants novos sem conversas, cria a mesma linha como ponto de partida.
+const linesCount = db.prepare("SELECT COUNT(*) AS c FROM lines WHERE active = 1").get().c;
+if (linesCount === 0) {
+  const legacySessionPath = process.env.WA_SESSION_PATH || require('path').join(__dirname, '../baileys-session');
+  const r = db.prepare("INSERT INTO lines (name, color, session_path, is_default) VALUES ('Linha principal', '#25D366', ?, 1)").run(legacySessionPath);
+  const lineId = r.lastInsertRowid;
+  const orphans = db.prepare("UPDATE conversations SET line_id = ? WHERE line_id IS NULL").run(lineId);
+  if (orphans.changes > 0) {
+    console.log(`[migration-lines] criou Linha principal (id=${lineId}) usando ${legacySessionPath}`);
+    console.log(`[migration-lines] ${orphans.changes} conversa(s) órfã(s) atribuídas`);
+  } else {
+    console.log(`[migration-lines] criou Linha principal (id=${lineId}) usando ${legacySessionPath}`);
+  }
+}
+
 // Rotas
 app.use('/auth', authRoutes);
 app.use('/users', usersRoutes);
@@ -62,6 +81,7 @@ app.use('/blacklist', blacklistRoutes);
 app.use('/broadcast', broadcastRoutes);
 app.use('/departments', departmentsRoutes);
 app.use('/push', pushRoutes);
+app.use('/lines', linesRoutes);
 
 // Health check — sem auth, designed para monitoring/uptime probes (UptimeRobot, etc).
 // Devolve 200 se DB responde; 503 se algo crítico está down. Nunca expõe dados sensíveis.
@@ -88,20 +108,28 @@ app.get('/health', (req, res) => {
   res.status(dbOk ? 200 : 503).json(body);
 });
 
-// WhatsApp status
+// WhatsApp status — sem line_id devolve estado da linha padrão (back-compat).
+// Com ?line_id=X devolve dessa linha. Endpoint /whatsapp/statuses devolve TODAS.
 app.get('/whatsapp/status', authMiddleware, (req, res) => {
-  res.json(getStatus());
+  const lineId = req.query.line_id ? parseInt(req.query.line_id, 10) : null;
+  res.json(getStatus(lineId));
+});
+app.get('/whatsapp/statuses', authMiddleware, (req, res) => {
+  res.json(getAllStatuses());
 });
 
-// WhatsApp disconnect (owner only)
+// WhatsApp disconnect (owner only) — ?line_id=X para uma específica; sem param desconecta a padrão
 app.post('/whatsapp/disconnect', authMiddleware, ownerOnly, async (req, res) => {
-  await disconnectWhatsApp();
+  const lineId = req.query.line_id ? parseInt(req.query.line_id, 10) : null;
+  await disconnectWhatsApp(lineId);
   res.json({ ok: true });
 });
 
 // Listar contactos da agenda do WhatsApp (em memória, populado pelo contacts.upsert)
+// Sem line_id usa a padrão.
 app.get('/whatsapp/contacts', authMiddleware, ownerOnly, (req, res) => {
-  const all = getWAContacts();
+  const lineId = req.query.line_id ? parseInt(req.query.line_id, 10) : null;
+  const all = getWAContacts(lineId);
   // Marcar quais já existem na BD
   const existing = new Set(
     db.prepare('SELECT phone FROM contacts').all().map(r => r.phone)
