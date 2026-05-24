@@ -363,7 +363,13 @@ export default function AdminPanel({ socket }) {
   async function saveDept() {
     if (!deptForm?.name?.trim()) return;
     try {
-      const payload = { name: deptForm.name.trim(), color: deptForm.color, is_default: !!deptForm.is_default };
+      const payload = {
+        name: deptForm.name.trim(),
+        color: deptForm.color,
+        is_default: !!deptForm.is_default,
+        // sla_minutes vazio = null (usar default global). Valor numérico = override.
+        sla_minutes: deptForm.sla_minutes === '' || deptForm.sla_minutes == null ? null : parseInt(deptForm.sla_minutes, 10),
+      };
       if (deptForm.id) await api.put(`/departments/${deptForm.id}`, payload);
       else await api.post('/departments', payload);
       setDeptForm(null);
@@ -591,7 +597,7 @@ export default function AdminPanel({ socket }) {
           <div style={S.section}>
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '1.5rem' }}>
               <h2 style={{ ...S.sectionTitle, margin: 0 }}>Departamentos</h2>
-              <button style={S.addBtn} onClick={() => setDeptForm({ name: '', color: '#3b82f6', is_default: false })}>
+              <button style={S.addBtn} onClick={() => setDeptForm({ name: '', color: '#3b82f6', is_default: false, sla_minutes: '' })}>
                 + Novo departamento
               </button>
             </div>
@@ -613,11 +619,14 @@ export default function AdminPanel({ socket }) {
                     <span style={{ width: 12, height: 12, borderRadius: '50%', background: d.color, flexShrink: 0 }} />
                     <strong style={{ fontSize: '1rem', color: 'var(--text)' }}>{d.name}</strong>
                   </div>
-                  <div style={{ fontSize: '0.78rem', color: 'var(--muted)', marginBottom: '0.9rem' }}>
+                  <div style={{ fontSize: '0.78rem', color: 'var(--muted)', marginBottom: '0.4rem' }}>
                     👥 {d.member_count} atendente(s){'   '}·{'   '}💬 {d.active_conversations} aberta(s)
                   </div>
+                  <div style={{ fontSize: '0.75rem', color: 'var(--muted)', marginBottom: '0.9rem' }}>
+                    ⏱ SLA: {d.sla_minutes ? <strong style={{ color: 'var(--text)' }}>{d.sla_minutes} min</strong> : <span style={{ fontStyle: 'italic' }}>usa global</span>}
+                  </div>
                   <div style={{ display: 'flex', gap: '0.4rem', flexWrap: 'wrap' }}>
-                    <button style={S.outlineBtn} onClick={() => setDeptForm({ id: d.id, name: d.name, color: d.color, is_default: !!d.is_default })}>Editar</button>
+                    <button style={S.outlineBtn} onClick={() => setDeptForm({ id: d.id, name: d.name, color: d.color, is_default: !!d.is_default, sla_minutes: d.sla_minutes ?? '' })}>Editar</button>
                     <button style={S.outlineBtn} onClick={() => openMembers(d.id)}>Membros</button>
                     <button style={{ ...S.outlineBtn, color: 'var(--danger)', borderColor: 'var(--danger)' }} onClick={() => setDeptToArchive({ id: d.id, name: d.name, open_count: d.active_conversations })}>Arquivar</button>
                   </div>
@@ -642,7 +651,7 @@ export default function AdminPanel({ socket }) {
                         style={{ width: 30, height: 30, borderRadius: '50%', background: c, border: deptForm.color === c ? '3px solid var(--text)' : '2px solid var(--border-m)', cursor: 'pointer', padding: 0 }} />
                     ))}
                   </div>
-                  <label style={{ display: 'flex', alignItems: 'flex-start', gap: '0.5rem', marginBottom: '1.25rem', fontSize: '0.85rem', cursor: 'pointer' }}>
+                  <label style={{ display: 'flex', alignItems: 'flex-start', gap: '0.5rem', marginBottom: '1rem', fontSize: '0.85rem', cursor: 'pointer' }}>
                     <input type="checkbox" checked={!!deptForm.is_default}
                       onChange={e => setDeptForm(p => ({ ...p, is_default: e.target.checked }))}
                       style={{ marginTop: 2 }} />
@@ -652,6 +661,14 @@ export default function AdminPanel({ socket }) {
                       <span style={{ color: 'var(--muted)', fontSize: '0.8rem' }}>Recebe conversas que não casam com nenhuma regra de keyword. Só pode haver um padrão.</span>
                     </span>
                   </label>
+                  <label style={S.fieldLabel}>SLA (minutos) — opcional</label>
+                  <input type="number" min="1" max="10080" style={{ ...S.input, width: '100%', marginBottom: '0.4rem', boxSizing: 'border-box' }}
+                    placeholder="Deixa vazio para usar default global"
+                    value={deptForm.sla_minutes ?? ''}
+                    onChange={e => setDeptForm(p => ({ ...p, sla_minutes: e.target.value }))} />
+                  <p style={{ color: 'var(--muted)', fontSize: '0.78rem', marginTop: 0, marginBottom: '1.25rem' }}>
+                    Tempo limite para responder ao cliente neste dept antes de disparar alerta. Vazio = usa o valor global definido em Settings.
+                  </p>
                   <div style={{ display: 'flex', gap: '0.5rem', justifyContent: 'flex-end' }}>
                     <button style={S.outlineBtn} onClick={() => setDeptForm(null)}>Cancelar</button>
                     <button style={S.addBtn} onClick={saveDept}>Guardar</button>

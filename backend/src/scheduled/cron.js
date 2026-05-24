@@ -23,12 +23,18 @@ function startScheduledMessagesCron(io) {
       io.emit('conversation:updated', conv);
     }
 
-    // Alertas de SLA
-    const slaMinutes = parseInt(db.prepare(`SELECT value FROM settings WHERE key = 'sla_minutes'`).get()?.value || '30', 10);
+    // Alertas de SLA — usa SLA por departamento se definido, caso contrário cai
+    // no global. COALESCE(d.sla_minutes, ?) precisa do default em duas posições:
+    // uma na SELECT (para incluir no payload) e uma na WHERE (para o filtro).
+    const globalSlaMinutes = parseInt(db.prepare(`SELECT value FROM settings WHERE key = 'sla_minutes'`).get()?.value || '30', 10);
     const slaBreached = db.prepare(`
-      SELECT conv.id, conv.assigned_to, con.name as contact_name, con.phone
+      SELECT conv.id, conv.assigned_to, conv.department_id,
+             con.name as contact_name, con.phone,
+             d.name as department_name,
+             COALESCE(d.sla_minutes, ?) AS effective_sla
       FROM conversations conv
       JOIN contacts con ON con.id = conv.contact_id
+      LEFT JOIN departments d ON d.id = conv.department_id AND d.active = 1
       WHERE conv.status != 'closed'
         AND (conv.snoozed_until IS NULL OR conv.snoozed_until <= CURRENT_TIMESTAMP)
         AND (
@@ -38,7 +44,7 @@ function startScheduledMessagesCron(io) {
         AND (
           SELECT MAX(m.timestamp) FROM messages m
           WHERE m.conversation_id = conv.id AND m.from_me = 0
-        ) <= datetime('now', '-' || ? || ' minutes')
+        ) <= datetime('now', '-' || COALESCE(d.sla_minutes, ?) || ' minutes')
         AND NOT EXISTS (
           SELECT 1 FROM messages m2
           WHERE m2.conversation_id = conv.id AND m2.from_me = 1 AND m2.is_internal = 0
@@ -54,19 +60,22 @@ function startScheduledMessagesCron(io) {
             WHERE m.conversation_id = conv.id AND m.from_me = 0
           )
         )
-    `).all(slaMinutes);
+    `).all(globalSlaMinutes, globalSlaMinutes);
 
     for (const conv of slaBreached) {
       db.prepare('UPDATE conversations SET sla_alerted_at = CURRENT_TIMESTAMP WHERE id = ?').run(conv.id);
       const payload = {
         conversation_id: conv.id,
         contact_name: conv.contact_name || conv.phone,
-        sla_minutes: slaMinutes,
+        sla_minutes: conv.effective_sla,
+        department_name: conv.department_name || null,
       };
       // Notifica atendente responsável
       if (conv.assigned_to) io.to(`user:${conv.assigned_to}`).emit('sla:alert', payload);
       // Notifica owners
       io.to('owners').emit('sla:alert', payload);
+      // Também emite conversation:updated para forçar refresh do badge na lista
+      io.emit('conversation:updated', { id: conv.id, sla_alerted_at: new Date().toISOString() });
     }
 
     const now = new Date().toISOString().slice(0, 16); // "YYYY-MM-DDTHH:MM"

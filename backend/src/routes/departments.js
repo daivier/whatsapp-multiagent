@@ -9,7 +9,7 @@ const router = express.Router();
 // Inclui campo `is_mine` para o atendente saber a que pertence.
 router.get('/', authMiddleware, (req, res) => {
   const depts = db.prepare(`
-    SELECT d.id, d.name, d.color, d.is_default, d.active, d.created_at,
+    SELECT d.id, d.name, d.color, d.is_default, d.active, d.created_at, d.sla_minutes,
       (SELECT COUNT(*) FROM user_departments ud WHERE ud.department_id = d.id) AS member_count,
       (SELECT COUNT(*) FROM conversations c WHERE c.department_id = d.id AND c.status IN ('open','waiting')) AS active_conversations,
       EXISTS (SELECT 1 FROM user_departments ud WHERE ud.department_id = d.id AND ud.user_id = ?) AS is_mine
@@ -20,9 +20,18 @@ router.get('/', authMiddleware, (req, res) => {
   res.json(depts);
 });
 
+// Helper: valida e normaliza sla_minutes (aceita null/undefined para "usar global").
+function parseSla(value) {
+  if (value === undefined) return undefined;            // não foi enviado — não muda
+  if (value === null || value === '') return null;      // explicitamente limpar
+  const n = parseInt(value, 10);
+  if (!Number.isFinite(n) || n < 1 || n > 10080) return undefined; // ignora inválidos silenciosamente
+  return n;
+}
+
 // POST / — criar (owner). Se for o primeiro, fica default automaticamente.
 router.post('/', authMiddleware, ownerOnly, (req, res) => {
-  const { name, color, is_default } = req.body;
+  const { name, color, is_default, sla_minutes } = req.body;
   if (!name?.trim()) return res.status(400).json({ error: 'name obrigatório' });
 
   try {
@@ -30,8 +39,9 @@ router.post('/', authMiddleware, ownerOnly, (req, res) => {
       const existing = db.prepare("SELECT COUNT(*) AS c FROM departments WHERE active = 1").get().c;
       const shouldBeDefault = existing === 0 || !!is_default;
       if (shouldBeDefault) db.prepare("UPDATE departments SET is_default = 0").run();
-      const r = db.prepare("INSERT INTO departments (name, color, is_default) VALUES (?, ?, ?)")
-        .run(name.trim(), color || '#6b7280', shouldBeDefault ? 1 : 0);
+      const sla = parseSla(sla_minutes);
+      const r = db.prepare("INSERT INTO departments (name, color, is_default, sla_minutes) VALUES (?, ?, ?, ?)")
+        .run(name.trim(), color || '#6b7280', shouldBeDefault ? 1 : 0, sla === undefined ? null : sla);
       return db.prepare("SELECT * FROM departments WHERE id = ?").get(r.lastInsertRowid);
     })();
 
@@ -45,10 +55,10 @@ router.post('/', authMiddleware, ownerOnly, (req, res) => {
   }
 });
 
-// PUT /:id — actualizar nome/cor/is_default (owner).
+// PUT /:id — actualizar nome/cor/is_default/sla_minutes (owner).
 router.put('/:id', authMiddleware, ownerOnly, (req, res) => {
   const { id } = req.params;
-  const { name, color, is_default } = req.body;
+  const { name, color, is_default, sla_minutes } = req.body;
 
   const existing = db.prepare("SELECT id FROM departments WHERE id = ? AND active = 1").get(id);
   if (!existing) return res.status(404).json({ error: 'Departamento não encontrado' });
@@ -61,6 +71,8 @@ router.put('/:id', authMiddleware, ownerOnly, (req, res) => {
       if (name?.trim()) { fields.push("name = ?"); params.push(name.trim()); }
       if (color) { fields.push("color = ?"); params.push(color); }
       if (is_default !== undefined) { fields.push("is_default = ?"); params.push(is_default ? 1 : 0); }
+      const sla = parseSla(sla_minutes);
+      if (sla !== undefined) { fields.push("sla_minutes = ?"); params.push(sla); }
       if (fields.length) {
         params.push(id);
         db.prepare(`UPDATE departments SET ${fields.join(', ')} WHERE id = ?`).run(...params);

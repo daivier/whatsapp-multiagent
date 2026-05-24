@@ -397,17 +397,24 @@ export default function ConversationList({ socket, selected, onSelect }) {
                         )}
                       </div>
                     )}
-                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '0.25rem' }}>
                       <span style={S.phone}>{conv.phone}</span>
-                      {conv.snoozed_until && utc(conv.snoozed_until) > new Date() ? (
-                        <span style={{ fontSize: '0.68rem', fontWeight: 600, background: '#e0e7ff', color: '#4338ca', borderRadius: '4px', padding: '0 4px' }}>
-                          💤 {utc(conv.snoozed_until).toLocaleTimeString('pt-PT', { hour: '2-digit', minute: '2-digit' })}
-                        </span>
-                      ) : wait ? (
-                        <span style={{ fontSize: '0.68rem', fontWeight: 600, background: WAIT_BGS[wait.level], color: WAIT_COLORS[wait.level], borderRadius: '4px', padding: '0 4px' }}>
-                          ⏱ {wait.label}
-                        </span>
-                      ) : null}
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.25rem' }}>
+                        {conv.sla_alerted_at && conv.status !== 'closed' && (!conv.snoozed_until || utc(conv.snoozed_until) <= new Date()) && (
+                          <span title="SLA excedido — resposta atrasada" style={{ fontSize: '0.68rem', fontWeight: 700, background: 'var(--danger-l)', color: 'var(--danger)', borderRadius: '4px', padding: '0 4px' }}>
+                            ⏰ SLA
+                          </span>
+                        )}
+                        {conv.snoozed_until && utc(conv.snoozed_until) > new Date() ? (
+                          <span style={{ fontSize: '0.68rem', fontWeight: 600, background: '#e0e7ff', color: '#4338ca', borderRadius: '4px', padding: '0 4px' }}>
+                            💤 {utc(conv.snoozed_until).toLocaleTimeString('pt-PT', { hour: '2-digit', minute: '2-digit' })}
+                          </span>
+                        ) : wait ? (
+                          <span style={{ fontSize: '0.68rem', fontWeight: 600, background: WAIT_BGS[wait.level], color: WAIT_COLORS[wait.level], borderRadius: '4px', padding: '0 4px' }}>
+                            ⏱ {wait.label}
+                          </span>
+                        ) : null}
+                      </div>
                     </div>
                   </div>
                 </div>
