@@ -249,7 +249,7 @@ export default function DashboardPage({ socket }) {
   if (loading) return <div style={{ padding: '2rem', color: 'var(--muted)' }}>A carregar dashboard...</div>;
   if (!dash) return <div style={{ padding: '2rem', color: 'var(--danger)' }}>Erro ao carregar dados.</div>;
 
-  const { live, tmaToday, firstResponseToday, hourly, atRisk, slaMinutes, totals } = dash;
+  const { live, tmaToday, firstResponseToday, hourly, atRisk, slaMinutes, totals, byDepartment } = dash;
   const onlineCount = supervisor.filter(a => a.status !== 'offline').length;
   const closedPct = live.total_today > 0 ? Math.round((live.closed_today / live.total_today) * 100) : 0;
 
@@ -287,6 +287,47 @@ export default function DashboardPage({ socket }) {
             {live.sla_breached} conversa{live.sla_breached !== 1 ? 's' : ''} a ultrapassar o SLA
             <span style={{ fontWeight: 400, marginLeft: '0.4rem' }}>(limite: {slaMinutes} min)</span>
           </span>
+        </div>
+      )}
+
+      {/* Por departamento — só aparece se houver departamentos criados */}
+      {Array.isArray(byDepartment) && byDepartment.length > 0 && (
+        <div style={{ background: 'var(--card)', border: '1px solid var(--border)', borderRadius: 'var(--r-lg)', padding: '1rem 1.25rem', boxShadow: 'var(--sh)', marginBottom: '1.25rem' }}>
+          <h3 style={{ margin: '0 0 0.75rem', fontSize: '0.85rem', fontWeight: 700, color: 'var(--text)' }}>🏢 Por departamento</h3>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))', gap: '0.6rem' }}>
+            {byDepartment.map(d => {
+              const breached = d.sla_breached > 0;
+              return (
+                <div key={d.id} style={{
+                  background: 'var(--bg)', borderRadius: 'var(--r-md)',
+                  padding: '0.7rem 0.85rem',
+                  borderLeft: `4px solid ${d.color || '#6b7280'}`,
+                  border: breached ? '1px solid #fecaca' : '1px solid var(--border)',
+                  boxShadow: breached ? 'inset 0 0 0 1px #fee2e2' : 'none',
+                }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', marginBottom: '0.4rem' }}>
+                    <span style={{ width: 9, height: 9, borderRadius: '50%', background: d.color || '#6b7280', flexShrink: 0 }} />
+                    <strong style={{ fontSize: '0.88rem', color: 'var(--text)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{d.name}</strong>
+                    <span style={{ marginLeft: 'auto', fontSize: '0.65rem', color: 'var(--hint)', flexShrink: 0 }}>
+                      ⏱ {d.sla_effective}m{!d.sla_minutes && '*'}
+                    </span>
+                  </div>
+                  <div style={{ display: 'flex', gap: '0.5rem', fontSize: '0.78rem' }}>
+                    <span><strong style={{ color: 'var(--accent)' }}>{d.open_count}</strong> <span style={{ color: 'var(--muted)' }}>abertas</span></span>
+                    <span><strong style={{ color: '#f97316' }}>{d.waiting_count}</strong> <span style={{ color: 'var(--muted)' }}>espera</span></span>
+                    {breached && (
+                      <span style={{ marginLeft: 'auto', background: '#fef2f2', color: '#dc2626', borderRadius: '999px', padding: '1px 7px', fontSize: '0.7rem', fontWeight: 700 }}>
+                        ⏰ {d.sla_breached} SLA
+                      </span>
+                    )}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+          <p style={{ margin: '0.6rem 0 0', fontSize: '0.68rem', color: 'var(--hint)' }}>
+            * SLA herdado do global ({slaMinutes} min). Define um SLA específico no formulário do departamento.
+          </p>
         </div>
       )}
 

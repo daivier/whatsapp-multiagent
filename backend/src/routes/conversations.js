@@ -594,7 +594,24 @@ router.get('/dashboard', authMiddleware, ownerOnly, (req, res) => {
     FROM conversations
   `).get();
 
-  res.json({ live: { ...live, sla_breached: slaBreached }, tmaToday, firstResponseToday, hourly, attendants, atRisk, slaMinutes, totals });
+  // Breakdown por departamento — apenas conversas activas (open/waiting, não snoozed).
+  // sla_breached usa o flag sla_alerted_at (preenchido pelo cron quando excedeu o
+  // limite efectivo do dept ou o global). Inclui sla_effective = dept SLA ou global.
+  const byDepartment = db.prepare(`
+    SELECT d.id, d.name, d.color, d.sla_minutes,
+      COALESCE(d.sla_minutes, ?) AS sla_effective,
+      COUNT(CASE WHEN c.status = 'open'    THEN 1 END) AS open_count,
+      COUNT(CASE WHEN c.status = 'waiting' THEN 1 END) AS waiting_count,
+      COUNT(CASE WHEN c.status IN ('open','waiting') AND c.sla_alerted_at IS NOT NULL THEN 1 END) AS sla_breached
+    FROM departments d
+    LEFT JOIN conversations c ON c.department_id = d.id
+      AND (c.snoozed_until IS NULL OR c.snoozed_until <= CURRENT_TIMESTAMP)
+    WHERE d.active = 1
+    GROUP BY d.id
+    ORDER BY d.is_default DESC, d.name ASC
+  `).all(slaMinutes);
+
+  res.json({ live: { ...live, sla_breached: slaBreached }, tmaToday, firstResponseToday, hourly, attendants, atRisk, slaMinutes, totals, byDepartment });
 });
 
 // GET /conversations/metrics
