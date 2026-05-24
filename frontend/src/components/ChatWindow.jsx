@@ -1,6 +1,7 @@
 import { useState, useEffect, useLayoutEffect, useRef } from 'react';
 import api from '../api';
 import { useAuth } from '../context/AuthContext';
+import ContactHistory from './ContactHistory';
 
 const API = import.meta.env.VITE_API_URL || '';
 
@@ -155,6 +156,7 @@ export default function ChatWindow({ conversation: convProp, socket, onClose, on
   const [quickReplies, setQuickReplies] = useState([]);
   const [qrSuggestions, setQrSuggestions] = useState([]);
   const [showHistory, setShowHistory] = useState(false);
+  const [showContact360, setShowContact360] = useState(false);
   const [history, setHistory] = useState([]);
   const [isInternal, setIsInternal] = useState(false);
   const [allTags, setAllTags] = useState([]);
@@ -721,6 +723,11 @@ export default function ChatWindow({ conversation: convProp, socket, onClose, on
             <span style={S.attendantBadge}>{conversation.attendant_name || 'Sem atendente'}</span>
           )}
 
+          {/* Histórico 360 do contacto */}
+          <button style={S.iconBtn} onClick={() => setShowContact360(v => !v)} title="Histórico do contacto">
+            📊
+          </button>
+
           {/* Prioridade */}
           <div style={{ position: 'relative' }}>
             <button style={{ ...S.iconBtn, color: currentPriority.color, borderColor: currentPriority.color + '66' }}
@@ -1119,6 +1126,20 @@ export default function ChatWindow({ conversation: convProp, socket, onClose, on
           </div>
         </div>
       )}
+
+      {/* Painel lateral: Histórico 360 do contacto */}
+      <ContactHistory
+        open={showContact360}
+        contactId={conversation?.contact_id}
+        onClose={() => setShowContact360(false)}
+        onSelectConversation={(c) => {
+          // Permitir navegar para conversa antiga apenas se for diferente da actual
+          if (c.id !== conversation?.id && onConversationChange) {
+            onConversationChange({ id: c.id });
+            setShowContact360(false);
+          }
+        }}
+      />
     </div>
   );
 }

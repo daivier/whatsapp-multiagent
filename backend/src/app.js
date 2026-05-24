@@ -63,6 +63,31 @@ app.use('/broadcast', broadcastRoutes);
 app.use('/departments', departmentsRoutes);
 app.use('/push', pushRoutes);
 
+// Health check — sem auth, designed para monitoring/uptime probes (UptimeRobot, etc).
+// Devolve 200 se DB responde; 503 se algo crítico está down. Nunca expõe dados sensíveis.
+app.get('/health', (req, res) => {
+  const wa = getStatus();
+  const push = require('./push');
+  const transcribe = require('./whatsapp/transcribe');
+  let dbOk = false;
+  try { db.prepare('SELECT 1').get(); dbOk = true; } catch (_) {}
+
+  let pkgVersion = null;
+  try { pkgVersion = require('../package.json').version || null; } catch (_) {}
+
+  const body = {
+    ok: dbOk,
+    db: dbOk ? 'ok' : 'fail',
+    whatsapp: { ready: wa.isReady, hasQr: wa.hasQr },
+    push: push.isReady() ? 'configured' : 'unconfigured',
+    transcribe: transcribe.isReady() ? 'configured' : 'unconfigured',
+    uptime_seconds: Math.round(process.uptime()),
+    version: pkgVersion,
+    timestamp: new Date().toISOString(),
+  };
+  res.status(dbOk ? 200 : 503).json(body);
+});
+
 // WhatsApp status
 app.get('/whatsapp/status', authMiddleware, (req, res) => {
   res.json(getStatus());

@@ -84,7 +84,7 @@ export default function AdminPanel({ socket }) {
   const [scheduled, setScheduled] = useState([]);
   const [transferLogs, setTransferLogs] = useState([]);
   const [keywordRules, setKeywordRules] = useState([]);
-  const [newKR, setNewKR] = useState({ keyword: '', response: '', department_id: '', priority: 100 });
+  const [newKR, setNewKR] = useState({ keyword: '', response: '', department_id: '', tag_id: '', priority: 100 });
 
   const [blacklist, setBlacklist] = useState([]);
   const [newBlocked, setNewBlocked] = useState({ phone: '', reason: '' });
@@ -124,7 +124,7 @@ export default function AdminPanel({ socket }) {
     if (tab === 'scheduled') loadScheduled();
     if (tab === 'contacts') loadContacts();
     if (tab === 'transfers') loadTransferLogs();
-    if (tab === 'automation') { loadKeywordRules(); loadAttendants(); loadDepartments(); }
+    if (tab === 'automation') { loadKeywordRules(); loadAttendants(); loadDepartments(); loadTags(); }
     if (tab === 'blacklist') loadBlacklist();
     if (tab === 'broadcast') loadBroadcastContacts();
     if (tab === 'departments') { loadDepartments(); loadAttendants(); }
@@ -326,9 +326,8 @@ export default function AdminPanel({ socket }) {
   async function addKeywordRule(e) {
     e.preventDefault();
     if (!newKR.keyword?.trim()) return;
-    // pelo menos resposta OU dept tem de estar preenchido — backend também valida
-    if (!newKR.response?.trim() && !newKR.department_id) {
-      alert('Indique uma resposta automática ou um departamento de destino (ou ambos)');
+    if (!newKR.response?.trim() && !newKR.department_id && !newKR.tag_id) {
+      alert('Indique pelo menos uma acção: resposta, departamento ou etiqueta');
       return;
     }
     try {
@@ -336,9 +335,10 @@ export default function AdminPanel({ socket }) {
         keyword: newKR.keyword.trim(),
         response: newKR.response?.trim() || '',
         department_id: newKR.department_id ? parseInt(newKR.department_id, 10) : null,
+        tag_id: newKR.tag_id ? parseInt(newKR.tag_id, 10) : null,
         priority: parseInt(newKR.priority, 10) || 100,
       });
-      setNewKR({ keyword: '', response: '', department_id: '', priority: 100 });
+      setNewKR({ keyword: '', response: '', department_id: '', tag_id: '', priority: 100 });
       loadKeywordRules();
     } catch (err) {
       alert(err.response?.data?.error || 'Erro ao adicionar regra');
@@ -1094,6 +1094,16 @@ export default function AdminPanel({ socket }) {
                 </select>
               </div>
               <div style={{ display: 'flex', flexDirection: 'column', gap: '0.2rem' }}>
+                <label style={S.fieldLabel}>Aplicar etiqueta</label>
+                <select style={{ ...S.input, width: '160px' }} value={newKR.tag_id}
+                  onChange={e => setNewKR(p => ({ ...p, tag_id: e.target.value }))}>
+                  <option value="">— Nenhuma —</option>
+                  {tags.map(t => (
+                    <option key={t.id} value={t.id}>{t.name}</option>
+                  ))}
+                </select>
+              </div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.2rem' }}>
                 <label style={S.fieldLabel} title="Menor número = mais prioritária. Default: 100">Prioridade</label>
                 <input type="number" style={{ ...S.input, width: '80px' }} value={newKR.priority}
                   onChange={e => setNewKR(p => ({ ...p, priority: e.target.value }))} />
@@ -1101,13 +1111,13 @@ export default function AdminPanel({ socket }) {
               <button style={S.addBtn} type="submit">Adicionar</button>
             </form>
             <table style={S.table}>
-              <thead><tr><th>Prio.</th><th>Palavra-chave</th><th>Resposta</th><th>Departamento</th><th>Ativa</th><th></th></tr></thead>
+              <thead><tr><th>Prio.</th><th>Palavra-chave</th><th>Resposta</th><th>Departamento</th><th>Etiqueta</th><th>Ativa</th><th></th></tr></thead>
               <tbody>
                 {keywordRules.map(r => (
                   <tr key={r.id}>
                     <td style={{ fontSize: '0.78rem', color: 'var(--muted)', fontFamily: 'monospace' }}>{r.priority ?? 100}</td>
                     <td><strong style={{ color: 'var(--accent)' }}>{r.keyword}</strong></td>
-                    <td style={{ maxWidth: '300px', wordBreak: 'break-word', color: r.response ? 'var(--muted)' : 'var(--hint)', fontSize: '0.85rem', fontStyle: r.response ? 'normal' : 'italic' }}>
+                    <td style={{ maxWidth: '280px', wordBreak: 'break-word', color: r.response ? 'var(--muted)' : 'var(--hint)', fontSize: '0.85rem', fontStyle: r.response ? 'normal' : 'italic' }}>
                       {r.response || '— (sem resposta)'}
                     </td>
                     <td>
@@ -1115,6 +1125,15 @@ export default function AdminPanel({ socket }) {
                         <span style={{ background: (r.department_color || '#6b7280') + '18', border: `1px solid ${(r.department_color || '#6b7280')}55`, color: r.department_color || '#6b7280', borderRadius: '999px', padding: '0.1rem 0.55rem', fontSize: '0.72rem', fontWeight: 600, display: 'inline-flex', alignItems: 'center', gap: '0.25rem' }}>
                           <span style={{ width: 6, height: 6, borderRadius: '50%', background: r.department_color || '#6b7280' }} />
                           {r.department_name}
+                        </span>
+                      ) : (
+                        <span style={{ color: 'var(--hint)', fontSize: '0.78rem' }}>—</span>
+                      )}
+                    </td>
+                    <td>
+                      {r.tag_name ? (
+                        <span style={{ background: (r.tag_color || '#6b7280') + '18', border: `1px solid ${(r.tag_color || '#6b7280')}55`, color: r.tag_color || '#6b7280', borderRadius: '999px', padding: '0.1rem 0.55rem', fontSize: '0.72rem', fontWeight: 600 }}>
+                          🏷️ {r.tag_name}
                         </span>
                       ) : (
                         <span style={{ color: 'var(--hint)', fontSize: '0.78rem' }}>—</span>
@@ -1129,7 +1148,7 @@ export default function AdminPanel({ socket }) {
                     <td><button style={{ ...S.outlineBtn, color: 'var(--danger)', borderColor: 'var(--danger)' }} onClick={() => deleteKeywordRule(r.id)}>Eliminar</button></td>
                   </tr>
                 ))}
-                {keywordRules.length === 0 && <tr><td colSpan={6} style={{ color: 'var(--hint)', textAlign: 'center', padding: '1rem' }}>Sem regras criadas</td></tr>}
+                {keywordRules.length === 0 && <tr><td colSpan={7} style={{ color: 'var(--hint)', textAlign: 'center', padding: '1rem' }}>Sem regras criadas</td></tr>}
               </tbody>
             </table>
 

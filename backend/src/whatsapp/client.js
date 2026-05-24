@@ -815,21 +815,55 @@ async function handleIncomingMessage(msg) {
     }
   }
 
-  // Bot por palavra-chave (só para mensagens do cliente)
+  // Bot por palavra-chave + auto-tag (só para mensagens do cliente).
+  // Uma regra pode ter response, tag_id, ambos ou nenhum dos dois (caso já tenha
+  // department_id que entra no routing). Iteramos por priority para auto-tag
+  // mas usamos apenas a PRIMEIRA regra que casa para enviar resposta.
   if (!fromMe && body && body.trim()) {
-    const rules = db.prepare('SELECT * FROM keyword_rules WHERE active = 1').all();
+    const rules = db.prepare('SELECT * FROM keyword_rules WHERE active = 1 ORDER BY priority ASC, id ASC').all();
     const lowerBody = body.toLowerCase();
-    const matched = rules.find(r => lowerBody.includes(r.keyword.toLowerCase()));
-    if (matched) {
-      try {
-        await sendMessage(waId, matched.response);
-        db.prepare('INSERT INTO messages (conversation_id, from_me, body) VALUES (?, 1, ?)').run(conversation.id, matched.response);
-        db.prepare('UPDATE conversations SET updated_at = CURRENT_TIMESTAMP WHERE id = ?').run(conversation.id);
-        const botMsg = db.prepare('SELECT * FROM messages WHERE conversation_id = ? ORDER BY id DESC LIMIT 1').get(conversation.id);
-        io.emit('message:new', { message: botMsg, conversation: getConversationWithContact(conversation.id) });
-      } catch (err) {
-        console.error('[keyword-bot] Erro ao enviar resposta automática:', err.message);
+    let responseSent = false;
+    const appliedTags = new Set();
+
+    for (const rule of rules) {
+      if (!rule.keyword || !lowerBody.includes(rule.keyword.toLowerCase())) continue;
+
+      // Auto-tag: aplica todas as tags das regras que casam (não só a primeira)
+      if (rule.tag_id && !appliedTags.has(rule.tag_id)) {
+        try {
+          db.prepare('INSERT OR IGNORE INTO conversation_tags (conversation_id, tag_id) VALUES (?, ?)')
+            .run(conversation.id, rule.tag_id);
+          appliedTags.add(rule.tag_id);
+        } catch (err) {
+          console.error('[keyword-bot] erro ao aplicar tag:', err.message);
+        }
       }
+
+      // Resposta automática: só a primeira regra com response não-vazio
+      if (!responseSent && rule.response && rule.response.trim()) {
+        try {
+          const responseBody = rule.response.trim();
+          const waMessageId = await sendMessage(waId, responseBody);
+          db.prepare('INSERT INTO messages (conversation_id, from_me, body, wa_message_id) VALUES (?, 1, ?, ?)')
+            .run(conversation.id, responseBody, waMessageId || null);
+          db.prepare('UPDATE conversations SET updated_at = CURRENT_TIMESTAMP WHERE id = ?').run(conversation.id);
+          const botMsg = db.prepare('SELECT * FROM messages WHERE conversation_id = ? ORDER BY id DESC LIMIT 1').get(conversation.id);
+          io.emit('message:new', { message: botMsg, conversation: getConversationWithContact(conversation.id) });
+          responseSent = true;
+        } catch (err) {
+          console.error('[keyword-bot] Erro ao enviar resposta automática:', err.message);
+        }
+      }
+    }
+
+    // Notificar UI se foram aplicadas tags novas
+    if (appliedTags.size > 0) {
+      const tags = db.prepare(`
+        SELECT t.id, t.name, t.color FROM tags t
+        INNER JOIN conversation_tags ct ON ct.tag_id = t.id
+        WHERE ct.conversation_id = ?
+      `).all(conversation.id);
+      io.emit('conversation:tags_updated', { conversation_id: conversation.id, tags });
     }
   }
 }

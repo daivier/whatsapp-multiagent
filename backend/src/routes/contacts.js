@@ -80,6 +80,58 @@ router.delete('/cleanup/invalid', (req, res) => {
   res.json({ deleted: result.changes });
 });
 
+// Histórico 360 do contacto — stats agregadas + conversas anteriores.
+// Usado pelo painel lateral do ChatWindow para o atendente ter contexto.
+router.get('/:id/history', (req, res) => {
+  const id = parseInt(req.params.id, 10);
+  const contact = db.prepare('SELECT id, name, phone, email, notes, created_at FROM contacts WHERE id = ?').get(id);
+  if (!contact) return res.status(404).json({ error: 'Contacto não encontrado' });
+
+  const stats = db.prepare(`
+    SELECT
+      COUNT(DISTINCT conv.id) AS total_conversations,
+      COUNT(CASE WHEN conv.status = 'closed' THEN 1 END) AS closed_conversations,
+      COUNT(CASE WHEN conv.status != 'closed' THEN 1 END) AS active_conversations,
+      (SELECT COUNT(*) FROM messages m INNER JOIN conversations c2 ON c2.id = m.conversation_id WHERE c2.contact_id = ?) AS total_messages,
+      MIN(conv.created_at) AS first_contact_at,
+      MAX(conv.updated_at) AS last_contact_at
+    FROM conversations conv
+    WHERE conv.contact_id = ?
+  `).get(id, id);
+
+  const ratings = db.prepare(`
+    SELECT COUNT(*) AS total, ROUND(AVG(score), 2) AS avg_score,
+      MAX(score) AS best, MIN(score) AS worst
+    FROM ratings WHERE contact_id = ?
+  `).get(id);
+
+  // Últimas 10 conversas (mais recentes primeiro) para drill-down
+  const conversations = db.prepare(`
+    SELECT conv.id, conv.status, conv.created_at, conv.updated_at,
+      u.name AS attendant_name,
+      d.name AS department_name, d.color AS department_color,
+      (SELECT COUNT(*) FROM messages WHERE conversation_id = conv.id) AS message_count,
+      (SELECT body FROM messages WHERE conversation_id = conv.id ORDER BY id DESC LIMIT 1) AS last_message,
+      (SELECT score FROM ratings WHERE conversation_id = conv.id ORDER BY id DESC LIMIT 1) AS rating
+    FROM conversations conv
+    LEFT JOIN users u ON u.id = conv.assigned_to
+    LEFT JOIN departments d ON d.id = conv.department_id
+    WHERE conv.contact_id = ?
+    ORDER BY conv.updated_at DESC
+    LIMIT 10
+  `).all(id);
+
+  const tags = db.prepare(`
+    SELECT DISTINCT t.id, t.name, t.color
+    FROM tags t
+    INNER JOIN conversation_tags ct ON ct.tag_id = t.id
+    INNER JOIN conversations conv ON conv.id = ct.conversation_id
+    WHERE conv.contact_id = ?
+  `).all(id);
+
+  res.json({ contact, stats, ratings, conversations, tags });
+});
+
 // Actualizar contacto (nome, notas, email)
 router.patch('/:id', (req, res) => {
   const { name, notes, email } = req.body;

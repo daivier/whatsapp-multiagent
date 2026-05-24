@@ -166,6 +166,7 @@ try { db.exec(`ALTER TABLE keyword_rules ADD COLUMN department_id INTEGER REFERE
 try { db.exec(`ALTER TABLE keyword_rules ADD COLUMN priority INTEGER NOT NULL DEFAULT 100`); } catch (_) {}
 try { db.exec(`CREATE INDEX IF NOT EXISTS idx_conversations_department ON conversations(department_id)`); } catch (_) {}
 try { db.exec(`ALTER TABLE departments ADD COLUMN sla_minutes INTEGER`); } catch (_) {}
+try { db.exec(`ALTER TABLE keyword_rules ADD COLUMN tag_id INTEGER REFERENCES tags(id)`); } catch (_) {}
 try {
   db.exec(`
     CREATE TABLE IF NOT EXISTS push_subscriptions (
