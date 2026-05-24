@@ -104,7 +104,7 @@ server {
         proxy_set_header X-Real-IP \$remote_addr;
     }
 
-    location ~ ^/(auth|users|conversations|messages|whatsapp) {
+    location ~ ^/(auth|users|conversations|messages|whatsapp|departments|push|lines|health|quick-replies|tags|settings|scheduled-messages|contacts|search|keyword-rules|blacklist|broadcast|uploads) {
         proxy_pass http://localhost:$PORT;
         proxy_http_version 1.1;
         proxy_set_header Host \$host;
