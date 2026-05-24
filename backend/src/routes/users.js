@@ -21,17 +21,48 @@ router.get('/available', authMiddleware, (req, res) => {
   res.json(users);
 });
 
+// Helper: lê departamentos de cada user (uma query, agrupa em JS)
+function attachDepartments(users) {
+  if (users.length === 0) return users;
+  const memberships = db.prepare(`
+    SELECT ud.user_id, d.id, d.name, d.color
+    FROM user_departments ud
+    INNER JOIN departments d ON d.id = ud.department_id
+    WHERE d.active = 1
+  `).all();
+  const byUser = new Map();
+  for (const m of memberships) {
+    if (!byUser.has(m.user_id)) byUser.set(m.user_id, []);
+    byUser.get(m.user_id).push({ id: m.id, name: m.name, color: m.color });
+  }
+  return users.map(u => ({ ...u, departments: byUser.get(u.id) || [] }));
+}
+
+// Substitui a lista de departamentos de um user (apaga + reinsere). Aceita
+// silenciosamente IDs inválidos para não rebentar transacções com erros parciais.
+function replaceUserDepartments(userId, deptIds) {
+  if (!Array.isArray(deptIds)) return;
+  db.transaction(() => {
+    db.prepare('DELETE FROM user_departments WHERE user_id = ?').run(userId);
+    const ins = db.prepare('INSERT INTO user_departments (user_id, department_id) VALUES (?, ?)');
+    for (const did of deptIds) {
+      const d = db.prepare('SELECT id FROM departments WHERE id = ? AND active = 1').get(did);
+      if (d) ins.run(userId, did);
+    }
+  })();
+}
+
 // GET /users — listar atendentes (owner only)
 router.get('/', authMiddleware, ownerOnly, (req, res) => {
   const users = db
     .prepare('SELECT id, name, email, role, status, active, on_shift, created_at FROM users ORDER BY role DESC, name ASC')
     .all();
-  res.json(users);
+  res.json(attachDepartments(users));
 });
 
 // POST /users — criar atendente (owner only)
 router.post('/', authMiddleware, ownerOnly, (req, res) => {
-  const { name, email, password, role = 'attendant' } = req.body;
+  const { name, email, password, role = 'attendant', department_ids } = req.body;
   if (!name || !email || !password) return res.status(400).json({ error: 'name, email e password obrigatórios' });
 
   const existing = db.prepare('SELECT id FROM users WHERE email = ?').get(email);
@@ -39,15 +70,16 @@ router.post('/', authMiddleware, ownerOnly, (req, res) => {
 
   const hash = bcrypt.hashSync(password, 10);
   const result = db.prepare('INSERT INTO users (name, email, password_hash, role) VALUES (?, ?, ?, ?)').run(name, email, hash, role);
-  const user = db.prepare('SELECT id, name, email, role, status, active FROM users WHERE id = ?').get(result.lastInsertRowid);
+  if (Array.isArray(department_ids)) replaceUserDepartments(result.lastInsertRowid, department_ids);
 
-  res.status(201).json(user);
+  const user = db.prepare('SELECT id, name, email, role, status, active FROM users WHERE id = ?').get(result.lastInsertRowid);
+  res.status(201).json(attachDepartments([user])[0]);
 });
 
 // PATCH /users/:id — ativar/desativar ou alterar dados (owner only)
 router.patch('/:id', authMiddleware, ownerOnly, (req, res) => {
   const { id } = req.params;
-  const { active, name } = req.body;
+  const { active, name, department_ids } = req.body;
 
   if (active !== undefined) {
     db.prepare('UPDATE users SET active = ? WHERE id = ?').run(active ? 1 : 0, id);
@@ -55,11 +87,12 @@ router.patch('/:id', authMiddleware, ownerOnly, (req, res) => {
   if (name) {
     db.prepare('UPDATE users SET name = ? WHERE id = ?').run(name, id);
   }
+  if (Array.isArray(department_ids)) replaceUserDepartments(parseInt(id, 10), department_ids);
 
   const user = db.prepare('SELECT id, name, email, role, status, active FROM users WHERE id = ?').get(id);
   if (!user) return res.status(404).json({ error: 'Utilizador não encontrado' });
 
-  res.json(user);
+  res.json(attachDepartments([user])[0]);
 });
 
 // PATCH /users/me/shift — atendente togla o próprio turno

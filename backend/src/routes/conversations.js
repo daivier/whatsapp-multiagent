@@ -22,11 +22,13 @@ const upload = multer({ storage, limits: { fileSize: 32 * 1024 * 1024 } });
 function conversationQuery(extraWhere = '') {
   return `
     SELECT conv.*, con.phone, con.wa_id, con.id as contact_id, con.name as contact_name, con.email as contact_email, con.notes as contact_notes, u.name as attendant_name,
+      d.name as department_name, d.color as department_color,
       (SELECT COUNT(*) FROM messages WHERE conversation_id = conv.id AND from_me = 0 AND read = 0) as unread_count,
       (SELECT MAX(timestamp) FROM messages WHERE conversation_id = conv.id AND from_me = 0) as last_client_at
     FROM conversations conv
     JOIN contacts con ON con.id = conv.contact_id
     LEFT JOIN users u ON u.id = conv.assigned_to
+    LEFT JOIN departments d ON d.id = conv.department_id
     ${extraWhere}
     ORDER BY conv.updated_at DESC
   `;
@@ -34,7 +36,7 @@ function conversationQuery(extraWhere = '') {
 
 // GET /conversations
 router.get('/', authMiddleware, (req, res) => {
-  const { status, priority, attendant_id, tag_id } = req.query;
+  const { status, priority, attendant_id, tag_id, department_id } = req.query;
   const conditions = [];
   const params = [];
 
@@ -62,6 +64,11 @@ router.get('/', authMiddleware, (req, res) => {
   if (tag_id) {
     conditions.push('EXISTS (SELECT 1 FROM conversation_tags ct WHERE ct.conversation_id = conv.id AND ct.tag_id = ?)');
     params.push(parseInt(tag_id));
+  }
+
+  if (department_id) {
+    conditions.push('conv.department_id = ?');
+    params.push(parseInt(department_id));
   }
 
   const where = conditions.length ? 'WHERE ' + conditions.join(' AND ') : '';

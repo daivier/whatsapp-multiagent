@@ -83,10 +83,18 @@ export default function AdminPanel({ socket }) {
   const [scheduled, setScheduled] = useState([]);
   const [transferLogs, setTransferLogs] = useState([]);
   const [keywordRules, setKeywordRules] = useState([]);
-  const [newKR, setNewKR] = useState({ keyword: '', response: '' });
+  const [newKR, setNewKR] = useState({ keyword: '', response: '', department_id: '', priority: 100 });
 
   const [blacklist, setBlacklist] = useState([]);
   const [newBlocked, setNewBlocked] = useState({ phone: '', reason: '' });
+
+  // Departamentos
+  const [departments, setDepartments] = useState([]);
+  const [deptForm, setDeptForm] = useState(null);        // { id?, name, color, is_default }
+  const [deptMembersFor, setDeptMembersFor] = useState(null); // dept id cujo modal de membros está aberto
+  const [deptMembers, setDeptMembers] = useState([]);    // [user_id, ...]
+  const [deptToArchive, setDeptToArchive] = useState(null);   // { id, name, open_count }
+  const [reassignTarget, setReassignTarget] = useState('');
 
   // Broadcast state
   const [broadcastContacts, setBroadcastContacts] = useState([]);
@@ -115,9 +123,10 @@ export default function AdminPanel({ socket }) {
     if (tab === 'scheduled') loadScheduled();
     if (tab === 'contacts') loadContacts();
     if (tab === 'transfers') loadTransferLogs();
-    if (tab === 'automation') { loadKeywordRules(); loadAttendants(); }
+    if (tab === 'automation') { loadKeywordRules(); loadAttendants(); loadDepartments(); }
     if (tab === 'blacklist') loadBlacklist();
     if (tab === 'broadcast') loadBroadcastContacts();
+    if (tab === 'departments') { loadDepartments(); loadAttendants(); }
   }, [tab]);
 
   useEffect(() => {
@@ -315,9 +324,24 @@ export default function AdminPanel({ socket }) {
   }
   async function addKeywordRule(e) {
     e.preventDefault();
-    if (!newKR.keyword || !newKR.response) return;
-    await api.post('/keyword-rules', newKR);
-    setNewKR({ keyword: '', response: '' }); loadKeywordRules();
+    if (!newKR.keyword?.trim()) return;
+    // pelo menos resposta OU dept tem de estar preenchido — backend também valida
+    if (!newKR.response?.trim() && !newKR.department_id) {
+      alert('Indique uma resposta automática ou um departamento de destino (ou ambos)');
+      return;
+    }
+    try {
+      await api.post('/keyword-rules', {
+        keyword: newKR.keyword.trim(),
+        response: newKR.response?.trim() || '',
+        department_id: newKR.department_id ? parseInt(newKR.department_id, 10) : null,
+        priority: parseInt(newKR.priority, 10) || 100,
+      });
+      setNewKR({ keyword: '', response: '', department_id: '', priority: 100 });
+      loadKeywordRules();
+    } catch (err) {
+      alert(err.response?.data?.error || 'Erro ao adicionar regra');
+    }
   }
   async function toggleKeywordRule(id, active) {
     await api.patch(`/keyword-rules/${id}`, { active: !active });
@@ -329,6 +353,56 @@ export default function AdminPanel({ socket }) {
   async function toggleAttendantShift(id, on_shift) {
     await api.patch(`/users/${id}/shift`, { on_shift: !on_shift });
     loadAttendants();
+  }
+
+  // --- Departamentos ---
+  async function loadDepartments() {
+    const { data } = await api.get('/departments');
+    setDepartments(Array.isArray(data) ? data : []);
+  }
+  async function saveDept() {
+    if (!deptForm?.name?.trim()) return;
+    try {
+      const payload = { name: deptForm.name.trim(), color: deptForm.color, is_default: !!deptForm.is_default };
+      if (deptForm.id) await api.put(`/departments/${deptForm.id}`, payload);
+      else await api.post('/departments', payload);
+      setDeptForm(null);
+      loadDepartments();
+    } catch (err) {
+      alert(err.response?.data?.error || 'Erro ao guardar departamento');
+    }
+  }
+  async function openMembers(deptId) {
+    try {
+      const { data } = await api.get(`/departments/${deptId}/members`);
+      setDeptMembers(Array.isArray(data) ? data.map(m => m.id) : []);
+      setDeptMembersFor(deptId);
+    } catch (err) {
+      alert(err.response?.data?.error || 'Erro ao carregar membros');
+    }
+  }
+  async function saveMembers() {
+    try {
+      await api.put(`/departments/${deptMembersFor}/members`, { user_ids: deptMembers });
+      setDeptMembersFor(null);
+      loadDepartments();
+      loadAttendants();
+    } catch (err) {
+      alert(err.response?.data?.error || 'Erro ao guardar membros');
+    }
+  }
+  async function archiveDept() {
+    const url = reassignTarget
+      ? `/departments/${deptToArchive.id}?reassign_to=${reassignTarget}`
+      : `/departments/${deptToArchive.id}`;
+    try {
+      await api.delete(url);
+      setDeptToArchive(null);
+      setReassignTarget('');
+      loadDepartments();
+    } catch (err) {
+      alert(err.response?.data?.error || 'Erro ao arquivar');
+    }
   }
 
   async function loadBroadcastContacts(q = '') {
@@ -376,7 +450,7 @@ export default function AdminPanel({ socket }) {
 
   const activeAttendants = attendants.filter(a => a.active);
   const TABS = [
-    ['dashboard','📊 Dashboard'],['conversations','Conversas'],['attendants','Atendentes'],['contacts','Contactos'],
+    ['dashboard','📊 Dashboard'],['conversations','Conversas'],['attendants','Atendentes'],['departments','🏢 Departamentos'],['contacts','Contactos'],
     ['reports','Relatórios'],['scheduled','Agendamentos'],
     ['transfers','Transferências'],['quickreplies','Respostas Rápidas'],
     ['tags','Etiquetas'],['automation','🤖 Automação'],['bot','Bot'],
@@ -483,12 +557,23 @@ export default function AdminPanel({ socket }) {
               <button style={S.addBtn} type="submit">Adicionar</button>
             </form>
             <table style={S.table}>
-              <thead><tr><th>Nome</th><th>Email</th><th>Estado</th><th>Ativo</th><th></th></tr></thead>
+              <thead><tr><th>Nome</th><th>Email</th><th>Departamentos</th><th>Estado</th><th>Ativo</th><th></th></tr></thead>
               <tbody>
                 {attendants.map(a => (
                   <tr key={a.id}>
                     <td style={{ fontWeight: 600 }}>{a.name}</td>
                     <td style={{ color: 'var(--muted)' }}>{a.email}</td>
+                    <td>
+                      {(a.departments || []).length === 0 ? (
+                        <span style={{ color: 'var(--hint)', fontSize: '0.78rem' }}>—</span>
+                      ) : (
+                        <div style={{ display: 'flex', gap: '0.25rem', flexWrap: 'wrap' }}>
+                          {a.departments.map(d => (
+                            <span key={d.id} style={{ background: d.color + '18', border: `1px solid ${d.color}55`, color: d.color, borderRadius: '999px', padding: '0.05rem 0.45rem', fontSize: '0.7rem', fontWeight: 600 }}>{d.name}</span>
+                          ))}
+                        </div>
+                      )}
+                    </td>
                     <td>
                       <span style={{ color: a.status === 'online' ? 'var(--success)' : a.status === 'busy' ? 'var(--warn)' : 'var(--hint)', fontWeight: 500, fontSize: '0.85rem' }}>{a.status}</span>
                     </td>
@@ -498,6 +583,140 @@ export default function AdminPanel({ socket }) {
                 ))}
               </tbody>
             </table>
+          </div>
+        )}
+
+        {/* DEPARTAMENTOS */}
+        {tab === 'departments' && (
+          <div style={S.section}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '1.5rem' }}>
+              <h2 style={{ ...S.sectionTitle, margin: 0 }}>Departamentos</h2>
+              <button style={S.addBtn} onClick={() => setDeptForm({ name: '', color: '#3b82f6', is_default: false })}>
+                + Novo departamento
+              </button>
+            </div>
+
+            {departments.length === 0 && (
+              <div style={{ background: 'var(--card)', padding: '1.5rem', borderRadius: 'var(--r-md)', border: '1px dashed var(--border-m)', color: 'var(--muted)', textAlign: 'center' }}>
+                <p style={{ margin: 0, marginBottom: '0.5rem' }}>Ainda não há departamentos.</p>
+                <p style={{ margin: 0, fontSize: '0.82rem' }}>Cria o primeiro para começar a rotear conversas por equipa (Vendas, Suporte, etc).</p>
+              </div>
+            )}
+
+            <div style={S.cards}>
+              {departments.map(d => (
+                <div key={d.id} style={{ ...S.card, minWidth: 240, maxWidth: 320, borderLeft: `5px solid ${d.color}`, position: 'relative', padding: '1.25rem' }}>
+                  {d.is_default ? (
+                    <span style={{ position: 'absolute', top: 10, right: 10, background: 'var(--accent-l)', color: 'var(--accent)', borderRadius: '999px', padding: '0.1rem 0.55rem', fontSize: '0.68rem', fontWeight: 700 }}>Padrão</span>
+                  ) : null}
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.4rem' }}>
+                    <span style={{ width: 12, height: 12, borderRadius: '50%', background: d.color, flexShrink: 0 }} />
+                    <strong style={{ fontSize: '1rem', color: 'var(--text)' }}>{d.name}</strong>
+                  </div>
+                  <div style={{ fontSize: '0.78rem', color: 'var(--muted)', marginBottom: '0.9rem' }}>
+                    👥 {d.member_count} atendente(s){'   '}·{'   '}💬 {d.active_conversations} aberta(s)
+                  </div>
+                  <div style={{ display: 'flex', gap: '0.4rem', flexWrap: 'wrap' }}>
+                    <button style={S.outlineBtn} onClick={() => setDeptForm({ id: d.id, name: d.name, color: d.color, is_default: !!d.is_default })}>Editar</button>
+                    <button style={S.outlineBtn} onClick={() => openMembers(d.id)}>Membros</button>
+                    <button style={{ ...S.outlineBtn, color: 'var(--danger)', borderColor: 'var(--danger)' }} onClick={() => setDeptToArchive({ id: d.id, name: d.name, open_count: d.active_conversations })}>Arquivar</button>
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            {/* Modal: criar / editar */}
+            {deptForm && (
+              <div style={S.modalOverlay} onClick={() => setDeptForm(null)}>
+                <div style={S.modal} onClick={e => e.stopPropagation()}>
+                  <h3 style={{ marginTop: 0 }}>{deptForm.id ? 'Editar' : 'Novo'} departamento</h3>
+                  <label style={S.fieldLabel}>Nome</label>
+                  <input style={{ ...S.input, width: '100%', marginBottom: '1rem', boxSizing: 'border-box' }}
+                    placeholder="Ex: Vendas, Suporte, Financeiro" autoFocus
+                    value={deptForm.name}
+                    onChange={e => setDeptForm(p => ({ ...p, name: e.target.value }))} />
+                  <label style={S.fieldLabel}>Cor</label>
+                  <div style={{ display: 'flex', gap: '0.4rem', marginBottom: '1rem', flexWrap: 'wrap' }}>
+                    {COLORS.map(c => (
+                      <button key={c} type="button" onClick={() => setDeptForm(p => ({ ...p, color: c }))}
+                        style={{ width: 30, height: 30, borderRadius: '50%', background: c, border: deptForm.color === c ? '3px solid var(--text)' : '2px solid var(--border-m)', cursor: 'pointer', padding: 0 }} />
+                    ))}
+                  </div>
+                  <label style={{ display: 'flex', alignItems: 'flex-start', gap: '0.5rem', marginBottom: '1.25rem', fontSize: '0.85rem', cursor: 'pointer' }}>
+                    <input type="checkbox" checked={!!deptForm.is_default}
+                      onChange={e => setDeptForm(p => ({ ...p, is_default: e.target.checked }))}
+                      style={{ marginTop: 2 }} />
+                    <span>
+                      <strong>Marcar como padrão</strong>
+                      <br />
+                      <span style={{ color: 'var(--muted)', fontSize: '0.8rem' }}>Recebe conversas que não casam com nenhuma regra de keyword. Só pode haver um padrão.</span>
+                    </span>
+                  </label>
+                  <div style={{ display: 'flex', gap: '0.5rem', justifyContent: 'flex-end' }}>
+                    <button style={S.outlineBtn} onClick={() => setDeptForm(null)}>Cancelar</button>
+                    <button style={S.addBtn} onClick={saveDept}>Guardar</button>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Modal: membros */}
+            {deptMembersFor && (
+              <div style={S.modalOverlay} onClick={() => setDeptMembersFor(null)}>
+                <div style={S.modal} onClick={e => e.stopPropagation()}>
+                  <h3 style={{ marginTop: 0 }}>Membros — {departments.find(d => d.id === deptMembersFor)?.name}</h3>
+                  <p style={{ color: 'var(--muted)', fontSize: '0.83rem', marginTop: 0, marginBottom: '0.75rem' }}>
+                    Atendentes marcados vão receber conversas roteadas para este departamento.
+                  </p>
+                  <div style={{ maxHeight: '40vh', overflowY: 'auto', border: '1px solid var(--border)', borderRadius: 'var(--r-sm)', padding: '0.5rem', marginBottom: '1rem' }}>
+                    {activeAttendants.length === 0 && <p style={{ margin: 0, color: 'var(--hint)', fontSize: '0.85rem' }}>Sem atendentes activos</p>}
+                    {activeAttendants.map(a => (
+                      <label key={a.id} style={{ display: 'flex', alignItems: 'center', gap: '0.6rem', padding: '0.4rem 0.5rem', cursor: 'pointer', fontSize: '0.9rem', borderRadius: 'var(--r-sm)' }}>
+                        <input type="checkbox" checked={deptMembers.includes(a.id)}
+                          onChange={e => setDeptMembers(prev => e.target.checked ? [...prev, a.id] : prev.filter(x => x !== a.id))} />
+                        <span style={{ flex: 1 }}>{a.name}</span>
+                        <span style={{ fontSize: '0.72rem', color: a.status === 'online' ? 'var(--success)' : 'var(--hint)' }}>{a.status}</span>
+                      </label>
+                    ))}
+                  </div>
+                  <div style={{ display: 'flex', gap: '0.5rem', justifyContent: 'flex-end' }}>
+                    <button style={S.outlineBtn} onClick={() => setDeptMembersFor(null)}>Cancelar</button>
+                    <button style={S.addBtn} onClick={saveMembers}>Guardar</button>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Modal: arquivar */}
+            {deptToArchive && (
+              <div style={S.modalOverlay} onClick={() => { setDeptToArchive(null); setReassignTarget(''); }}>
+                <div style={S.modal} onClick={e => e.stopPropagation()}>
+                  <h3 style={{ marginTop: 0 }}>Arquivar departamento</h3>
+                  <p style={{ fontSize: '0.9rem' }}>Arquivar <strong>{deptToArchive.name}</strong>? Esta acção pode ser revertida diretamente na BD se necessário.</p>
+                  {deptToArchive.open_count > 0 && (
+                    <>
+                      <p style={{ fontSize: '0.85rem', color: 'var(--warn)', background: 'var(--warn-l)', padding: '0.6rem 0.8rem', borderRadius: 'var(--r-sm)', marginBottom: '0.75rem' }}>
+                        ⚠️ Existem {deptToArchive.open_count} conversa(s) abertas neste departamento. Escolha um departamento para receber:
+                      </p>
+                      <select style={{ ...S.select, width: '100%', marginBottom: '1rem', boxSizing: 'border-box' }} value={reassignTarget} onChange={e => setReassignTarget(e.target.value)}>
+                        <option value="">— Escolher departamento —</option>
+                        {departments.filter(d => d.id !== deptToArchive.id).map(d => (
+                          <option key={d.id} value={d.id}>{d.name}</option>
+                        ))}
+                      </select>
+                    </>
+                  )}
+                  <div style={{ display: 'flex', gap: '0.5rem', justifyContent: 'flex-end' }}>
+                    <button style={S.outlineBtn} onClick={() => { setDeptToArchive(null); setReassignTarget(''); }}>Cancelar</button>
+                    <button style={{ ...S.addBtn, background: 'var(--danger)' }}
+                      disabled={deptToArchive.open_count > 0 && !reassignTarget}
+                      onClick={archiveDept}>
+                      Arquivar
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
           </div>
         )}
 
@@ -792,24 +1011,59 @@ export default function AdminPanel({ socket }) {
             <h2 style={S.sectionTitle}>Automação</h2>
 
             {/* --- Bot por palavra-chave --- */}
-            <h3 style={S.subTitle}>🤖 Bot por palavra-chave</h3>
+            <h3 style={S.subTitle}>🤖 Regras por palavra-chave</h3>
             <p style={{ color: 'var(--muted)', fontSize: '0.85rem', marginBottom: '1rem' }}>
-              Quando uma mensagem contém a palavra-chave, o bot responde automaticamente.
+              Quando uma mensagem nova contém a palavra-chave, a regra pode (1) responder automaticamente, (2) rotear a conversa para um departamento, ou ambos.
+              Em caso de empate, ganha a regra com <strong>prioridade menor</strong>.
             </p>
-            <form onSubmit={addKeywordRule} style={{ ...S.form, flexWrap: 'wrap', marginBottom: '1rem' }}>
-              <input style={{ ...S.input, width: '140px' }} placeholder="Palavra-chave" value={newKR.keyword}
-                onChange={e => setNewKR(p => ({ ...p, keyword: e.target.value }))} required />
-              <input style={{ ...S.input, flex: 1, minWidth: '200px' }} placeholder="Resposta automática" value={newKR.response}
-                onChange={e => setNewKR(p => ({ ...p, response: e.target.value }))} required />
+            <form onSubmit={addKeywordRule} style={{ ...S.form, flexWrap: 'wrap', marginBottom: '1rem', alignItems: 'flex-end' }}>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.2rem' }}>
+                <label style={S.fieldLabel}>Palavra-chave</label>
+                <input style={{ ...S.input, width: '140px' }} placeholder="defeito" value={newKR.keyword}
+                  onChange={e => setNewKR(p => ({ ...p, keyword: e.target.value }))} required />
+              </div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.2rem', flex: 1, minWidth: '180px' }}>
+                <label style={S.fieldLabel}>Resposta automática (opcional)</label>
+                <input style={{ ...S.input }} placeholder="Deixe em branco para apenas rotear" value={newKR.response}
+                  onChange={e => setNewKR(p => ({ ...p, response: e.target.value }))} />
+              </div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.2rem' }}>
+                <label style={S.fieldLabel}>Rotear para</label>
+                <select style={{ ...S.input, width: '160px' }} value={newKR.department_id}
+                  onChange={e => setNewKR(p => ({ ...p, department_id: e.target.value }))}>
+                  <option value="">— Nenhum —</option>
+                  {departments.map(d => (
+                    <option key={d.id} value={d.id}>{d.name}</option>
+                  ))}
+                </select>
+              </div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.2rem' }}>
+                <label style={S.fieldLabel} title="Menor número = mais prioritária. Default: 100">Prioridade</label>
+                <input type="number" style={{ ...S.input, width: '80px' }} value={newKR.priority}
+                  onChange={e => setNewKR(p => ({ ...p, priority: e.target.value }))} />
+              </div>
               <button style={S.addBtn} type="submit">Adicionar</button>
             </form>
             <table style={S.table}>
-              <thead><tr><th>Palavra-chave</th><th>Resposta</th><th>Ativa</th><th></th></tr></thead>
+              <thead><tr><th>Prio.</th><th>Palavra-chave</th><th>Resposta</th><th>Departamento</th><th>Ativa</th><th></th></tr></thead>
               <tbody>
                 {keywordRules.map(r => (
                   <tr key={r.id}>
+                    <td style={{ fontSize: '0.78rem', color: 'var(--muted)', fontFamily: 'monospace' }}>{r.priority ?? 100}</td>
                     <td><strong style={{ color: 'var(--accent)' }}>{r.keyword}</strong></td>
-                    <td style={{ maxWidth: '350px', wordBreak: 'break-word', color: 'var(--muted)', fontSize: '0.85rem' }}>{r.response}</td>
+                    <td style={{ maxWidth: '300px', wordBreak: 'break-word', color: r.response ? 'var(--muted)' : 'var(--hint)', fontSize: '0.85rem', fontStyle: r.response ? 'normal' : 'italic' }}>
+                      {r.response || '— (sem resposta)'}
+                    </td>
+                    <td>
+                      {r.department_name ? (
+                        <span style={{ background: (r.department_color || '#6b7280') + '18', border: `1px solid ${(r.department_color || '#6b7280')}55`, color: r.department_color || '#6b7280', borderRadius: '999px', padding: '0.1rem 0.55rem', fontSize: '0.72rem', fontWeight: 600, display: 'inline-flex', alignItems: 'center', gap: '0.25rem' }}>
+                          <span style={{ width: 6, height: 6, borderRadius: '50%', background: r.department_color || '#6b7280' }} />
+                          {r.department_name}
+                        </span>
+                      ) : (
+                        <span style={{ color: 'var(--hint)', fontSize: '0.78rem' }}>—</span>
+                      )}
+                    </td>
                     <td>
                       <button onClick={() => toggleKeywordRule(r.id, r.active)}
                         style={{ padding: '0.2rem 0.6rem', borderRadius: '999px', border: 'none', cursor: 'pointer', fontSize: '0.78rem', fontWeight: 600, background: r.active ? 'var(--success)' : 'var(--border)', color: r.active ? '#fff' : 'var(--muted)' }}>
@@ -819,7 +1073,7 @@ export default function AdminPanel({ socket }) {
                     <td><button style={{ ...S.outlineBtn, color: 'var(--danger)', borderColor: 'var(--danger)' }} onClick={() => deleteKeywordRule(r.id)}>Eliminar</button></td>
                   </tr>
                 ))}
-                {keywordRules.length === 0 && <tr><td colSpan={4} style={{ color: 'var(--hint)', textAlign: 'center', padding: '1rem' }}>Sem regras criadas</td></tr>}
+                {keywordRules.length === 0 && <tr><td colSpan={6} style={{ color: 'var(--hint)', textAlign: 'center', padding: '1rem' }}>Sem regras criadas</td></tr>}
               </tbody>
             </table>
 

@@ -120,10 +120,26 @@ db.exec(`
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP
   );
 
+  CREATE TABLE IF NOT EXISTS departments (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    name TEXT NOT NULL UNIQUE,
+    color TEXT NOT NULL DEFAULT '#6b7280',
+    is_default INTEGER NOT NULL DEFAULT 0,
+    active INTEGER NOT NULL DEFAULT 1,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+  );
+
+  CREATE TABLE IF NOT EXISTS user_departments (
+    user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    department_id INTEGER NOT NULL REFERENCES departments(id) ON DELETE CASCADE,
+    PRIMARY KEY (user_id, department_id)
+  );
+
   CREATE INDEX IF NOT EXISTS idx_conversations_assigned ON conversations(assigned_to);
   CREATE INDEX IF NOT EXISTS idx_messages_conversation ON messages(conversation_id);
   CREATE INDEX IF NOT EXISTS idx_transfer_logs_conv ON transfer_logs(conversation_id);
   CREATE INDEX IF NOT EXISTS idx_ratings_attendant ON ratings(attendant_id);
+  CREATE INDEX IF NOT EXISTS idx_user_departments_dept ON user_departments(department_id);
 `);
 
 // Migrations
@@ -145,6 +161,10 @@ try { db.exec(`ALTER TABLE messages ADD COLUMN failed INTEGER NOT NULL DEFAULT 0
 try { db.exec(`ALTER TABLE messages ADD COLUMN reply_to_id INTEGER`); } catch (_) {}
 try { db.exec(`ALTER TABLE messages ADD COLUMN deleted INTEGER NOT NULL DEFAULT 0`); } catch (_) {}
 try { db.exec(`ALTER TABLE conversations ADD COLUMN awaiting_rating INTEGER NOT NULL DEFAULT 0`); } catch (_) {}
+try { db.exec(`ALTER TABLE conversations ADD COLUMN department_id INTEGER REFERENCES departments(id)`); } catch (_) {}
+try { db.exec(`ALTER TABLE keyword_rules ADD COLUMN department_id INTEGER REFERENCES departments(id)`); } catch (_) {}
+try { db.exec(`ALTER TABLE keyword_rules ADD COLUMN priority INTEGER NOT NULL DEFAULT 100`); } catch (_) {}
+try { db.exec(`CREATE INDEX IF NOT EXISTS idx_conversations_department ON conversations(department_id)`); } catch (_) {}
 
 // Seed default settings
 const settingsDefaults = [

@@ -51,14 +51,23 @@ export default function ConversationList({ socket, selected, onSelect }) {
   const [assignPickerId, setAssignPickerId] = useState(null); // id da conversa com picker aberto
   const [assigning, setAssigning] = useState(false);
 
+  // Departamentos a que o user pertence (só relevante para atendentes com >1 dept)
+  const [myDepartments, setMyDepartments] = useState([]);
+  const [filterDept, setFilterDept] = useState(''); // '' = todos
+
   useEffect(() => {
     api.get('/tags').then(({ data }) => setTags(Array.isArray(data) ? data : [])).catch(() => {});
     if (user.role === 'owner') {
       api.get('/users').then(({ data }) => setAttendants(Array.isArray(data) ? data.filter(u => u.role === 'attendant' && u.active) : [])).catch(() => {});
     }
+    // GET /departments inclui is_mine para o utilizador actual
+    api.get('/departments').then(({ data }) => {
+      const mine = Array.isArray(data) ? data.filter(d => d.is_mine) : [];
+      setMyDepartments(mine);
+    }).catch(() => {});
   }, []);
 
-  useEffect(() => { load(); }, [filter, filterPriority, filterAttendant, filterTag]);
+  useEffect(() => { load(); }, [filter, filterPriority, filterAttendant, filterTag, filterDept]);
 
   useEffect(() => {
     if (!socket) return;
@@ -123,6 +132,7 @@ export default function ConversationList({ socket, selected, onSelect }) {
     if (filterPriority) params.priority = filterPriority;
     if (filterAttendant) params.attendant_id = filterAttendant;
     if (filterTag) params.tag_id = filterTag;
+    if (filterDept) params.department_id = filterDept;
     const { data } = await api.get('/conversations', { params });
     setConversations(Array.isArray(data) ? data : []);
   }
@@ -259,6 +269,29 @@ export default function ConversationList({ socket, selected, onSelect }) {
             </div>
           )}
 
+          {/* Chip strip de departamentos — só atendentes em ≥2 depts */}
+          {myDepartments.length >= 2 && (
+            <div style={{ display: 'flex', gap: '0.3rem', padding: '0.4rem 1rem 0.2rem', flexWrap: 'wrap' }}>
+              <button
+                style={{ ...S.filterBtn, ...(filterDept === '' ? S.filterActive : {}), display: 'inline-flex', alignItems: 'center', gap: '0.3rem' }}
+                onClick={() => setFilterDept('')}>
+                Todos
+              </button>
+              {myDepartments.map(d => (
+                <button key={d.id}
+                  style={{
+                    ...S.filterBtn,
+                    display: 'inline-flex', alignItems: 'center', gap: '0.3rem',
+                    ...(String(filterDept) === String(d.id) ? { background: d.color, color: '#fff', border: `1px solid ${d.color}` } : { borderColor: d.color + '55', color: d.color }),
+                  }}
+                  onClick={() => setFilterDept(String(filterDept) === String(d.id) ? '' : d.id)}>
+                  <span style={{ width: 7, height: 7, borderRadius: '50%', background: String(filterDept) === String(d.id) ? '#fff' : d.color }} />
+                  {d.name}
+                </button>
+              ))}
+            </div>
+          )}
+
           <div style={S.filters}>
             {FILTERS.map(([val, label]) => (
               <button key={val} style={{ ...S.filterBtn, ...(filter === val ? S.filterActive : {}) }}
@@ -322,8 +355,11 @@ export default function ConversationList({ socket, selected, onSelect }) {
                   </div>
                   <div style={S.info}>
                     <div style={S.row}>
-                      <span style={{ ...S.name, fontWeight: unread > 0 && !isSelected ? 700 : 600 }}>
-                        {conv.contact_name || conv.phone}
+                      <span style={{ ...S.name, fontWeight: unread > 0 && !isSelected ? 700 : 600, display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
+                        {conv.department_color && (
+                          <span title={conv.department_name || ''} style={{ width: 8, height: 8, borderRadius: '50%', background: conv.department_color, flexShrink: 0 }} />
+                        )}
+                        <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{conv.contact_name || conv.phone}</span>
                       </span>
                       <span style={{ ...S.badge, background: STATUS_BG[conv.status], color: STATUS_COLOR[conv.status] }}>
                         {STATUS_LABEL[conv.status]}

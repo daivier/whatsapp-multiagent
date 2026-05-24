@@ -7,6 +7,7 @@ const {
 } = require('@whiskeysockets/baileys');
 const qrcode = require('qrcode');
 const db = require('../db/schema');
+const { computeTargetDepartment, pickLeastBusyAttendant } = require('./routing');
 const fs = require('fs');
 const path = require('path');
 const { spawn } = require('child_process');
@@ -645,7 +646,9 @@ async function handleIncomingMessage(msg) {
         }
         reopened = true;
       } else {
-        db.prepare(`INSERT INTO conversations (contact_id, status) VALUES (?, 'waiting')`).run(contact.id);
+        const targetDeptId = computeTargetDepartment(body);
+        db.prepare(`INSERT INTO conversations (contact_id, status, department_id) VALUES (?, 'waiting', ?)`)
+          .run(contact.id, targetDeptId);
         conversation = db
           .prepare(`SELECT * FROM conversations WHERE contact_id = ? ORDER BY id DESC LIMIT 1`)
           .get(contact.id);
@@ -653,13 +656,10 @@ async function handleIncomingMessage(msg) {
 
       // Auto-assign (só para mensagens do cliente)
       // Apenas atribui se houver atendente online/no turno — sem fallback para offline
+      // Se a conversa tem department_id, restringe aos membros desse departamento;
+      // caso contrário (modo legacy), considera todos os atendentes.
       if (!keptAttendant && (!reopened || !conversation.assigned_to)) {
-        const attendant = db.prepare(`
-          SELECT u.id, COUNT(c.id) as load FROM users u
-          LEFT JOIN conversations c ON c.assigned_to = u.id AND c.status = 'open'
-          WHERE u.role = 'attendant' AND u.status != 'offline' AND u.active = 1 AND u.on_shift = 1
-          GROUP BY u.id ORDER BY load ASC LIMIT 1
-        `).get();
+        const attendant = pickLeastBusyAttendant(conversation.department_id);
         if (attendant) {
           db.prepare(`UPDATE conversations SET assigned_to = ?, status = 'open', updated_at = CURRENT_TIMESTAMP WHERE id = ?`)
             .run(attendant.id, conversation.id);
@@ -945,10 +945,12 @@ function getStatus() {
 function getConversationWithContact(conversationId) {
   return db.prepare(`
     SELECT conv.*, con.phone, con.name as contact_name, con.email as contact_email,
-           con.notes as contact_notes, con.id as contact_id, u.name as attendant_name
+           con.notes as contact_notes, con.id as contact_id, u.name as attendant_name,
+           d.name as department_name, d.color as department_color
     FROM conversations conv
     JOIN contacts con ON con.id = conv.contact_id
     LEFT JOIN users u ON u.id = conv.assigned_to
+    LEFT JOIN departments d ON d.id = conv.department_id
     WHERE conv.id = ?
   `).get(conversationId);
 }
