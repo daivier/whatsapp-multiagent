@@ -125,12 +125,12 @@ npm run build
 # ── 4. PM2 ───────────────────────────────────────────────────────────────────
 echo "[4/6] A registar no PM2..."
 pm2 delete "$PM2_NAME" 2>/dev/null || true
+# IMPORTANTE: cwd tem de ser $TENANT_DIR/backend (não $TENANT_DIR) — caso contrário
+# dotenv não encontra o .env e o backend cai no PORT default (3001), causando
+# EADDRINUSE em VMs onde outra app já usa essa porta.
 pm2 start "$TENANT_DIR/backend/src/app.js" \
   --name "$PM2_NAME" \
-  --cwd "$TENANT_DIR" \
-  --wait-ready \
-  --listen-timeout 15000 \
-  --kill-timeout 8000
+  --cwd "$TENANT_DIR/backend"
 pm2 save
 
 # ── 5. Nginx vhost ───────────────────────────────────────────────────────────

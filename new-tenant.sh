@@ -79,9 +79,10 @@ npm run build
 
 # --- 4. Registar no PM2 ---
 echo "[4/6] A registar no PM2..."
+# IMPORTANTE: cwd tem de ser $TENANT_DIR/backend para o dotenv encontrar o .env
 pm2 start "$TENANT_DIR/backend/src/app.js" \
   --name "wa-$SLUG" \
-  --cwd "$TENANT_DIR" \
+  --cwd "$TENANT_DIR/backend" \
   --
 pm2 save
 
