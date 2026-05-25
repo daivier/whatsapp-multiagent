@@ -123,6 +123,10 @@ export default function ConversationList({ socket, selected, onSelect }) {
       setConversations(prev => prev.filter(c => c.id !== id));
     }
 
+    function onConversationTaken({ conversation_id }) {
+      setConversations(prev => prev.filter(c => c.id !== conversation_id));
+    }
+
     function onContactUpdated(contact) {
       setConversations(prev => prev.map(c =>
         c.contact_id === contact.id ? { ...c, contact_name: contact.name } : c
@@ -143,6 +147,7 @@ export default function ConversationList({ socket, selected, onSelect }) {
     socket.on('conversation:updated', onConversationUpdated);
     socket.on('conversation:deleted', onConversationDeleted);
     socket.on('conversation:unassigned', onConversationUnassigned);
+    socket.on('conversation:taken', onConversationTaken);
     socket.on('contact:updated', onContactUpdated);
     socket.on('conversation:assigned', onConversationAssigned);
     return () => {
@@ -151,6 +156,7 @@ export default function ConversationList({ socket, selected, onSelect }) {
       socket.off('conversation:updated', onConversationUpdated);
       socket.off('conversation:deleted', onConversationDeleted);
       socket.off('conversation:unassigned', onConversationUnassigned);
+      socket.off('conversation:taken', onConversationTaken);
       socket.off('contact:updated', onContactUpdated);
       socket.off('conversation:assigned', onConversationAssigned);
     };
