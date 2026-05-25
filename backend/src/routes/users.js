@@ -79,13 +79,18 @@ router.post('/', authMiddleware, ownerOnly, (req, res) => {
 // PATCH /users/:id — ativar/desativar ou alterar dados (owner only)
 router.patch('/:id', authMiddleware, ownerOnly, (req, res) => {
   const { id } = req.params;
-  const { active, name, password, department_ids } = req.body;
+  const { active, name, email, password, department_ids } = req.body;
 
   if (active !== undefined) {
     db.prepare('UPDATE users SET active = ? WHERE id = ?').run(active ? 1 : 0, id);
   }
   if (name) {
     db.prepare('UPDATE users SET name = ? WHERE id = ?').run(name.trim(), id);
+  }
+  if (email) {
+    const conflict = db.prepare('SELECT id FROM users WHERE email = ? AND id != ?').get(email.trim(), id);
+    if (conflict) return res.status(409).json({ error: 'Email já está em uso por outro utilizador' });
+    db.prepare('UPDATE users SET email = ? WHERE id = ?').run(email.trim(), id);
   }
   if (password) {
     if (password.length < 6) return res.status(400).json({ error: 'A senha deve ter pelo menos 6 caracteres' });

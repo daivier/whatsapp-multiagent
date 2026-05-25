@@ -304,7 +304,7 @@ export default function AdminPanel({ socket }) {
     if (!editForm.name.trim()) { setEditError('O nome não pode estar vazio'); return; }
     setEditSaving(true); setEditError('');
     try {
-      const payload = { name: editForm.name.trim() };
+      const payload = { name: editForm.name.trim(), email: editForm.email.trim() };
       if (editForm.password) payload.password = editForm.password;
       await api.patch(`/users/${editingUser.id}`, payload);
       setEditingUser(null);
@@ -683,7 +683,7 @@ export default function AdminPanel({ socket }) {
                     </td>
                     <td style={{ color: a.active ? 'var(--success)' : 'var(--hint)', fontWeight: 500 }}>{a.active ? 'Sim' : 'Não'}</td>
                     <td style={{ display: 'flex', gap: '0.4rem' }}>
-                      <button style={{ ...S.outlineBtn, borderColor: 'var(--accent)', color: 'var(--accent)' }} onClick={() => { setEditingUser(a); setEditForm({ name: a.name, password: '' }); setEditError(''); }}>Editar</button>
+                      <button style={{ ...S.outlineBtn, borderColor: 'var(--accent)', color: 'var(--accent)' }} onClick={() => { setEditingUser(a); setEditForm({ name: a.name, email: a.email, password: '' }); setEditError(''); }}>Editar</button>
                       <button style={S.outlineBtn} onClick={() => toggleAttendant(a.id, a.active)}>{a.active ? 'Desativar' : 'Ativar'}</button>
                     </td>
                   </tr>
@@ -705,6 +705,10 @@ export default function AdminPanel({ socket }) {
               <div>
                 <label style={{ fontSize: '0.82rem', fontWeight: 600, color: 'var(--muted)', display: 'block', marginBottom: '0.3rem' }}>Nome</label>
                 <input style={S.input} value={editForm.name} onChange={e => setEditForm(p => ({ ...p, name: e.target.value }))} />
+              </div>
+              <div>
+                <label style={{ fontSize: '0.82rem', fontWeight: 600, color: 'var(--muted)', display: 'block', marginBottom: '0.3rem' }}>Email</label>
+                <input style={S.input} type="email" value={editForm.email} onChange={e => setEditForm(p => ({ ...p, email: e.target.value }))} />
               </div>
               <div>
                 <label style={{ fontSize: '0.82rem', fontWeight: 600, color: 'var(--muted)', display: 'block', marginBottom: '0.3rem' }}>Nova senha <span style={{ fontWeight: 400, color: 'var(--hint)' }}>(deixar em branco para não alterar)</span></label>
