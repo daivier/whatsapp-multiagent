@@ -99,9 +99,17 @@ function MessageContent({ msg, onMediaLoad }) {
   if (msg.deleted) {
     return <p style={{ margin: 0, fontSize: '0.85rem', color: 'var(--hint)', fontStyle: 'italic' }}>🚫 Mensagem apagada</p>;
   }
-  const isViewOnce = !msg.media_url && msg.body && (
-    msg.body.includes('visualização única') || msg.body === '🔒 Mensagem de visualização única'
-  );
+  // Sentinelas exactos que o backend guarda para mensagens de visualização única.
+  // NUNCA usar .includes() pois apanharia mensagens normais com essas palavras.
+  const VIEW_ONCE_SENTINELS = new Set([
+    '🔒 Mensagem de visualização única',
+    '📷 Imagem de visualização única',
+    '🎥 Vídeo de visualização única',
+    '🎤 Áudio de visualização única',
+    '🪄 Sticker de visualização única',
+    '📎 Ficheiro de visualização única',
+  ]);
+  const isViewOnce = !msg.media_url && msg.body && VIEW_ONCE_SENTINELS.has(msg.body);
   if (isViewOnce) {
     return (
       <div title="Mensagens de visualização única só podem ser abertas pelo destinatário no telemóvel. O conteúdo não está disponível aqui."
