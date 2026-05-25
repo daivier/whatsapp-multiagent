@@ -18,6 +18,10 @@ router.get('/', (req, res) => {
   if (show_cancelled !== '1') {
     conditions.push('sm.cancelled = 0');
   }
+  // Por defeito só mostra pendentes (não enviadas); ?show_sent=1 para incluir enviadas
+  if (req.query.show_sent !== '1') {
+    conditions.push('sm.sent_at IS NULL');
+  }
 
   const where = conditions.length ? 'WHERE ' + conditions.join(' AND ') : '';
   const rows = db.prepare(`
@@ -27,7 +31,7 @@ router.get('/', (req, res) => {
     LEFT JOIN contacts con ON con.id = cv.contact_id
     LEFT JOIN users u ON u.id = sm.created_by
     ${where}
-    ORDER BY sm.sent_at ASC, sm.scheduled_at ASC
+    ORDER BY sm.scheduled_at ASC
   `).all(...params);
   res.json(rows);
 });
