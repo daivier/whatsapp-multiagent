@@ -361,9 +361,28 @@ router.post('/:id/transfer', authMiddleware, async (req, res) => {
   const attendant = db.prepare('SELECT id, name FROM users WHERE id = ? AND role = ? AND active = 1').get(attendant_id, 'attendant');
   if (!attendant) return res.status(404).json({ error: 'Atendente não encontrado' });
 
+  // Inferir departamento e linha do novo atendente para actualizar a conversa
+  const attendantDept = db.prepare(`
+    SELECT ud.department_id, l.id AS line_id
+    FROM user_departments ud
+    LEFT JOIN lines l ON l.department_id = ud.department_id AND l.active = 1
+    WHERE ud.user_id = ?
+    ORDER BY ud.department_id
+    LIMIT 1
+  `).get(attendant_id);
+
   const prevConv = db.prepare('SELECT assigned_to FROM conversations WHERE id = ?').get(req.params.id);
-  db.prepare(`UPDATE conversations SET assigned_to = ?, status = 'open', updated_at = CURRENT_TIMESTAMP WHERE id = ?`)
-    .run(attendant_id, req.params.id);
+
+  if (attendantDept?.line_id) {
+    db.prepare(`UPDATE conversations SET assigned_to = ?, department_id = ?, line_id = ?, status = 'open', updated_at = CURRENT_TIMESTAMP WHERE id = ?`)
+      .run(attendant_id, attendantDept.department_id, attendantDept.line_id, req.params.id);
+  } else if (attendantDept?.department_id) {
+    db.prepare(`UPDATE conversations SET assigned_to = ?, department_id = ?, status = 'open', updated_at = CURRENT_TIMESTAMP WHERE id = ?`)
+      .run(attendant_id, attendantDept.department_id, req.params.id);
+  } else {
+    db.prepare(`UPDATE conversations SET assigned_to = ?, status = 'open', updated_at = CURRENT_TIMESTAMP WHERE id = ?`)
+      .run(attendant_id, req.params.id);
+  }
 
   // Log de transferência
   db.prepare('INSERT INTO transfer_logs (conversation_id, from_user_id, to_user_id, transferred_by) VALUES (?, ?, ?, ?)')
