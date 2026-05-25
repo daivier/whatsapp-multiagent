@@ -51,6 +51,14 @@ export default function ConversationList({ socket, selected, onSelect }) {
   const [assignPickerId, setAssignPickerId] = useState(null); // id da conversa com picker aberto
   const [assigning, setAssigning] = useState(false);
 
+  // Bulk selection mode
+  const [selectMode, setSelectMode] = useState(false);
+  const [bulkSelected, setBulkSelected] = useState(new Set()); // ids selecionados em modo bulk
+  const [bulkAction, setBulkAction] = useState(null);  // 'transfer' | 'tag' | 'department' | 'delete' | null
+  const [bulkActionValue, setBulkActionValue] = useState('');
+  const [bulkBusy, setBulkBusy] = useState(false);
+  const [departments2, setDepartments2] = useState([]); // depts para o picker de bulk (só owner)
+
   // Departamentos a que o user pertence (só relevante para atendentes com >1 dept)
   const [myDepartments, setMyDepartments] = useState([]);
   const [filterDept, setFilterDept] = useState(''); // '' = todos
@@ -69,6 +77,9 @@ export default function ConversationList({ socket, selected, onSelect }) {
       setMyDepartments(mine);
     }).catch(() => {});
     api.get('/lines').then(({ data }) => setLines(Array.isArray(data) ? data : [])).catch(() => {});
+    if (user.role === 'owner') {
+      api.get('/departments').then(({ data }) => setDepartments2(Array.isArray(data) ? data : [])).catch(() => {});
+    }
   }, []);
 
   useEffect(() => { load(); }, [filter, filterPriority, filterAttendant, filterTag, filterDept, filterLine]);
@@ -162,6 +173,67 @@ export default function ConversationList({ socket, selected, onSelect }) {
 
   function clearSearch() { setSearchQ(''); setSearchResults(null); setSearching(false); }
 
+  // ── Bulk actions ──
+  function toggleSelectMode() {
+    setSelectMode(v => { const next = !v; if (!next) setBulkSelected(new Set()); return next; });
+    setAssignPickerId(null);
+  }
+  function toggleBulkSelected(id) {
+    setBulkSelected(prev => { const next = new Set(prev); if (next.has(id)) next.delete(id); else next.add(id); return next; });
+  }
+  function selectAllVisible() {
+    setBulkSelected(new Set(conversations.map(c => c.id)));
+  }
+  function openBulk(action) {
+    if (bulkSelected.size === 0) return;
+    setBulkAction(action);
+    setBulkActionValue('');
+  }
+  async function executeBulk() {
+    if (bulkBusy) return;
+    setBulkBusy(true);
+    const ids = Array.from(bulkSelected);
+    try {
+      let endpoint, body, method = 'post';
+      switch (bulkAction) {
+        case 'close':
+          endpoint = '/conversations/bulk/close'; body = { ids };
+          if (!confirm(`Fechar ${ids.length} conversa(s)?`)) { setBulkBusy(false); return; }
+          break;
+        case 'transfer':
+          if (!bulkActionValue) { alert('Escolhe atendente'); setBulkBusy(false); return; }
+          endpoint = '/conversations/bulk/transfer'; body = { ids, attendant_id: parseInt(bulkActionValue, 10) };
+          break;
+        case 'tag':
+          if (!bulkActionValue) { alert('Escolhe etiqueta'); setBulkBusy(false); return; }
+          endpoint = '/conversations/bulk/tag'; body = { ids, tag_id: parseInt(bulkActionValue, 10) };
+          break;
+        case 'department':
+          endpoint = '/conversations/bulk/department'; body = { ids, department_id: bulkActionValue ? parseInt(bulkActionValue, 10) : null };
+          break;
+        case 'delete':
+          if (!confirm(`⚠️ APAGAR DEFINITIVAMENTE ${ids.length} conversa(s) e todas as mensagens? Não pode ser revertido.`)) { setBulkBusy(false); return; }
+          endpoint = '/conversations/bulk'; body = { ids }; method = 'delete';
+          break;
+      }
+      const res = method === 'delete'
+        ? await api.delete(endpoint, { data: body })
+        : await api.post(endpoint, body);
+      // Sucesso: limpar selecção e refrescar
+      setBulkSelected(new Set());
+      setSelectMode(false);
+      setBulkAction(null);
+      setBulkActionValue('');
+      load();
+      const denied = res.data?.denied?.length || 0;
+      const did = res.data?.updated ?? res.data?.deleted ?? ids.length;
+      if (denied > 0) alert(`${did} aplicadas. ${denied} negadas (sem permissão).`);
+    } catch (err) {
+      alert(err.response?.data?.error || 'Erro na operação em massa');
+    }
+    setBulkBusy(false);
+  }
+
   async function assignConversation(convId, attendantId) {
     setAssigning(true);
     try {
@@ -212,8 +284,41 @@ export default function ConversationList({ socket, selected, onSelect }) {
             >
               ⚙️{activeFilterCount > 0 && <span style={{ background: '#fff', color: 'var(--accent)', borderRadius: '999px', fontSize: '0.65rem', fontWeight: 700, minWidth: 14, height: 14, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', padding: '0 3px' }}>{activeFilterCount}</span>}
             </button>
+            <button
+              onClick={toggleSelectMode}
+              style={{ ...S.newBtn, background: selectMode ? 'var(--accent)' : 'var(--border)', color: selectMode ? '#fff' : 'var(--muted)', width: 'auto', padding: '0 8px', fontSize: '0.75rem' }}
+              title={selectMode ? 'Sair do modo selecção' : 'Selecionar várias'}
+            >
+              {selectMode ? '✕' : '☑️'}
+            </button>
             <button onClick={() => setShowNewModal(true)} style={S.newBtn} title="Nova conversa">✏️</button>
           </div>
+
+          {/* Barra de acções bulk */}
+          {selectMode && (
+            <div style={{ padding: '0.5rem 1rem', background: 'var(--accent-l)', borderBottom: '1px solid var(--accent)', display: 'flex', alignItems: 'center', gap: '0.4rem', flexWrap: 'wrap', fontSize: '0.78rem' }}>
+              <strong style={{ color: 'var(--accent)' }}>{bulkSelected.size} selecionada(s)</strong>
+              {bulkSelected.size === 0 && conversations.length > 0 && (
+                <button style={{ ...S.filterBtn, fontSize: '0.7rem' }} onClick={selectAllVisible}>Selecionar todas ({conversations.length})</button>
+              )}
+              {bulkSelected.size > 0 && (
+                <>
+                  <button style={{ ...S.filterBtn, fontSize: '0.72rem' }} onClick={() => openBulk('close')}>✓ Fechar</button>
+                  {user.role === 'owner' && (
+                    <button style={{ ...S.filterBtn, fontSize: '0.72rem' }} onClick={() => openBulk('transfer')}>🔄 Transferir</button>
+                  )}
+                  <button style={{ ...S.filterBtn, fontSize: '0.72rem' }} onClick={() => openBulk('tag')}>🏷️ Etiqueta</button>
+                  {user.role === 'owner' && (
+                    <button style={{ ...S.filterBtn, fontSize: '0.72rem' }} onClick={() => openBulk('department')}>🏢 Dept</button>
+                  )}
+                  {user.role === 'owner' && (
+                    <button style={{ ...S.filterBtn, fontSize: '0.72rem', color: 'var(--danger)', borderColor: 'var(--danger)' }} onClick={() => openBulk('delete')}>🗑️ Apagar</button>
+                  )}
+                  <button style={{ ...S.filterBtn, fontSize: '0.7rem', color: 'var(--hint)' }} onClick={() => setBulkSelected(new Set())}>Limpar</button>
+                </>
+              )}
+            </div>
+          )}
 
           {/* Painel de filtros avançados */}
           {showFilters && (
@@ -367,13 +472,24 @@ export default function ConversationList({ socket, selected, onSelect }) {
           <>
             {conversations.length === 0 && <p style={S.empty}>Nenhuma conversa</p>}
             {conversations.map(conv => {
-              const isSelected = selected?.id === conv.id;
+              const isOpen = selected?.id === conv.id;  // currently shown in ChatWindow
+              const isChecked = selectMode && bulkSelected.has(conv.id);
               const initial = (conv.contact_name || conv.phone || '?')[0].toUpperCase();
               const unread = conv.unread_count || 0;
               const wait = (conv.status !== 'closed') ? formatWait(conv.last_client_at) : null;
               const priorityColor = conv.priority === 'urgent' ? '#ef4444' : conv.priority === 'low' ? '#3b82f6' : null;
+              const itemClickHandler = () => {
+                if (selectMode) { toggleBulkSelected(conv.id); return; }
+                setAssignPickerId(null);
+                onSelect(conv);
+              };
               return (
-                <div key={conv.id} style={{ ...S.item, ...(isSelected ? S.itemActive : {}), ...(priorityColor ? { boxShadow: `inset 3px 0 0 ${priorityColor}` } : {}) }} onClick={() => { setAssignPickerId(null); onSelect(conv); }}>
+                <div key={conv.id}
+                  style={{ ...S.item, ...(isOpen && !selectMode ? S.itemActive : {}), ...(isChecked ? { background: 'var(--accent-l)' } : {}), ...(priorityColor ? { boxShadow: `inset 3px 0 0 ${priorityColor}` } : {}) }}
+                  onClick={itemClickHandler}>
+                  {selectMode && (
+                    <input type="checkbox" checked={!!isChecked} onChange={() => toggleBulkSelected(conv.id)} onClick={e => e.stopPropagation()} style={{ marginRight: '0.25rem', cursor: 'pointer', flexShrink: 0 }} />
+                  )}
                   <div style={{ position: 'relative', flexShrink: 0 }}>
                     <div style={{ ...S.avatar, background: isSelected ? 'var(--accent)' : 'var(--accent-l)', color: isSelected ? '#fff' : 'var(--accent)' }}>
                       {initial}
@@ -452,8 +568,65 @@ export default function ConversationList({ socket, selected, onSelect }) {
           </>
         )}
       </div>
+
+      {/* Modal de bulk action que precisa de valor (transfer/tag/department) ou confirmação (close/delete já lidados via confirm() em executeBulk) */}
+      {bulkAction && (bulkAction === 'transfer' || bulkAction === 'tag' || bulkAction === 'department') && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.4)', zIndex: 600, display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+          onClick={() => { setBulkAction(null); setBulkActionValue(''); }}>
+          <div onClick={e => e.stopPropagation()} style={{ background: 'var(--card)', padding: '1.25rem', borderRadius: 'var(--r-md)', minWidth: '280px', maxWidth: '90vw' }}>
+            <h3 style={{ margin: '0 0 0.75rem', fontSize: '1rem' }}>
+              {bulkAction === 'transfer' && `🔄 Transferir ${bulkSelected.size} conversa(s) para...`}
+              {bulkAction === 'tag' && `🏷️ Aplicar etiqueta a ${bulkSelected.size} conversa(s)`}
+              {bulkAction === 'department' && `🏢 Mudar departamento de ${bulkSelected.size} conversa(s)`}
+            </h3>
+            {bulkAction === 'transfer' && (
+              <select value={bulkActionValue} onChange={e => setBulkActionValue(e.target.value)}
+                style={{ width: '100%', padding: '0.45rem', border: '1px solid var(--border-m)', borderRadius: 'var(--r-sm)', fontSize: '0.88rem', marginBottom: '1rem', background: 'var(--bg)', color: 'var(--text)' }}>
+                <option value="">— Escolher atendente —</option>
+                {attendants.map(a => <option key={a.id} value={a.id}>{a.name} ({a.status || 'offline'})</option>)}
+              </select>
+            )}
+            {bulkAction === 'tag' && (
+              <select value={bulkActionValue} onChange={e => setBulkActionValue(e.target.value)}
+                style={{ width: '100%', padding: '0.45rem', border: '1px solid var(--border-m)', borderRadius: 'var(--r-sm)', fontSize: '0.88rem', marginBottom: '1rem', background: 'var(--bg)', color: 'var(--text)' }}>
+                <option value="">— Escolher etiqueta —</option>
+                {tags.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
+              </select>
+            )}
+            {bulkAction === 'department' && (
+              <select value={bulkActionValue} onChange={e => setBulkActionValue(e.target.value)}
+                style={{ width: '100%', padding: '0.45rem', border: '1px solid var(--border-m)', borderRadius: 'var(--r-sm)', fontSize: '0.88rem', marginBottom: '1rem', background: 'var(--bg)', color: 'var(--text)' }}>
+                <option value="">— Sem departamento (limpar) —</option>
+                {departments2.map(d => <option key={d.id} value={d.id}>{d.name}</option>)}
+              </select>
+            )}
+            <div style={{ display: 'flex', gap: '0.5rem', justifyContent: 'flex-end' }}>
+              <button onClick={() => { setBulkAction(null); setBulkActionValue(''); }}
+                style={{ padding: '0.4rem 0.9rem', border: '1px solid var(--border-m)', background: 'none', borderRadius: 'var(--r-sm)', cursor: 'pointer', fontSize: '0.85rem' }}>
+                Cancelar
+              </button>
+              <button onClick={executeBulk} disabled={bulkBusy || (bulkAction !== 'department' && !bulkActionValue)}
+                style={{ padding: '0.4rem 1rem', background: 'var(--accent)', color: '#fff', border: 'none', borderRadius: 'var(--r-sm)', cursor: 'pointer', fontWeight: 600, fontSize: '0.85rem' }}>
+                {bulkBusy ? '...' : 'Aplicar'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Close e Delete usam confirm() nativo dentro de executeBulk — sem modal */}
+      {bulkAction && (bulkAction === 'close' || bulkAction === 'delete') && (
+        <ExecuteOnMount onMount={executeBulk} />
+      )}
     </div>
   );
+}
+
+// Helper para disparar executeBulk imediatamente quando close/delete são escolhidos
+// (sem modal — só confirmação nativa). É um componente vazio que dispara um efeito.
+function ExecuteOnMount({ onMount }) {
+  useEffect(() => { onMount(); }, []);
+  return null;
 }
 
 const S = {

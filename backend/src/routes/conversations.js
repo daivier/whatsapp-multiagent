@@ -527,6 +527,130 @@ router.post('/:id/merge', authMiddleware, ownerOnly, (req, res) => {
   res.json(result);
 });
 
+// ─── Bulk actions (têm de vir ANTES de DELETE /:id ou Express trata "bulk" como id) ─
+// Helper: valida que o utilizador pode operar em todas as conversas pedidas
+// (owner pode em qualquer; atendente apenas nas suas). Devolve { ids, denied }.
+function filterAllowedIds(rawIds, user) {
+  if (!Array.isArray(rawIds) || rawIds.length === 0) return { ids: [], denied: [] };
+  const ids = rawIds.map(n => parseInt(n, 10)).filter(Number.isInteger);
+  if (ids.length === 0) return { ids: [], denied: [] };
+  if (user.role === 'owner') return { ids, denied: [] };
+  // Atendente: filtrar apenas as assigned_to ele
+  const placeholders = ids.map(() => '?').join(',');
+  const allowed = db.prepare(`SELECT id FROM conversations WHERE id IN (${placeholders}) AND assigned_to = ?`).all(...ids, user.id).map(r => r.id);
+  const allowedSet = new Set(allowed);
+  return { ids: allowed, denied: ids.filter(i => !allowedSet.has(i)) };
+}
+
+// POST /conversations/bulk/close — fecha N conversas
+router.post('/bulk/close', authMiddleware, (req, res) => {
+  const { ids: rawIds } = req.body;
+  const { ids, denied } = filterAllowedIds(rawIds, req.user);
+  if (ids.length === 0) return res.status(400).json({ error: 'Nenhuma conversa permitida', denied });
+
+  const placeholders = ids.map(() => '?').join(',');
+  const result = db.prepare(`UPDATE conversations SET status = 'closed', updated_at = CURRENT_TIMESTAMP WHERE id IN (${placeholders})`).run(...ids);
+
+  // Emitir conversation:updated para cada uma (frontend remove/actualiza)
+  const io = ioInstance.get();
+  if (io) for (const id of ids) io.emit('conversation:updated', { id, status: 'closed' });
+  res.json({ ok: true, updated: result.changes, denied });
+});
+
+// POST /conversations/bulk/transfer — atribui N conversas a um atendente
+// body: { ids, attendant_id }
+router.post('/bulk/transfer', authMiddleware, (req, res) => {
+  const { ids: rawIds, attendant_id } = req.body;
+  if (!attendant_id) return res.status(400).json({ error: 'attendant_id obrigatório' });
+  const attendant = db.prepare("SELECT id, name FROM users WHERE id = ? AND role = 'attendant' AND active = 1").get(attendant_id);
+  if (!attendant) return res.status(404).json({ error: 'Atendente não encontrado' });
+
+  const { ids, denied } = filterAllowedIds(rawIds, req.user);
+  if (ids.length === 0) return res.status(400).json({ error: 'Nenhuma conversa permitida', denied });
+
+  const placeholders = ids.map(() => '?').join(',');
+  const tx = db.transaction(() => {
+    // Log de transferência para cada
+    const prev = db.prepare(`SELECT id, assigned_to FROM conversations WHERE id IN (${placeholders})`).all(...ids);
+    const insertLog = db.prepare('INSERT INTO transfer_logs (conversation_id, from_user_id, to_user_id, transferred_by) VALUES (?, ?, ?, ?)');
+    for (const p of prev) insertLog.run(p.id, p.assigned_to || null, attendant_id, req.user.id);
+    db.prepare(`UPDATE conversations SET assigned_to = ?, status = 'open', updated_at = CURRENT_TIMESTAMP WHERE id IN (${placeholders})`).run(attendant_id, ...ids);
+  });
+  tx();
+
+  const io = ioInstance.get();
+  if (io) {
+    for (const id of ids) io.emit('conversation:updated', { id, assigned_to: attendant_id });
+    io.to(`user:${attendant_id}`).emit('conversation:assigned', { bulk: true, count: ids.length, from: req.user.name });
+  }
+  res.json({ ok: true, updated: ids.length, denied, attendant_name: attendant.name });
+});
+
+// POST /conversations/bulk/tag — aplica uma tag a N conversas (idempotente)
+// body: { ids, tag_id }
+router.post('/bulk/tag', authMiddleware, (req, res) => {
+  const { ids: rawIds, tag_id } = req.body;
+  if (!tag_id) return res.status(400).json({ error: 'tag_id obrigatório' });
+  const tag = db.prepare('SELECT id FROM tags WHERE id = ?').get(tag_id);
+  if (!tag) return res.status(404).json({ error: 'Etiqueta não encontrada' });
+
+  const { ids, denied } = filterAllowedIds(rawIds, req.user);
+  if (ids.length === 0) return res.status(400).json({ error: 'Nenhuma conversa permitida', denied });
+
+  const ins = db.prepare('INSERT OR IGNORE INTO conversation_tags (conversation_id, tag_id) VALUES (?, ?)');
+  const tx = db.transaction(() => { for (const id of ids) ins.run(id, tag_id); });
+  tx();
+
+  // Emitir update de tags para cada
+  const io = ioInstance.get();
+  if (io) {
+    for (const id of ids) {
+      const tags = db.prepare(`SELECT t.id, t.name, t.color FROM tags t INNER JOIN conversation_tags ct ON ct.tag_id = t.id WHERE ct.conversation_id = ?`).all(id);
+      io.emit('conversation:tags_updated', { conversation_id: id, tags });
+    }
+  }
+  res.json({ ok: true, updated: ids.length, denied });
+});
+
+// POST /conversations/bulk/department — muda dept de N conversas (owner-only via ownerOnly)
+// body: { ids, department_id }
+router.post('/bulk/department', authMiddleware, ownerOnly, (req, res) => {
+  const { ids: rawIds, department_id } = req.body;
+  if (department_id != null) {
+    const dept = db.prepare('SELECT id FROM departments WHERE id = ? AND active = 1').get(department_id);
+    if (!dept) return res.status(400).json({ error: 'Departamento inválido' });
+  }
+  const ids = (rawIds || []).map(n => parseInt(n, 10)).filter(Number.isInteger);
+  if (ids.length === 0) return res.status(400).json({ error: 'ids obrigatório' });
+
+  const placeholders = ids.map(() => '?').join(',');
+  const result = db.prepare(`UPDATE conversations SET department_id = ?, updated_at = CURRENT_TIMESTAMP WHERE id IN (${placeholders})`).run(department_id || null, ...ids);
+
+  const io = ioInstance.get();
+  if (io) for (const id of ids) io.emit('conversation:updated', { id, department_id: department_id || null });
+  res.json({ ok: true, updated: result.changes });
+});
+
+// DELETE /conversations/bulk — apaga N conversas (owner only)
+// body: { ids }
+router.delete('/bulk', authMiddleware, ownerOnly, (req, res) => {
+  const ids = (req.body?.ids || []).map(n => parseInt(n, 10)).filter(Number.isInteger);
+  if (ids.length === 0) return res.status(400).json({ error: 'ids obrigatório' });
+
+  const placeholders = ids.map(() => '?').join(',');
+  const tx = db.transaction(() => {
+    db.prepare(`DELETE FROM messages WHERE conversation_id IN (${placeholders})`).run(...ids);
+    db.prepare(`DELETE FROM conversation_tags WHERE conversation_id IN (${placeholders})`).run(...ids);
+    db.prepare(`DELETE FROM conversations WHERE id IN (${placeholders})`).run(...ids);
+  });
+  tx();
+
+  const io = ioInstance.get();
+  if (io) for (const id of ids) io.emit('conversation:deleted', { id });
+  res.json({ ok: true, deleted: ids.length });
+});
+
+// DELETE /:id — single (mantido aqui depois das bulk para Express resolver na ordem certa)
 router.delete('/:id', authMiddleware, ownerOnly, (req, res) => {
   const conv = db.prepare('SELECT id FROM conversations WHERE id = ?').get(req.params.id);
   if (!conv) return res.status(404).json({ error: 'Conversa não encontrada' });
