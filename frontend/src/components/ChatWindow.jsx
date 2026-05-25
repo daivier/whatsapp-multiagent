@@ -509,6 +509,16 @@ export default function ChatWindow({ conversation: convProp, socket, onClose, on
     } catch { setWarning('Erro ao carregar atendentes'); }
   }
 
+  // Actualizar status dos atendentes em tempo real enquanto o painel de transferência está aberto
+  useEffect(() => {
+    if (!showTransfer || !socket) return;
+    function onUserStatus({ userId, status }) {
+      setAvailableAttendants(prev => prev.map(a => a.id === userId ? { ...a, status } : a));
+    }
+    socket.on('user:status', onUserStatus);
+    return () => socket.off('user:status', onUserStatus);
+  }, [showTransfer, socket]);
+
   async function doTransfer() {
     if (!transferToId) return;
     setTransferring(true);
