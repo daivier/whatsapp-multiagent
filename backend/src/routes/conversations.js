@@ -251,6 +251,7 @@ router.post('/:id/notes', authMiddleware, (req, res) => {
 
   const conv = db.prepare('SELECT conv.*, con.name as contact_name, con.phone FROM conversations conv JOIN contacts con ON con.id = conv.contact_id WHERE conv.id = ?').get(req.params.id);
   if (!conv) return res.status(404).json({ error: 'Conversa não encontrada' });
+  if (conv.status === 'closed') return res.status(409).json({ error: 'Conversa fechada. Reabre para adicionar notas.' });
   if (req.user.role === 'attendant' && conv.assigned_to !== req.user.id) return res.status(403).json({ error: 'Sem permissão' });
 
   const result = db.prepare('INSERT INTO messages (conversation_id, from_me, sender_id, body, is_internal) VALUES (?, 1, ?, ?, 1)')

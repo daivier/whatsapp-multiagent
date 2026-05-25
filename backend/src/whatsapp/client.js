@@ -447,8 +447,9 @@ async function handleIncomingMessage(msg, lineId) {
   if (!conversation && !fromMe) {
     const recentOutbound = db.prepare(`
       SELECT conv.* FROM conversations conv
-      JOIN messages m ON m.conversation_id = conv.id AND m.from_me = 1
+      JOIN messages m ON m.conversation_id = conv.id AND m.from_me = 1 AND (m.is_internal IS NULL OR m.is_internal = 0)
       WHERE conv.contact_id = ? AND conv.line_id = ? AND conv.status = 'closed'
+        AND conv.awaiting_rating = 0
         AND conv.updated_at >= datetime('now', '-2 minutes')
       ORDER BY conv.id DESC LIMIT 1
     `).get(contact.id, lineId);
