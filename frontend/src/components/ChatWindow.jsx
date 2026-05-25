@@ -563,10 +563,11 @@ export default function ChatWindow({ conversation: convProp, socket, onClose, on
 
   async function saveSchedule() {
     if (!scheduleBody.trim() || !scheduleAt) return;
-    if (new Date(scheduleAt) <= new Date()) {
-      setWarning('A data/hora do agendamento deve ser no futuro');
-      return;
-    }
+    const dt = new Date(scheduleAt);
+    if (isNaN(dt.getTime())) { setWarning('Data inválida'); return; }
+    if (dt <= new Date()) { setWarning('A data/hora do agendamento deve ser no futuro'); return; }
+    const maxFuture = new Date(); maxFuture.setFullYear(maxFuture.getFullYear() + 1);
+    if (dt > maxFuture) { setWarning('Data inválida: o agendamento não pode ultrapassar 1 ano no futuro'); return; }
     setScheduleSaving(true);
     try {
       await api.post('/scheduled-messages', {
@@ -1085,7 +1086,8 @@ export default function ChatWindow({ conversation: convProp, socket, onClose, on
           </div>
           <input type="datetime-local" style={{ ...S.schedInput, marginBottom: '0.5rem' }}
             value={scheduleAt} onChange={e => setScheduleAt(e.target.value)}
-            min={new Date(Date.now() + 60000).toISOString().slice(0, 16)} />
+            min={new Date(Date.now() + 60000).toISOString().slice(0, 16)}
+            max={new Date(Date.now() + 365 * 24 * 60 * 60 * 1000).toISOString().slice(0, 16)} />
           <textarea style={{ ...S.schedInput, resize: 'vertical', minHeight: '60px' }}
             placeholder="Texto da mensagem..." value={scheduleBody}
             onChange={e => setScheduleBody(e.target.value)} />

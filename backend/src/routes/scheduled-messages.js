@@ -40,6 +40,11 @@ router.get('/', (req, res) => {
 router.post('/', (req, res) => {
   const { conversation_id, wa_id, body, scheduled_at } = req.body;
   if (!wa_id || !body || !scheduled_at) return res.status(400).json({ error: 'Campos obrigatórios em falta' });
+  // Validar data: deve ser válida e no máximo 1 ano no futuro
+  const dtCheck = new Date(scheduled_at);
+  if (isNaN(dtCheck.getTime())) return res.status(400).json({ error: 'Data inválida' });
+  const maxFuture = new Date(); maxFuture.setFullYear(maxFuture.getFullYear() + 1);
+  if (dtCheck > maxFuture) return res.status(400).json({ error: 'Data inválida: máximo 1 ano no futuro' });
   // Validar que a data é no futuro (scheduled_at vem como hora local sem timezone)
   const isPast = db.prepare(
     `SELECT replace(?, 'T', ' ') < datetime('now', 'localtime', '-1 minute') AS result`
@@ -63,8 +68,12 @@ router.patch('/:id', (req, res) => {
 
   const newBody = body?.trim() || sm.body;
   const newAt = scheduled_at || sm.scheduled_at;
-  // Validar que a nova data é no futuro (só se foi enviada uma nova data)
+  // Validar que a nova data é válida e no futuro (só se foi enviada uma nova data)
   if (scheduled_at) {
+    const dtEdit = new Date(scheduled_at);
+    if (isNaN(dtEdit.getTime())) return res.status(400).json({ error: 'Data inválida' });
+    const maxFutureEdit = new Date(); maxFutureEdit.setFullYear(maxFutureEdit.getFullYear() + 1);
+    if (dtEdit > maxFutureEdit) return res.status(400).json({ error: 'Data inválida: máximo 1 ano no futuro' });
     const isPast = db.prepare(
       `SELECT replace(?, 'T', ' ') < datetime('now', 'localtime', '-1 minute') AS result`
     ).get(scheduled_at)?.result;
