@@ -440,7 +440,11 @@ export default function ChatWindow({ conversation: convProp, socket, onClose, on
       });
     } catch (err) {
       setMessages(prev => prev.filter(m => m.id !== tempId));
-      setWarning(err.response?.data?.error || err.message || 'Erro ao enviar ficheiro');
+      if (err.response?.status === 413) {
+        setWarning('Ficheiro demasiado grande. O limite máximo é 50 MB.');
+      } else {
+        setWarning(err.response?.data?.error || err.message || 'Erro ao enviar ficheiro');
+      }
     }
     setUploadingFile(false);
   }
