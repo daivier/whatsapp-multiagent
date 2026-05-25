@@ -564,7 +564,13 @@ async function handleIncomingMessage(msg, lineId) {
     const vType = content.imageMessage ? '📷 Imagem' : (content.videoMessage || content.ptvMessage) ? '🎥 Vídeo' : content.audioMessage ? '🎤 Áudio' : content.stickerMessage ? '🪄 Sticker' : '📎 Ficheiro';
     body = isViewOnce ? `${vType} de visualização única` : fromMe ? `${vType} enviada do telemóvel` : vType;
   }
-  if (isViewOnce && !mediaUrl && !body.trim()) body = '🔒 Mensagem de visualização única';
+  if (isViewOnce && !mediaUrl && !body.trim()) {
+    // Mensagem sainte (fromMe) sem corpo e sem media é um eco mal parseado da plataforma
+    // (acontece quando o chat tem mensagens temporárias e o wa_message_id não foi gravado).
+    // Descartar em vez de guardar o sentinela errado na DB.
+    if (fromMe) return;
+    body = '🔒 Mensagem de visualização única';
+  }
 
   // Bot de triagem
   if (!fromMe) {
