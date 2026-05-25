@@ -491,16 +491,16 @@ export default function ConversationList({ socket, selected, onSelect }) {
                     <input type="checkbox" checked={!!isChecked} onChange={() => toggleBulkSelected(conv.id)} onClick={e => e.stopPropagation()} style={{ marginRight: '0.25rem', cursor: 'pointer', flexShrink: 0 }} />
                   )}
                   <div style={{ position: 'relative', flexShrink: 0 }}>
-                    <div style={{ ...S.avatar, background: isSelected ? 'var(--accent)' : 'var(--accent-l)', color: isSelected ? '#fff' : 'var(--accent)' }}>
+                    <div style={{ ...S.avatar, background: isOpen ? 'var(--accent)' : 'var(--accent-l)', color: isOpen ? '#fff' : 'var(--accent)' }}>
                       {initial}
                     </div>
-                    {unread > 0 && !isSelected && (
+                    {unread > 0 && !isOpen && (
                       <span style={S.unreadBadge}>{unread > 99 ? '99+' : unread}</span>
                     )}
                   </div>
                   <div style={S.info}>
                     <div style={S.row}>
-                      <span style={{ ...S.name, fontWeight: unread > 0 && !isSelected ? 700 : 600, display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
+                      <span style={{ ...S.name, fontWeight: unread > 0 && !isOpen ? 700 : 600, display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
                         {conv.department_color && (
                           <span title={conv.department_name || ''} style={{ width: 8, height: 8, borderRadius: '50%', background: conv.department_color, flexShrink: 0 }} />
                         )}
