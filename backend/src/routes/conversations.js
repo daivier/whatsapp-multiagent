@@ -99,6 +99,15 @@ router.post('/outbound', authMiddleware, async (req, res) => {
   }
   if (!lineId) return res.status(400).json({ error: 'Nenhuma linha activa para envio' });
 
+  // Atendentes só podem usar linhas do seu departamento
+  if (req.user.role === 'attendant') {
+    const line = db.prepare('SELECT department_id FROM lines WHERE id = ?').get(lineId);
+    if (line?.department_id) {
+      const isMember = db.prepare('SELECT 1 FROM user_departments WHERE department_id = ? AND user_id = ?').get(line.department_id, req.user.id);
+      if (!isMember) return res.status(403).json({ error: 'Não tens permissão para usar esta linha.' });
+    }
+  }
+
   // Normaliza o número: remove espaços, traços, parênteses
   const cleanPhone = phone.trim().replace(/[\s\-().]/g, '');
   // Variante sem prefixo 55 para pesquisa

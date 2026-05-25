@@ -1,7 +1,9 @@
 import { useState, useRef, useEffect } from 'react';
 import api from '../api';
+import { useAuth } from '../context/AuthContext';
 
 export default function NewConversationModal({ onClose, onCreated }) {
+  const { user } = useAuth();
   const [phone, setPhone] = useState('');
   const [message, setMessage] = useState('');
   const [sending, setSending] = useState(false);
@@ -13,10 +15,22 @@ export default function NewConversationModal({ onClose, onCreated }) {
 
   useEffect(() => {
     phoneRef.current?.focus();
-    api.get('/lines').then(({ data }) => {
-      const arr = Array.isArray(data) ? data : [];
-      setLines(arr);
-      const def = arr.find(l => l.is_default) || arr[0];
+    Promise.all([
+      api.get('/lines'),
+      api.get('/departments'),
+    ]).then(([linesRes, deptsRes]) => {
+      const allLines = Array.isArray(linesRes.data) ? linesRes.data : [];
+      const myDeptIds = new Set(
+        (Array.isArray(deptsRes.data) ? deptsRes.data : [])
+          .filter(d => d.is_mine)
+          .map(d => d.id)
+      );
+      // Atendentes só veem linhas do seu departamento (ou linhas sem departamento)
+      const allowed = user.role === 'owner'
+        ? allLines
+        : allLines.filter(l => !l.department_id || myDeptIds.has(l.department_id));
+      setLines(allowed);
+      const def = allowed.find(l => l.is_default) || allowed[0];
       if (def) setLineId(String(def.id));
     }).catch(() => {});
   }, []);
