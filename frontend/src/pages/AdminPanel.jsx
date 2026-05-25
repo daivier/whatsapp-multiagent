@@ -136,7 +136,7 @@ export default function AdminPanel({ socket }) {
     if (tab === 'blacklist') loadBlacklist();
     if (tab === 'broadcast') loadBroadcastContacts();
     if (tab === 'departments') { loadDepartments(); loadAttendants(); }
-    if (tab === 'lines') loadLines();
+    if (tab === 'lines') { loadLines(); loadDepartments(); }
   }, [tab]);
 
   useEffect(() => {
@@ -388,7 +388,12 @@ export default function AdminPanel({ socket }) {
   async function saveLine() {
     if (!lineForm?.name?.trim()) return;
     try {
-      const payload = { name: lineForm.name.trim(), color: lineForm.color, is_default: !!lineForm.is_default };
+      const payload = {
+        name: lineForm.name.trim(),
+        color: lineForm.color,
+        is_default: !!lineForm.is_default,
+        department_id: lineForm.department_id ? parseInt(lineForm.department_id, 10) : null,
+      };
       if (lineForm.id) await api.put(`/lines/${lineForm.id}`, payload);
       else await api.post('/lines', payload);
       setLineForm(null);
@@ -841,11 +846,18 @@ export default function AdminPanel({ socket }) {
                       <span style={{ width: 8, height: 8, borderRadius: '50%', background: statusColor, flexShrink: 0 }} />
                       <span style={{ color: statusColor, fontWeight: 600 }}>{statusLabel}</span>
                     </div>
-                    <div style={{ fontSize: '0.78rem', color: 'var(--muted)', marginBottom: '0.9rem' }}>
+                    <div style={{ fontSize: '0.78rem', color: 'var(--muted)', marginBottom: '0.4rem' }}>
                       💬 {l.active_conversations} activa(s) · {l.total_conversations} total
                     </div>
+                    {l.department_name && (
+                      <div style={{ fontSize: '0.75rem', marginBottom: '0.7rem' }}>
+                        <span style={{ background: l.department_color || '#6366f1', color: '#fff', padding: '0.1rem 0.5rem', borderRadius: '999px', fontWeight: 600 }}>
+                          🏢 {l.department_name}
+                        </span>
+                      </div>
+                    )}
                     <div style={{ display: 'flex', gap: '0.35rem', flexWrap: 'wrap' }}>
-                      <button style={S.outlineBtn} onClick={() => setLineForm({ id: l.id, name: l.name, color: l.color, is_default: !!l.is_default })}>Editar</button>
+                      <button style={S.outlineBtn} onClick={() => setLineForm({ id: l.id, name: l.name, color: l.color, is_default: !!l.is_default, department_id: l.department_id || '' })}>Editar</button>
                       {!isReady && <button style={{ ...S.outlineBtn, color: '#22c55e', borderColor: '#22c55e' }} onClick={() => openLineQr(l.id)}>📱 QR</button>}
                       {isReady && <button style={S.outlineBtn} onClick={() => disconnectLine(l.id)}>Desligar</button>}
                       {!isReady && !hasQr && <button style={S.outlineBtn} onClick={() => reconnectLine(l.id)}>Reconectar</button>}
@@ -872,6 +884,19 @@ export default function AdminPanel({ socket }) {
                         style={{ width: 30, height: 30, borderRadius: '50%', background: c, border: lineForm.color === c ? '3px solid var(--text)' : '2px solid var(--border-m)', cursor: 'pointer', padding: 0 }} />
                     ))}
                   </div>
+                  <label style={S.fieldLabel}>Departamento (roteamento automático)</label>
+                  <select style={{ ...S.input, width: '100%', marginBottom: '1rem', boxSizing: 'border-box' }}
+                    value={lineForm.department_id || ''} onChange={e => setLineForm(p => ({ ...p, department_id: e.target.value }))}>
+                    <option value="">— Nenhum (usa palavras-chave ou padrão) —</option>
+                    {departments.filter(d => d.active).map(d => (
+                      <option key={d.id} value={d.id}>{d.name}</option>
+                    ))}
+                  </select>
+                  {lineForm.department_id && (
+                    <p style={{ fontSize: '0.78rem', color: 'var(--muted)', marginTop: '-0.75rem', marginBottom: '1rem' }}>
+                      ✅ Todas as conversas desta linha vão directo para <strong>{departments.find(d => String(d.id) === String(lineForm.department_id))?.name}</strong>, ignorando regras de palavras-chave.
+                    </p>
+                  )}
                   {lineForm.id && (
                     <label style={{ display: 'flex', alignItems: 'flex-start', gap: '0.5rem', marginBottom: '1rem', fontSize: '0.85rem', cursor: 'pointer' }}>
                       <input type="checkbox" checked={!!lineForm.is_default} onChange={e => setLineForm(p => ({ ...p, is_default: e.target.checked }))} style={{ marginTop: 2 }} />

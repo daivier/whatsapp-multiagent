@@ -509,7 +509,7 @@ async function handleIncomingMessage(msg, lineId) {
       }
       reopened = true;
     } else {
-      const targetDeptId = computeTargetDepartment(body);
+      const targetDeptId = computeTargetDepartment(body, lineId);
       db.prepare(`INSERT INTO conversations (contact_id, status, department_id, line_id) VALUES (?, 'waiting', ?, ?)`).run(contact.id, targetDeptId, lineId);
       conversation = db.prepare(`SELECT * FROM conversations WHERE contact_id = ? AND line_id = ? ORDER BY id DESC LIMIT 1`).get(contact.id, lineId);
     }

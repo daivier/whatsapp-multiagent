@@ -10,11 +10,14 @@ const router = express.Router();
 // GET / — lista de linhas activas com contagens + estado WhatsApp ao vivo
 router.get('/', authMiddleware, (req, res) => {
   const lines = db.prepare(`
-    SELECT id, name, color, is_default, active, created_at, session_path,
+    SELECT lines.id, lines.name, lines.color, lines.is_default, lines.active, lines.created_at, lines.session_path,
+      lines.department_id, d.name AS department_name, d.color AS department_color,
       (SELECT COUNT(*) FROM conversations c WHERE c.line_id = lines.id AND c.status != 'closed') AS active_conversations,
       (SELECT COUNT(*) FROM conversations c WHERE c.line_id = lines.id) AS total_conversations
-    FROM lines WHERE active = 1
-    ORDER BY is_default DESC, id ASC
+    FROM lines
+    LEFT JOIN departments d ON d.id = lines.department_id
+    WHERE lines.active = 1
+    ORDER BY lines.is_default DESC, lines.id ASC
   `).all();
   // Enriquecer com estado WhatsApp em memória (ready/qr)
   const enriched = lines.map(l => {
@@ -63,9 +66,9 @@ router.post('/', authMiddleware, ownerOnly, async (req, res) => {
   }
 });
 
-// PUT /:id — actualizar nome/cor (owner). session_path não muda.
+// PUT /:id — actualizar nome/cor/departamento (owner). session_path não muda.
 router.put('/:id', authMiddleware, ownerOnly, (req, res) => {
-  const { name, color, is_default } = req.body;
+  const { name, color, is_default, department_id } = req.body;
   const existing = db.prepare("SELECT * FROM lines WHERE id = ? AND active = 1").get(req.params.id);
   if (!existing) return res.status(404).json({ error: 'Linha não encontrada' });
 
@@ -76,6 +79,8 @@ router.put('/:id', authMiddleware, ownerOnly, (req, res) => {
       if (name?.trim()) { fields.push("name = ?"); params.push(name.trim()); }
       if (color) { fields.push("color = ?"); params.push(color); }
       if (is_default !== undefined) { fields.push("is_default = ?"); params.push(is_default ? 1 : 0); }
+      // department_id: null para remover associação, número para definir departamento
+      if (department_id !== undefined) { fields.push("department_id = ?"); params.push(department_id || null); }
       if (fields.length) { params.push(req.params.id); db.prepare(`UPDATE lines SET ${fields.join(', ')} WHERE id = ?`).run(...params); }
     })();
     const updated = db.prepare("SELECT * FROM lines WHERE id = ?").get(req.params.id);

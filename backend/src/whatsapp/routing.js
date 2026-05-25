@@ -18,19 +18,26 @@ function hasAnyDepartment() {
 
 /**
  * Decide para que departamento uma conversa nova deve ir, baseado no corpo
- * da primeira mensagem.
+ * da primeira mensagem e/ou na linha por onde chegou.
  *
  * Ordem:
  *   1. Sem departamentos configurados → null (modo legacy)
- *   2. Regra de keyword_rules com department_id que case com a mensagem
+ *   2. A linha tem department_id configurado → usa esse departamento directamente
+ *   3. Regra de keyword_rules com department_id que case com a mensagem
  *      (ordem: priority ASC, id ASC — primeira que casa vence)
- *   3. Departamento marcado como is_default
- *   4. null (há departamentos mas nenhum default e nenhum match) — neste
+ *   4. Departamento marcado como is_default
+ *   5. null (há departamentos mas nenhum default e nenhum match) — neste
  *      caso o caller deve assignar via pickLeastBusyAttendant(null) para
  *      garantir que a conversa não fica órfã
  */
-function computeTargetDepartment(messageBody) {
+function computeTargetDepartment(messageBody, lineId) {
   if (!hasAnyDepartment()) return null;
+
+  // Prioridade 0: a linha de entrada tem um departamento fixo configurado
+  if (lineId) {
+    const line = db.prepare('SELECT department_id FROM lines WHERE id = ? AND active = 1').get(lineId);
+    if (line?.department_id) return line.department_id;
+  }
 
   const body = (messageBody || '').toLowerCase().trim();
 
