@@ -79,13 +79,18 @@ router.post('/', authMiddleware, ownerOnly, (req, res) => {
 // PATCH /users/:id — ativar/desativar ou alterar dados (owner only)
 router.patch('/:id', authMiddleware, ownerOnly, (req, res) => {
   const { id } = req.params;
-  const { active, name, department_ids } = req.body;
+  const { active, name, password, department_ids } = req.body;
 
   if (active !== undefined) {
     db.prepare('UPDATE users SET active = ? WHERE id = ?').run(active ? 1 : 0, id);
   }
   if (name) {
-    db.prepare('UPDATE users SET name = ? WHERE id = ?').run(name, id);
+    db.prepare('UPDATE users SET name = ? WHERE id = ?').run(name.trim(), id);
+  }
+  if (password) {
+    if (password.length < 6) return res.status(400).json({ error: 'A senha deve ter pelo menos 6 caracteres' });
+    const hash = bcrypt.hashSync(password, 10);
+    db.prepare('UPDATE users SET password_hash = ? WHERE id = ?').run(hash, id);
   }
   if (Array.isArray(department_ids)) replaceUserDepartments(parseInt(id, 10), department_ids);
 

@@ -56,6 +56,10 @@ export default function AdminPanel({ socket }) {
   const [whatsappReady, setWhatsappReady] = useState(false);
   const [disconnecting, setDisconnecting] = useState(false);
   const [newUser, setNewUser] = useState({ name: '', email: '', password: '' });
+  const [editingUser, setEditingUser] = useState(null); // { id, name } do atendente a editar
+  const [editForm, setEditForm] = useState({ name: '', password: '' });
+  const [editSaving, setEditSaving] = useState(false);
+  const [editError, setEditError] = useState('');
   const [transferTo, setTransferTo] = useState('');
   const [userStatuses, setUserStatuses] = useState({});
   const [listKey, setListKey] = useState(0);
@@ -296,6 +300,21 @@ export default function AdminPanel({ socket }) {
     setNewUser({ name: '', email: '', password: '' });
     loadAttendants();
   }
+  async function saveEditUser() {
+    if (!editForm.name.trim()) { setEditError('O nome não pode estar vazio'); return; }
+    setEditSaving(true); setEditError('');
+    try {
+      const payload = { name: editForm.name.trim() };
+      if (editForm.password) payload.password = editForm.password;
+      await api.patch(`/users/${editingUser.id}`, payload);
+      setEditingUser(null);
+      loadAttendants();
+    } catch (err) {
+      setEditError(err.response?.data?.error || 'Erro ao guardar');
+    }
+    setEditSaving(false);
+  }
+
   async function toggleAttendant(id, active) {
     await api.patch(`/users/${id}`, { active: !active });
     loadAttendants();
@@ -663,11 +682,42 @@ export default function AdminPanel({ socket }) {
                       <span style={{ color: a.status === 'online' ? 'var(--success)' : a.status === 'busy' ? 'var(--warn)' : 'var(--hint)', fontWeight: 500, fontSize: '0.85rem' }}>{a.status}</span>
                     </td>
                     <td style={{ color: a.active ? 'var(--success)' : 'var(--hint)', fontWeight: 500 }}>{a.active ? 'Sim' : 'Não'}</td>
-                    <td><button style={S.outlineBtn} onClick={() => toggleAttendant(a.id, a.active)}>{a.active ? 'Desativar' : 'Ativar'}</button></td>
+                    <td style={{ display: 'flex', gap: '0.4rem' }}>
+                      <button style={{ ...S.outlineBtn, borderColor: 'var(--accent)', color: 'var(--accent)' }} onClick={() => { setEditingUser(a); setEditForm({ name: a.name, password: '' }); setEditError(''); }}>Editar</button>
+                      <button style={S.outlineBtn} onClick={() => toggleAttendant(a.id, a.active)}>{a.active ? 'Desativar' : 'Ativar'}</button>
+                    </td>
                   </tr>
                 ))}
               </tbody>
             </table>
+          </div>
+        )}
+
+        {/* MODAL EDITAR ATENDENTE */}
+        {editingUser && (
+          <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.45)', zIndex: 600, display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+            onClick={() => setEditingUser(null)}>
+            <div onClick={e => e.stopPropagation()} style={{ background: 'var(--card)', borderRadius: 'var(--r-md)', boxShadow: 'var(--sh-md)', width: '100%', maxWidth: '380px', padding: '1.5rem', display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <strong style={{ fontSize: '1rem' }}>✏️ Editar atendente</strong>
+                <button onClick={() => setEditingUser(null)} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: '1rem', color: 'var(--muted)' }}>✕</button>
+              </div>
+              <div>
+                <label style={{ fontSize: '0.82rem', fontWeight: 600, color: 'var(--muted)', display: 'block', marginBottom: '0.3rem' }}>Nome</label>
+                <input style={S.input} value={editForm.name} onChange={e => setEditForm(p => ({ ...p, name: e.target.value }))} />
+              </div>
+              <div>
+                <label style={{ fontSize: '0.82rem', fontWeight: 600, color: 'var(--muted)', display: 'block', marginBottom: '0.3rem' }}>Nova senha <span style={{ fontWeight: 400, color: 'var(--hint)' }}>(deixar em branco para não alterar)</span></label>
+                <input style={S.input} type="password" placeholder="Mínimo 6 caracteres" value={editForm.password} onChange={e => setEditForm(p => ({ ...p, password: e.target.value }))} />
+              </div>
+              {editError && <p style={{ margin: 0, color: 'var(--danger)', fontSize: '0.83rem', background: 'var(--danger-l)', padding: '0.4rem 0.6rem', borderRadius: 'var(--r-sm)' }}>{editError}</p>}
+              <div style={{ display: 'flex', gap: '0.5rem', justifyContent: 'flex-end', marginTop: '0.25rem' }}>
+                <button onClick={() => setEditingUser(null)} style={{ padding: '0.4rem 1rem', border: '1px solid var(--border-m)', background: 'none', borderRadius: 'var(--r-sm)', cursor: 'pointer', fontSize: '0.85rem' }}>Cancelar</button>
+                <button onClick={saveEditUser} disabled={editSaving} style={{ padding: '0.4rem 1.2rem', background: 'var(--accent)', color: '#fff', border: 'none', borderRadius: 'var(--r-sm)', cursor: 'pointer', fontWeight: 600, fontSize: '0.85rem', opacity: editSaving ? 0.7 : 1 }}>
+                  {editSaving ? 'A guardar...' : 'Guardar'}
+                </button>
+              </div>
+            </div>
           </div>
         )}
 
