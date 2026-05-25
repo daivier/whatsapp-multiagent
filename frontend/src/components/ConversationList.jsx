@@ -129,12 +129,22 @@ export default function ConversationList({ socket, selected, onSelect }) {
       ));
     }
 
+    function onConversationAssigned({ conversation }) {
+      if (!conversation?.id) return;
+      setConversations(prev => {
+        const exists = prev.some(c => c.id === conversation.id);
+        if (exists) return prev.map(c => c.id === conversation.id ? { ...c, ...conversation } : c);
+        return [{ ...conversation, unread_count: 1 }, ...prev];
+      });
+    }
+
     socket.on('message:new', onNewMessage);
     socket.on('message:incoming', onNewMessage);
     socket.on('conversation:updated', onConversationUpdated);
     socket.on('conversation:deleted', onConversationDeleted);
     socket.on('conversation:unassigned', onConversationUnassigned);
     socket.on('contact:updated', onContactUpdated);
+    socket.on('conversation:assigned', onConversationAssigned);
     return () => {
       socket.off('message:new', onNewMessage);
       socket.off('message:incoming', onNewMessage);
@@ -142,6 +152,7 @@ export default function ConversationList({ socket, selected, onSelect }) {
       socket.off('conversation:deleted', onConversationDeleted);
       socket.off('conversation:unassigned', onConversationUnassigned);
       socket.off('contact:updated', onContactUpdated);
+      socket.off('conversation:assigned', onConversationAssigned);
     };
   }, [socket, selected]);
 

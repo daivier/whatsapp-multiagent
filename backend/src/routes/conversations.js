@@ -377,6 +377,8 @@ router.post('/:id/transfer', authMiddleware, async (req, res) => {
   if (io) {
     // Notifica todos os clientes para actualizar a conversa
     io.emit('conversation:updated', conv);
+    // Notifica o novo atendente para ADICIONAR a conversa à lista (não estava na lista dele)
+    io.to(`user:${attendant_id}`).emit('conversation:assigned', { conversation: conv });
     // Notifica o atendente anterior especificamente (para remover da lista)
     if (prevConv?.assigned_to && prevConv.assigned_to !== attendant_id) {
       io.to(`user:${prevConv.assigned_to}`).emit('conversation:unassigned', { id: conv.id });
