@@ -134,7 +134,8 @@ router.post('/outbound', authMiddleware, async (req, res) => {
   }
 
   // Cria conversa (ou reabre a última fechada) — filtrada por linha
-  let conversation = db.prepare(`SELECT * FROM conversations WHERE contact_id = ? AND line_id = ? AND status != 'closed' ORDER BY id DESC LIMIT 1`).get(contact.id, lineId);
+  // Inclui line_id IS NULL para compatibilidade com conversas criadas antes da migração de schema
+  let conversation = db.prepare(`SELECT * FROM conversations WHERE contact_id = ? AND (line_id = ? OR line_id IS NULL) AND status != 'closed' ORDER BY id DESC LIMIT 1`).get(contact.id, lineId);
 
   // Conflito: já existe conversa aberta atribuída a outro utilizador
   const originalAssigneeId = (conversation && conversation.assigned_to && conversation.assigned_to !== req.user.id) ? conversation.assigned_to : null;
@@ -150,7 +151,7 @@ router.post('/outbound', authMiddleware, async (req, res) => {
 
   if (!conversation) {
     db.prepare(`INSERT INTO conversations (contact_id, assigned_to, status, line_id) VALUES (?, ?, 'open', ?)`).run(contact.id, req.user.id, lineId);
-    conversation = db.prepare('SELECT * FROM conversations WHERE contact_id = ? AND line_id = ? ORDER BY id DESC LIMIT 1').get(contact.id, lineId);
+    conversation = db.prepare('SELECT * FROM conversations WHERE contact_id = ? AND (line_id = ? OR line_id IS NULL) ORDER BY id DESC LIMIT 1').get(contact.id, lineId);
   }
 
   // Envia mensagem pelo WhatsApp na linha escolhida
@@ -958,7 +959,7 @@ router.get('/ratings', authMiddleware, ownerOnly, (req, res) => {
       ROUND(AVG(r.score), 2) as avg_score
     FROM users u
     LEFT JOIN ratings r ON r.attendant_id = u.id AND ${w}
-    WHERE u.role = 'attendant' AND u.active = 1
+    WHERE u.role IN ('attendant', 'owner') AND u.active = 1
     GROUP BY u.id ORDER BY avg_score DESC NULLS LAST
   `).all();
 
