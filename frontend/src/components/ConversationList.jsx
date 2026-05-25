@@ -123,17 +123,25 @@ export default function ConversationList({ socket, selected, onSelect }) {
       setConversations(prev => prev.filter(c => c.id !== id));
     }
 
+    function onContactUpdated(contact) {
+      setConversations(prev => prev.map(c =>
+        c.contact_id === contact.id ? { ...c, contact_name: contact.name } : c
+      ));
+    }
+
     socket.on('message:new', onNewMessage);
     socket.on('message:incoming', onNewMessage);
     socket.on('conversation:updated', onConversationUpdated);
     socket.on('conversation:deleted', onConversationDeleted);
     socket.on('conversation:unassigned', onConversationUnassigned);
+    socket.on('contact:updated', onContactUpdated);
     return () => {
       socket.off('message:new', onNewMessage);
       socket.off('message:incoming', onNewMessage);
       socket.off('conversation:updated', onConversationUpdated);
       socket.off('conversation:deleted', onConversationDeleted);
       socket.off('conversation:unassigned', onConversationUnassigned);
+      socket.off('contact:updated', onContactUpdated);
     };
   }, [socket, selected]);
 

@@ -267,6 +267,10 @@ export default function ChatWindow({ conversation: convProp, socket, onClose, on
       if (!conv?.id || conv.id !== conversation?.id) return;
       setConversation(prev => ({ ...prev, ...conv }));
     }
+    function onContactUpdated(contact) {
+      if (!conversation?.contact_id || contact.id !== conversation.contact_id) return;
+      setConversation(prev => ({ ...prev, contact_name: contact.name, contact_email: contact.email, contact_notes: contact.notes }));
+    }
     socket.on('message:new', onMessage);
     socket.on('typing:update', onTyping);
     socket.on('message:edited', onEdited);
@@ -275,6 +279,7 @@ export default function ChatWindow({ conversation: convProp, socket, onClose, on
     socket.on('message:deleted', onDeleted);
     socket.on('conversation:tags_updated', onTagsUpdated);
     socket.on('conversation:updated', onConversationUpdated);
+    socket.on('contact:updated', onContactUpdated);
     return () => {
       socket.off('message:new', onMessage);
       socket.off('typing:update', onTyping);
@@ -284,6 +289,7 @@ export default function ChatWindow({ conversation: convProp, socket, onClose, on
       socket.off('message:deleted', onDeleted);
       socket.off('conversation:tags_updated', onTagsUpdated);
       socket.off('conversation:updated', onConversationUpdated);
+      socket.off('contact:updated', onContactUpdated);
     };
   }, [socket, conversation]);
 

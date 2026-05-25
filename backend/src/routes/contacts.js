@@ -3,6 +3,7 @@ const router = express.Router();
 const db = require('../db/schema');
 const { authMiddleware } = require('../middleware/auth');
 const { runLidMerge } = require('../whatsapp/client');
+const ioInstance = require('../io-instance');
 
 router.use(authMiddleware);
 
@@ -143,7 +144,9 @@ router.patch('/:id', (req, res) => {
   if (fields.length === 0) return res.status(400).json({ error: 'Nada para actualizar' });
   values.push(req.params.id);
   db.prepare(`UPDATE contacts SET ${fields.join(', ')} WHERE id = ?`).run(...values);
-  res.json(db.prepare('SELECT * FROM contacts WHERE id = ?').get(req.params.id));
+  const updated = db.prepare('SELECT * FROM contacts WHERE id = ?').get(req.params.id);
+  ioInstance.get()?.emit('contact:updated', updated);
+  res.json(updated);
 });
 
 module.exports = router;
