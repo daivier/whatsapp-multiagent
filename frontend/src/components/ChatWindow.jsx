@@ -980,6 +980,9 @@ export default function ChatWindow({ conversation: convProp, socket, onClose, on
               {cat && <div style={{ padding: '0.25rem 1rem', fontSize: '0.7rem', fontWeight: 700, color: 'var(--accent)', background: 'var(--accent-l)', textTransform: 'uppercase', letterSpacing: '0.04em' }}>{cat}</div>}
               {items.map(qr => (
                 <div key={qr.id} style={S.qrItem} onClick={() => applyQuickReply(qr)}>
+                  {qr.owner_user_id && (
+                    <span title="Atalho pessoal" style={{ marginRight: '0.3rem', fontSize: '0.75rem' }}>👤</span>
+                  )}
                   <strong style={{ color: 'var(--accent)', fontSize: '0.85rem' }}>/{qr.shortcut}</strong>
                   <span style={{ color: 'var(--muted)', marginLeft: '0.5rem', fontSize: '0.85rem' }}>{qr.body}</span>
                 </div>

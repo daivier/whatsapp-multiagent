@@ -183,6 +183,8 @@ try {
 try { db.exec(`ALTER TABLE conversations ADD COLUMN line_id INTEGER REFERENCES lines(id)`); } catch (_) {}
 try { db.exec(`ALTER TABLE scheduled_messages ADD COLUMN line_id INTEGER REFERENCES lines(id)`); } catch (_) {}
 try { db.exec(`CREATE INDEX IF NOT EXISTS idx_conversations_line ON conversations(line_id)`); } catch (_) {}
+try { db.exec(`ALTER TABLE quick_replies ADD COLUMN owner_user_id INTEGER REFERENCES users(id) ON DELETE CASCADE`); } catch (_) {}
+try { db.exec(`CREATE INDEX IF NOT EXISTS idx_quick_replies_owner ON quick_replies(owner_user_id)`); } catch (_) {}
 try {
   db.exec(`
     CREATE TABLE IF NOT EXISTS push_subscriptions (

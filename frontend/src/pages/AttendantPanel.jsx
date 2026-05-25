@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import ConversationList from '../components/ConversationList';
 import ChatWindow from '../components/ChatWindow';
 import ScheduledMessagesPage from './ScheduledMessagesPage';
+import MyQuickRepliesPage from './MyQuickRepliesPage';
 import { useAuth } from '../context/AuthContext';
 import { useNotifications } from '../hooks/useNotifications';
 import PushNotificationsButton from '../components/PushNotificationsButton';
@@ -49,7 +50,7 @@ export default function AttendantPanel({ socket }) {
     return (s && s !== 'offline') ? s : 'online';
   });
   const [onShift, setOnShift] = useState(!!(user.on_shift));
-  const [view, setView] = useState('conversations'); // 'conversations' | 'scheduled'
+  const [view, setView] = useState('conversations'); // 'conversations' | 'scheduled' | 'snippets'
   const [isMobile, setIsMobile] = useState(window.innerWidth < 640);
 
   // Re-sincroniza o turno ao montar (garante que está actualizado após re-login)
@@ -146,11 +147,16 @@ export default function AttendantPanel({ socket }) {
         <button style={{ ...S.navBtn, ...(view === 'scheduled' ? S.navBtnActive : {}) }} onClick={() => setView('scheduled')}>
           📅 Agendamentos
         </button>
+        <button style={{ ...S.navBtn, ...(view === 'snippets' ? S.navBtnActive : {}) }} onClick={() => setView('snippets')}>
+          ⚡ Meus atalhos
+        </button>
       </div>
 
       <div style={S.body}>
         {view === 'scheduled' ? (
           <ScheduledMessagesPage socket={socket} />
+        ) : view === 'snippets' ? (
+          <MyQuickRepliesPage />
         ) : (
           <>
             {showList && (

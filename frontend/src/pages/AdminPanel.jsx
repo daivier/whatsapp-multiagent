@@ -61,7 +61,7 @@ export default function AdminPanel({ socket }) {
   const [listKey, setListKey] = useState(0);
 
   const [quickReplies, setQuickReplies] = useState([]);
-  const [newQR, setNewQR] = useState({ shortcut: '', body: '', category: '' });
+  const [newQR, setNewQR] = useState({ shortcut: '', body: '', category: '', is_personal: false });
 
   const [tags, setTags] = useState([]);
   const [newTag, setNewTag] = useState({ name: '', color: '#25D366' });
@@ -319,8 +319,13 @@ export default function AdminPanel({ socket }) {
   async function addQuickReply(e) {
     e.preventDefault();
     if (!newQR.shortcut || !newQR.body) return;
-    await api.post('/quick-replies', newQR);
-    setNewQR({ shortcut: '', body: '', category: '' }); loadQuickReplies();
+    try {
+      await api.post('/quick-replies', newQR);
+      setNewQR({ shortcut: '', body: '', category: '', is_personal: false });
+      loadQuickReplies();
+    } catch (err) {
+      alert(err.response?.data?.error || 'Erro ao guardar atalho');
+    }
   }
   async function deleteQuickReply(id) {
     await api.delete(`/quick-replies/${id}`); loadQuickReplies();
@@ -1164,15 +1169,29 @@ export default function AdminPanel({ socket }) {
                 onChange={e => setNewQR(p => ({ ...p, body: e.target.value }))} required />
               <input style={{ ...S.input, width: '120px' }} placeholder="Categoria (opcional)" value={newQR.category}
                 onChange={e => setNewQR(p => ({ ...p, category: e.target.value }))} />
+              <label title="Marca para criar apenas para ti; desmarcado = global (toda a equipa usa)"
+                style={{ display: 'inline-flex', alignItems: 'center', gap: '0.3rem', fontSize: '0.78rem', color: 'var(--muted)', cursor: 'pointer', padding: '0 0.5rem' }}>
+                <input type="checkbox" checked={newQR.is_personal} onChange={e => setNewQR(p => ({ ...p, is_personal: e.target.checked }))} />
+                Pessoal
+              </label>
               <button style={S.addBtn} type="submit">Adicionar</button>
             </form>
             <table style={S.table}>
-              <thead><tr><th>Atalho</th><th>Mensagem</th><th>Categoria</th><th></th></tr></thead>
+              <thead><tr><th>Atalho</th><th>Mensagem</th><th>Visibilidade</th><th>Categoria</th><th></th></tr></thead>
               <tbody>
                 {quickReplies.map(qr => (
                   <tr key={qr.id}>
                     <td><strong style={{ color: 'var(--accent)' }}>/{qr.shortcut}</strong></td>
-                    <td style={{ maxWidth: '350px', wordBreak: 'break-word', color: 'var(--muted)' }}>{qr.body}</td>
+                    <td style={{ maxWidth: '300px', wordBreak: 'break-word', color: 'var(--muted)' }}>{qr.body}</td>
+                    <td>
+                      {qr.owner_user_id === null ? (
+                        <span style={{ background: 'var(--success-l)', color: 'var(--success)', padding: '1px 8px', borderRadius: '999px', fontSize: '0.72rem', fontWeight: 600 }}>🌐 Global</span>
+                      ) : (
+                        <span style={{ background: '#fef3c7', color: '#b45309', padding: '1px 8px', borderRadius: '999px', fontSize: '0.72rem', fontWeight: 600 }} title={`Pessoal de ${qr.owner_name || '?'}`}>
+                          👤 {qr.owner_name || 'Pessoal'}
+                        </span>
+                      )}
+                    </td>
                     <td>
                       {qr.category
                         ? <span style={{ background: 'var(--accent-l)', color: 'var(--accent)', padding: '1px 8px', borderRadius: '999px', fontSize: '0.75rem', fontWeight: 600 }}>{qr.category}</span>
