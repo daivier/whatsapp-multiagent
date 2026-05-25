@@ -132,9 +132,9 @@ function MessageContent({ msg, onMediaLoad }) {
     );
   }
   if (msg.media_url) {
-    const fname = msg.media_url.split('/').pop();
+    const fname = msg.media_filename || msg.media_url.split('/').pop();
     return (
-      <a href={`${API}${msg.media_url}`} target="_blank" rel="noreferrer"
+      <a href={`${API}${msg.media_url}`} target="_blank" rel="noreferrer" download={fname}
         style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', fontSize: '0.85rem', color: 'var(--accent)', textDecoration: 'none' }}>
         📎 {fname}
       </a>
@@ -629,7 +629,7 @@ export default function ChatWindow({ conversation: convProp, socket, onClose, on
       const bgColor = m.is_internal ? '#fffbeb' : isMe ? '#dcf8c6' : '#ffffff';
       const align = isMe ? 'flex-end' : 'flex-start';
       const noteLabel = m.is_internal ? '<div style="font-size:10px;color:#b45309;font-weight:600;margin-bottom:3px">📝 Nota interna</div>' : '';
-      const mediaLine = m.media_url ? `<div style="font-size:11px;color:#3b82f6;margin-top:3px">📎 ${m.media_url.split('/').pop()}</div>` : '';
+      const mediaLine = m.media_url ? `<div style="font-size:11px;color:#3b82f6;margin-top:3px">📎 ${m.media_filename || m.media_url.split('/').pop()}</div>` : '';
       return `<div style="display:flex;flex-direction:column;align-items:${align};margin:3px 0">
         <div style="background:${bgColor};border:1px solid #e5e7eb;border-radius:8px;padding:6px 10px;max-width:72%">
           ${noteLabel}<div style="font-size:10px;color:#6b7280;font-weight:600;margin-bottom:2px">${sender}</div>

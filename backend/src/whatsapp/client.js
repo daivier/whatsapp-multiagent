@@ -537,7 +537,7 @@ async function handleIncomingMessage(msg, lineId) {
   }
 
   // Media
-  let mediaUrl = null, mediaType = null;
+  let mediaUrl = null, mediaType = null, mediaFilename = null;
   if (isVcard) mediaType = 'vcard';
   else if (hasMedia) {
     try {
@@ -555,6 +555,7 @@ async function handleIncomingMessage(msg, lineId) {
         fs.writeFileSync(path.join(UPLOADS_DIR, filename), buffer);
         mediaUrl = `/uploads/${filename}`;
         mediaType = mimetype;
+        mediaFilename = origName || null;
       }
     } catch (err) { console.error('[media]', err.message); }
   }
@@ -591,8 +592,8 @@ async function handleIncomingMessage(msg, lineId) {
     if (existing) return;
   }
   const safeBody = sanitizeZalgo(body || '');
-  const insRes = db.prepare('INSERT INTO messages (conversation_id, from_me, body, media_url, media_type, reply_to_id, wa_message_id) VALUES (?, ?, ?, ?, ?, ?, ?)')
-    .run(conversation.id, fromMe ? 1 : 0, safeBody, mediaUrl, mediaType, replyToId, incomingWaId);
+  const insRes = db.prepare('INSERT INTO messages (conversation_id, from_me, body, media_url, media_type, media_filename, reply_to_id, wa_message_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?)')
+    .run(conversation.id, fromMe ? 1 : 0, safeBody, mediaUrl, mediaType, mediaFilename, replyToId, incomingWaId);
   db.prepare('UPDATE conversations SET updated_at = CURRENT_TIMESTAMP WHERE id = ?').run(conversation.id);
 
   if (!fromMe && mediaUrl && mediaType?.startsWith('audio/')) {

@@ -148,6 +148,7 @@ try { db.exec(`ALTER TABLE contacts ADD COLUMN notes TEXT`); } catch (_) {}
 try { db.exec(`ALTER TABLE contacts ADD COLUMN email TEXT`); } catch (_) {}
 try { db.exec(`ALTER TABLE messages ADD COLUMN media_url TEXT`); } catch (_) {}
 try { db.exec(`ALTER TABLE messages ADD COLUMN media_type TEXT`); } catch (_) {}
+try { db.exec(`ALTER TABLE messages ADD COLUMN media_filename TEXT`); } catch (_) {}
 try { db.exec(`ALTER TABLE messages ADD COLUMN is_internal INTEGER NOT NULL DEFAULT 0`); } catch (_) {}
 try { db.exec(`ALTER TABLE conversations ADD COLUMN tags TEXT`); } catch (_) {}
 try { db.exec(`ALTER TABLE conversations ADD COLUMN priority TEXT NOT NULL DEFAULT 'normal'`); } catch (_) {}
