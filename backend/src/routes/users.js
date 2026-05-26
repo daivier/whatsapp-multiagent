@@ -76,6 +76,36 @@ router.post('/', authMiddleware, ownerOnly, (req, res) => {
   res.status(201).json(attachDepartments([user])[0]);
 });
 
+// PATCH /users/me — qualquer utilizador altera os próprios dados (nome, email, senha)
+// DEVE estar antes de /:id para o Express não capturar "me" como id
+router.patch('/me', authMiddleware, (req, res) => {
+  const { name, email, password, current_password } = req.body;
+
+  // Verificar senha atual antes de alterar
+  if (password || email) {
+    if (!current_password) return res.status(400).json({ error: 'Senha atual obrigatória para alterar email ou senha' });
+    const userCheck = db.prepare('SELECT password_hash FROM users WHERE id = ?').get(req.user.id);
+    if (!bcrypt.compareSync(current_password, userCheck.password_hash)) {
+      return res.status(401).json({ error: 'Senha atual incorreta' });
+    }
+  }
+
+  if (name) db.prepare('UPDATE users SET name = ? WHERE id = ?').run(name.trim(), req.user.id);
+  if (email) {
+    const conflict = db.prepare('SELECT id FROM users WHERE email = ? AND id != ?').get(email.trim(), req.user.id);
+    if (conflict) return res.status(409).json({ error: 'Email já está em uso' });
+    db.prepare('UPDATE users SET email = ? WHERE id = ?').run(email.trim(), req.user.id);
+  }
+  if (password) {
+    if (password.length < 6) return res.status(400).json({ error: 'A senha deve ter pelo menos 6 caracteres' });
+    const hash = bcrypt.hashSync(password, 10);
+    db.prepare('UPDATE users SET password_hash = ? WHERE id = ?').run(hash, req.user.id);
+  }
+
+  const user = db.prepare('SELECT id, name, email, role, status, active, on_shift FROM users WHERE id = ?').get(req.user.id);
+  res.json(user);
+});
+
 // PATCH /users/:id — ativar/desativar ou alterar dados (owner only)
 router.patch('/:id', authMiddleware, ownerOnly, (req, res) => {
   const { id } = req.params;
@@ -103,35 +133,6 @@ router.patch('/:id', authMiddleware, ownerOnly, (req, res) => {
   if (!user) return res.status(404).json({ error: 'Utilizador não encontrado' });
 
   res.json(attachDepartments([user])[0]);
-});
-
-// PATCH /users/me — qualquer utilizador altera os próprios dados (nome, email, senha)
-router.patch('/me', authMiddleware, (req, res) => {
-  const { name, email, password, current_password } = req.body;
-
-  // Verificar senha atual antes de alterar
-  if (password || email) {
-    if (!current_password) return res.status(400).json({ error: 'Senha atual obrigatória para alterar email ou senha' });
-    const userCheck = db.prepare('SELECT password_hash FROM users WHERE id = ?').get(req.user.id);
-    if (!bcrypt.compareSync(current_password, userCheck.password_hash)) {
-      return res.status(401).json({ error: 'Senha atual incorreta' });
-    }
-  }
-
-  if (name) db.prepare('UPDATE users SET name = ? WHERE id = ?').run(name.trim(), req.user.id);
-  if (email) {
-    const conflict = db.prepare('SELECT id FROM users WHERE email = ? AND id != ?').get(email.trim(), req.user.id);
-    if (conflict) return res.status(409).json({ error: 'Email já está em uso' });
-    db.prepare('UPDATE users SET email = ? WHERE id = ?').run(email.trim(), req.user.id);
-  }
-  if (password) {
-    if (password.length < 6) return res.status(400).json({ error: 'A senha deve ter pelo menos 6 caracteres' });
-    const hash = bcrypt.hashSync(password, 10);
-    db.prepare('UPDATE users SET password_hash = ? WHERE id = ?').run(hash, req.user.id);
-  }
-
-  const user = db.prepare('SELECT id, name, email, role, status, active, on_shift FROM users WHERE id = ?').get(req.user.id);
-  res.json(user);
 });
 
 // PATCH /users/me/shift — atendente togla o próprio turno
