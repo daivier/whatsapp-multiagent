@@ -60,6 +60,11 @@ export default function AdminPanel({ socket }) {
   const [editForm, setEditForm] = useState({ name: '', password: '' });
   const [editSaving, setEditSaving] = useState(false);
   const [editError, setEditError] = useState('');
+  const [showProfile, setShowProfile] = useState(false);
+  const [profileForm, setProfileForm] = useState({ name: '', email: '', current_password: '', password: '', password2: '' });
+  const [profileSaving, setProfileSaving] = useState(false);
+  const [profileError, setProfileError] = useState('');
+  const [profileSuccess, setProfileSuccess] = useState('');
   const [transferTo, setTransferTo] = useState('');
   const [userStatuses, setUserStatuses] = useState({});
   const [listKey, setListKey] = useState(0);
@@ -300,6 +305,28 @@ export default function AdminPanel({ socket }) {
     setNewUser({ name: '', email: '', password: '' });
     loadAttendants();
   }
+  async function saveProfile() {
+    setProfileError(''); setProfileSuccess('');
+    if (!profileForm.name.trim()) { setProfileError('O nome não pode estar vazio'); return; }
+    if (profileForm.password && profileForm.password !== profileForm.password2) { setProfileError('As senhas não coincidem'); return; }
+    if (profileForm.password && profileForm.password.length < 6) { setProfileError('A senha deve ter pelo menos 6 caracteres'); return; }
+    if ((profileForm.password || profileForm.email !== user.email) && !profileForm.current_password) { setProfileError('Senha atual obrigatória para alterar email ou senha'); return; }
+    setProfileSaving(true);
+    try {
+      const payload = { name: profileForm.name.trim() };
+      if (profileForm.email.trim() !== user.email) payload.email = profileForm.email.trim();
+      if (profileForm.password) { payload.password = profileForm.password; payload.current_password = profileForm.current_password; }
+      else if (profileForm.current_password) payload.current_password = profileForm.current_password;
+      await api.patch('/users/me', payload);
+      setProfileSuccess('Perfil atualizado com sucesso!');
+      setProfileForm(f => ({ ...f, current_password: '', password: '', password2: '' }));
+    } catch (err) {
+      setProfileError(err.response?.data?.error || 'Erro ao atualizar perfil');
+    } finally {
+      setProfileSaving(false);
+    }
+  }
+
   async function saveEditUser() {
     if (!editForm.name.trim()) { setEditError('O nome não pode estar vazio'); return; }
     setEditSaving(true); setEditError('');
@@ -598,6 +625,7 @@ export default function AdminPanel({ socket }) {
         <div style={{ margin: '0 1rem 0.5rem', display: 'flex', justifyContent: 'center' }}>
           <PushNotificationsButton />
         </div>
+        <button style={{ ...S.logoutBtn, background: 'var(--accent-l)', color: 'var(--accent)', marginBottom: '0.4rem' }} onClick={() => { setProfileForm({ name: user.name || '', email: user.email || '', current_password: '', password: '', password2: '' }); setProfileError(''); setProfileSuccess(''); setShowProfile(true); }}>👤 Perfil / Senha</button>
         <button style={S.logoutBtn} onClick={logout}>Sair</button>
       </aside>
 
@@ -1842,6 +1870,60 @@ export default function AdminPanel({ socket }) {
           </div>
         )}
       </main>
+
+      {/* MODAL PERFIL / ALTERAR SENHA */}
+      {showProfile && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.45)', zIndex: 700, display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+          onClick={() => setShowProfile(false)}>
+          <div onClick={e => e.stopPropagation()} style={{ background: 'var(--card)', borderRadius: 'var(--r-md)', boxShadow: 'var(--sh-md)', width: '100%', maxWidth: '380px', padding: '1.5rem', display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <strong style={{ fontSize: '1rem' }}>👤 Meu Perfil</strong>
+              <button onClick={() => setShowProfile(false)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--muted)', fontSize: '1.1rem' }}>✕</button>
+            </div>
+
+            <label style={S.fieldLabel}>Nome</label>
+            <input style={{ ...S.input, width: '100%', boxSizing: 'border-box' }}
+              value={profileForm.name}
+              onChange={e => setProfileForm(f => ({ ...f, name: e.target.value }))} />
+
+            <label style={S.fieldLabel}>Email</label>
+            <input style={{ ...S.input, width: '100%', boxSizing: 'border-box' }} type="email"
+              value={profileForm.email}
+              onChange={e => setProfileForm(f => ({ ...f, email: e.target.value }))} />
+
+            <hr style={{ border: 'none', borderTop: '1px solid var(--border)', margin: '0.25rem 0' }} />
+            <p style={{ margin: 0, fontSize: '0.82rem', color: 'var(--muted)' }}>Para alterar email ou senha preenche a senha atual:</p>
+
+            <label style={S.fieldLabel}>Senha atual</label>
+            <input style={{ ...S.input, width: '100%', boxSizing: 'border-box' }} type="password"
+              placeholder="Obrigatório para mudar email/senha"
+              value={profileForm.current_password}
+              onChange={e => setProfileForm(f => ({ ...f, current_password: e.target.value }))} />
+
+            <label style={S.fieldLabel}>Nova senha <span style={{ color: 'var(--hint)', fontWeight: 400 }}>(deixa em branco para não alterar)</span></label>
+            <input style={{ ...S.input, width: '100%', boxSizing: 'border-box' }} type="password"
+              placeholder="Mínimo 6 caracteres"
+              value={profileForm.password}
+              onChange={e => setProfileForm(f => ({ ...f, password: e.target.value }))} />
+
+            <label style={S.fieldLabel}>Confirmar nova senha</label>
+            <input style={{ ...S.input, width: '100%', boxSizing: 'border-box' }} type="password"
+              placeholder="Repete a nova senha"
+              value={profileForm.password2}
+              onChange={e => setProfileForm(f => ({ ...f, password2: e.target.value }))} />
+
+            {profileError && <p style={{ color: 'var(--danger)', fontSize: '0.82rem', margin: 0 }}>{profileError}</p>}
+            {profileSuccess && <p style={{ color: 'var(--success, #22c55e)', fontSize: '0.82rem', margin: 0 }}>{profileSuccess}</p>}
+
+            <div style={{ display: 'flex', gap: '0.5rem', justifyContent: 'flex-end' }}>
+              <button style={S.outlineBtn} onClick={() => setShowProfile(false)}>Cancelar</button>
+              <button style={S.addBtn} onClick={saveProfile} disabled={profileSaving}>
+                {profileSaving ? 'A guardar…' : 'Guardar'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
