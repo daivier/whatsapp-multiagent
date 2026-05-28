@@ -3,7 +3,7 @@ const multer = require('multer');
 const path = require('path');
 const fs = require('fs');
 const db = require('../db/schema');
-const { authMiddleware, ownerOnly } = require('../middleware/auth');
+const { authMiddleware, ownerOnly, supervisorOrOwner } = require('../middleware/auth');
 const { sendMessage, sendMedia } = require('../whatsapp/client');
 const ioInstance = require('../io-instance');
 const push = require('../push');
@@ -46,6 +46,10 @@ router.get('/', authMiddleware, (req, res) => {
   if (req.user.role === 'attendant') {
     conditions.push('conv.assigned_to = ?');
     params.push(req.user.id);
+  } else if (req.user.role === 'supervisor' && attendant_id) {
+    // Supervisor a filtrar por atendente específico
+    conditions.push('conv.assigned_to = ?');
+    params.push(parseInt(attendant_id));
   } else if (attendant_id) {
     // Owner a filtrar por atendente específico
     conditions.push('conv.assigned_to = ?');
@@ -150,8 +154,15 @@ router.post('/outbound', authMiddleware, async (req, res) => {
   }
 
   if (!conversation) {
-    db.prepare(`INSERT INTO conversations (contact_id, assigned_to, status, line_id) VALUES (?, ?, 'open', ?)`).run(contact.id, req.user.id, lineId);
-    conversation = db.prepare('SELECT * FROM conversations WHERE contact_id = ? AND (line_id = ? OR line_id IS NULL) ORDER BY id DESC LIMIT 1').get(contact.id, lineId);
+    try {
+      db.prepare(`INSERT INTO conversations (contact_id, assigned_to, status, line_id) VALUES (?, ?, 'open', ?)`).run(contact.id, req.user.id, lineId);
+    } catch (constraintErr) {
+      // UNIQUE constraint failed: já existe conversa aberta para este contact+line.
+      // Em vez de crashar, reutilizamos a existente.
+      console.warn('[outbound] UNIQUE constraint ao criar conversa, reutilizando existente.');
+    }
+    conversation = db.prepare("SELECT * FROM conversations WHERE contact_id = ? AND (line_id = ? OR line_id IS NULL) AND status != 'closed' ORDER BY id DESC LIMIT 1").get(contact.id, lineId);
+    if (!conversation) return res.status(500).json({ error: 'Não foi possível criar ou encontrar a conversa' });
   }
 
   // Envia mensagem pelo WhatsApp na linha escolhida

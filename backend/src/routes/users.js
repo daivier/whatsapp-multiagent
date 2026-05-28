@@ -1,7 +1,8 @@
 const express = require('express');
 const bcrypt = require('bcryptjs');
 const db = require('../db/schema');
-const { authMiddleware, ownerOnly } = require('../middleware/auth');
+const { authMiddleware, ownerOnly, supervisorOrOwner } = require('../middleware/auth');
+const { assignWaitingConversations } = require('../whatsapp/routing');
 
 const router = express.Router();
 
@@ -158,6 +159,8 @@ router.patch('/me/shift', authMiddleware, (req, res) => {
   // Notifica todos via io-instance (para admin ver em tempo real)
   const ioInstance = require('../io-instance');
   ioInstance.get()?.emit('user:shift', { userId: req.user.id, on_shift: user.on_shift });
+  // Auto-atribuir conversas em espera quando atendente entra em turno
+  if (on_shift) assignWaitingConversations();
   res.json(user);
 });
 
@@ -169,6 +172,8 @@ router.patch('/:id/shift', authMiddleware, ownerOnly, (req, res) => {
   if (!user) return res.status(404).json({ error: 'Utilizador não encontrado' });
   const ioInstance = require('../io-instance');
   ioInstance.get()?.emit('user:shift', { userId: user.id, on_shift: user.on_shift });
+  // Auto-atribuir conversas em espera quando atendente entra em turno
+  if (on_shift) assignWaitingConversations();
   res.json(user);
 });
 

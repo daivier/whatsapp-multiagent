@@ -3,6 +3,7 @@ const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const db = require('../db/schema');
 const { authMiddleware, SECRET } = require('../middleware/auth');
+const { assignWaitingConversations } = require('../whatsapp/routing');
 
 const router = express.Router();
 
@@ -38,6 +39,8 @@ router.patch('/status', authMiddleware, (req, res) => {
   db.prepare('UPDATE users SET status = ? WHERE id = ?').run(status, req.user.id);
   if (status !== 'offline') {
     db.prepare('UPDATE users SET preferred_status = ? WHERE id = ?').run(status, req.user.id);
+    // Auto-atribuir conversas em espera quando atendente fica disponível
+    assignWaitingConversations();
   }
   res.json({ ok: true });
 });

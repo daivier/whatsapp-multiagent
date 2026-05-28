@@ -97,8 +97,49 @@ function pickLeastBusyAttendant(departmentId) {
   `).get();
 }
 
+/**
+ * Percorre todas as conversas em 'waiting' sem atendente e tenta atribuir
+ * automaticamente. Chamado quando um atendente entra em turno ou fica online.
+ * Emite 'conversation:assigned' via socket para cada atribuição.
+ */
+function assignWaitingConversations(io) {
+  const waiting = db.prepare(`
+    SELECT * FROM conversations
+    WHERE status = 'waiting' AND assigned_to IS NULL
+    ORDER BY updated_at ASC
+  `).all();
+
+  if (waiting.length === 0) return;
+
+  const ioInstance = require('../io-instance');
+  const socket = io || ioInstance.get();
+
+  for (const conv of waiting) {
+    const attendant = pickLeastBusyAttendant(conv.department_id);
+    if (!attendant) continue;
+
+    db.prepare(`
+      UPDATE conversations
+      SET assigned_to = ?, status = 'open', updated_at = CURRENT_TIMESTAMP
+      WHERE id = ?
+    `).run(attendant.id, conv.id);
+
+    const updated = db.prepare(`
+      SELECT c.*, ct.name as contact_name, ct.phone
+      FROM conversations c
+      JOIN contacts ct ON ct.id = c.contact_id
+      WHERE c.id = ?
+    `).get(conv.id);
+
+    if (socket) {
+      socket.emit('conversation:assigned', { conversation: updated });
+    }
+  }
+}
+
 module.exports = {
   hasAnyDepartment,
   computeTargetDepartment,
   pickLeastBusyAttendant,
+  assignWaitingConversations,
 };
