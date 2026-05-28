@@ -1376,7 +1376,14 @@ export default function AdminPanel({ socket }) {
                     <td style={{ fontSize: '0.8rem', color: 'var(--hint)', whiteSpace: 'nowrap' }}>
                       {c.last_contact ? new Date(c.last_contact).toLocaleDateString('pt-BR') : '—'}
                     </td>
-                    <td><button style={S.outlineBtn} onClick={() => setEditingContact({ ...c })}>Editar</button></td>
+                    <td style={{ whiteSpace: 'nowrap' }}>
+                      <button style={S.outlineBtn} onClick={() => setEditingContact({ ...c })}>Editar</button>
+                      <button
+                        style={{ ...S.outlineBtn, borderColor: 'var(--danger)', color: 'var(--danger)', marginLeft: '0.35rem' }}
+                        onClick={() => deleteContact(c.id, c.name || c.phone)}>
+                        🗑️
+                      </button>
+                    </td>
                   </tr>
                 ))}
               </tbody>
