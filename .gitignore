@@ -1,7 +1,13 @@
 node_modules/
 .env
 database.sqlite
+database.sqlite-shm
+database.sqlite-wal
+*.sqlite-journal
 whatsapp-session/
+whatsapp-session-*/
 dist/
 .DS_Store
 *.log
+.recovery/
+uploads/
