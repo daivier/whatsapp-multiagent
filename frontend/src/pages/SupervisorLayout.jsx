@@ -125,9 +125,8 @@ export default function SupervisorLayout({ socket }) {
               <div style={{ width: isMobile ? '100%' : 320, flexShrink: 0, display: 'flex', flexDirection: 'column', borderRight: '1px solid var(--border)', overflow: 'hidden' }}>
                 <ConversationList
                   socket={socket}
-                  selectedConvId={selectedConv?.id}
-                  onSelectConversation={conv => setSelectedConv(conv)}
-                  supervisorMode={true}
+                  selected={selectedConv}
+                  onSelect={setSelectedConv}
                 />
               </div>
             )}

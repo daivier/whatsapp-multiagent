@@ -177,8 +177,8 @@ router.patch('/:id/shift', authMiddleware, ownerOnly, (req, res) => {
   res.json(user);
 });
 
-// GET /users/supervisor — dados em tempo real para painel supervisor (owner only)
-router.get('/supervisor', authMiddleware, ownerOnly, (req, res) => {
+// GET /users/supervisor — dados em tempo real para painel supervisor (owner + supervisor)
+router.get('/supervisor', authMiddleware, supervisorOrOwner, (req, res) => {
   const attendants = db.prepare(`
     SELECT u.id, u.name, u.status, u.on_shift,
       COUNT(CASE WHEN c.status = 'open'    THEN 1 END) as open_count,

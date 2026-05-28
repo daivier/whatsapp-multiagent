@@ -703,7 +703,7 @@ router.delete('/:id', authMiddleware, ownerOnly, (req, res) => {
 });
 
 // GET /conversations/dashboard — dados ao vivo para o dashboard principal
-router.get('/dashboard', authMiddleware, ownerOnly, (req, res) => {
+router.get('/dashboard', authMiddleware, supervisorOrOwner, (req, res) => {
   const slaMinutes = parseInt(db.prepare("SELECT value FROM settings WHERE key = 'sla_minutes'").get()?.value || '30', 10);
 
   // Contagens ao vivo
