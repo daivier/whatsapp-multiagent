@@ -3,6 +3,7 @@ import { AuthProvider, useAuth } from './context/AuthContext';
 import Login from './pages/Login';
 import AttendantPanel from './pages/AttendantPanel';
 import AdminPanel from './pages/AdminPanel';
+import SupervisorLayout from './pages/SupervisorLayout';
 import { io } from 'socket.io-client';
 
 function playNotificationSound() {
@@ -71,6 +72,7 @@ function App() {
 
   if (!user) return <Login />;
   if (user.role === 'owner') return <AdminPanel socket={socket} />;
+  if (user.role === 'supervisor') return <SupervisorLayout socket={socket} />;
   return <AttendantPanel socket={socket} />;
 }
 
