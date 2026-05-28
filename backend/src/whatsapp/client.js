@@ -120,16 +120,21 @@ function cleanPendingQueue(state) {
 async function retryPendingMessages(state) {
   cleanPendingQueue(state);
   if (state.pendingQueue.size === 0 || !state.sock) return;
-  console.log(`[retry] linha ${state.lineId}: ${state.pendingQueue.size} mensagem(ns) pendente(s)...`);
-  for (const [id, entry] of state.pendingQueue) {
+  // Snapshot — for-of num Map visita entries adicionadas durante a iteração.
+  // Sem isto, cada retry bem-sucedido criaria um novo entry que voltaria
+  // a ser visitado, gerando spam infinito (incidente supermercados, 2026-05).
+  const snapshot = Array.from(state.pendingQueue.entries());
+  console.log(`[retry] linha ${state.lineId}: ${snapshot.length} mensagem(ns) pendente(s)...`);
+  for (const [id, entry] of snapshot) {
     try {
       const result = await state.sock.sendMessage(entry.jid, { text: entry.body }, entry.opts || {});
       const newId = result?.key?.id;
       if (newId) {
         db.prepare('UPDATE messages SET wa_message_id = ? WHERE wa_message_id = ?').run(newId, id);
-        state.pendingQueue.delete(id);
-        state.pendingQueue.set(newId, { ...entry, sentAt: Date.now() });
       }
+      // Remove sempre — não re-adicionar com novo id. O ACK definitivo virá
+      // por messages.update, e cleanPendingQueue trata do TTL.
+      state.pendingQueue.delete(id);
     } catch (err) {
       console.error(`[retry] linha ${state.lineId}: ${err.message}`);
     }
