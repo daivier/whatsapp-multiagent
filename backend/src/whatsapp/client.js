@@ -384,6 +384,20 @@ async function handleIncomingMessage(msg, lineId) {
     try {
       const target = db.prepare('SELECT id, conversation_id, reactions FROM messages WHERE wa_message_id = ?').get(reactionMsg.key.id);
       if (target) {
+        // Se for eco da nossa própria reacção (fromMe=true), ignorar quando já
+        // temos a reacção registada com um user real (id>0). Evita o duplicado
+        // típico: painel chama POST /react → backend grava com id=user.id → envia
+        // pelo Baileys → eco chega aqui como fromMe=true → não duplicar.
+        if (msg.key.fromMe && target.reactions) {
+          try {
+            const list = JSON.parse(target.reactions);
+            const isOurs = list.some(r =>
+              r.emoji === (reactionMsg.text || '') &&
+              (r.users || []).some(u => u.id > 0)
+            );
+            if (isOurs) return; // já aplicada via endpoint
+          } catch (_) {}
+        }
         const conv = db.prepare('SELECT con.name as contact_name, con.phone FROM conversations conv JOIN contacts con ON con.id=conv.contact_id WHERE conv.id=?').get(target.conversation_id);
         const senderUser = msg.key.fromMe
           ? { id: 0, name: 'Atendente (externo)' } // reacção do nosso lado via outro dispositivo
