@@ -107,9 +107,10 @@ router.patch('/me', authMiddleware, (req, res) => {
 });
 
 // PATCH /users/:id — ativar/desativar ou alterar dados (owner only)
+const VALID_ROLES = ['owner', 'supervisor', 'attendant'];
 router.patch('/:id', authMiddleware, ownerOnly, (req, res) => {
   const { id } = req.params;
-  const { active, name, email, password, department_ids } = req.body;
+  const { active, name, email, password, department_ids, role } = req.body;
 
   if (active !== undefined) {
     db.prepare('UPDATE users SET active = ? WHERE id = ?').run(active ? 1 : 0, id);
@@ -126,6 +127,20 @@ router.patch('/:id', authMiddleware, ownerOnly, (req, res) => {
     if (password.length < 6) return res.status(400).json({ error: 'A senha deve ter pelo menos 6 caracteres' });
     const hash = bcrypt.hashSync(password, 10);
     db.prepare('UPDATE users SET password_hash = ? WHERE id = ?').run(hash, id);
+  }
+  if (role !== undefined) {
+    if (!VALID_ROLES.includes(role)) {
+      return res.status(400).json({ error: `role inválido. Aceites: ${VALID_ROLES.join(', ')}` });
+    }
+    // Salvaguarda: não permitir que o último owner se rebaixe (deixa sem dono)
+    const target = db.prepare('SELECT role FROM users WHERE id = ?').get(id);
+    if (target?.role === 'owner' && role !== 'owner') {
+      const otherOwners = db.prepare("SELECT COUNT(*) AS c FROM users WHERE role = 'owner' AND active = 1 AND id != ?").get(id).c;
+      if (otherOwners === 0) {
+        return res.status(409).json({ error: 'Não é possível rebaixar o último owner. Promove outro utilizador a owner primeiro.' });
+      }
+    }
+    db.prepare('UPDATE users SET role = ? WHERE id = ?').run(role, id);
   }
   if (Array.isArray(department_ids)) replaceUserDepartments(parseInt(id, 10), department_ids);
 

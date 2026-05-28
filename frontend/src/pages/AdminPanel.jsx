@@ -59,7 +59,7 @@ export default function AdminPanel({ socket }) {
   const [disconnecting, setDisconnecting] = useState(false);
   const [newUser, setNewUser] = useState({ name: '', email: '', password: '' });
   const [editingUser, setEditingUser] = useState(null); // { id, name } do atendente a editar
-  const [editForm, setEditForm] = useState({ name: '', password: '' });
+  const [editForm, setEditForm] = useState({ name: '', email: '', password: '', role: 'attendant' });
   const [editSaving, setEditSaving] = useState(false);
   const [editError, setEditError] = useState('');
   const [showProfile, setShowProfile] = useState(false);
@@ -206,7 +206,8 @@ export default function AdminPanel({ socket }) {
 
   async function loadAttendants() {
     const { data } = await api.get('/users');
-    setAttendants(Array.isArray(data) ? data.filter(u => u.role === 'attendant') : []);
+    // Mostra atendentes + supervisores na gestao; owners ficam fora (geridos via perfil proprio).
+    setAttendants(Array.isArray(data) ? data.filter(u => u.role !== 'owner') : []);
   }
   async function checkWhatsapp() {
     const { data } = await api.get('/whatsapp/status');
@@ -354,6 +355,7 @@ export default function AdminPanel({ socket }) {
     try {
       const payload = { name: editForm.name.trim(), email: editForm.email.trim() };
       if (editForm.password) payload.password = editForm.password;
+      if (editForm.role && editForm.role !== editingUser.role) payload.role = editForm.role;
       await api.patch(`/users/${editingUser.id}`, payload);
       setEditingUser(null);
       loadAttendants();
@@ -749,11 +751,18 @@ export default function AdminPanel({ socket }) {
               onChange={e => setAttendantSearch(e.target.value)}
             />
             <table style={S.table}>
-              <thead><tr><th>Nome</th><th>Email</th><th>Departamentos</th><th>Estado</th><th>Ativo</th><th></th></tr></thead>
+              <thead><tr><th>Nome</th><th>Função</th><th>Email</th><th>Departamentos</th><th>Estado</th><th>Ativo</th><th></th></tr></thead>
               <tbody>
                 {attendants.filter(a => !attendantSearch || a.name.toLowerCase().includes(attendantSearch.toLowerCase())).map(a => (
                   <tr key={a.id}>
                     <td style={{ fontWeight: 600 }}>{a.name}</td>
+                    <td>
+                      {a.role === 'supervisor' ? (
+                        <span style={{ background: '#ddd6fe', color: '#5b21b6', padding: '1px 8px', borderRadius: '999px', fontSize: '0.72rem', fontWeight: 600 }}>🛡️ Supervisor</span>
+                      ) : (
+                        <span style={{ color: 'var(--hint)', fontSize: '0.78rem' }}>Atendente</span>
+                      )}
+                    </td>
                     <td style={{ color: 'var(--muted)' }}>{a.email}</td>
                     <td>
                       {(a.departments || []).length === 0 ? (
@@ -771,7 +780,7 @@ export default function AdminPanel({ socket }) {
                     </td>
                     <td style={{ color: a.active ? 'var(--success)' : 'var(--hint)', fontWeight: 500 }}>{a.active ? 'Sim' : 'Não'}</td>
                     <td style={{ display: 'flex', gap: '0.4rem' }}>
-                      <button style={{ ...S.outlineBtn, borderColor: 'var(--accent)', color: 'var(--accent)' }} onClick={() => { setEditingUser(a); setEditForm({ name: a.name, email: a.email, password: '' }); setEditError(''); }}>Editar</button>
+                      <button style={{ ...S.outlineBtn, borderColor: 'var(--accent)', color: 'var(--accent)' }} onClick={() => { setEditingUser(a); setEditForm({ name: a.name, email: a.email, password: '', role: a.role || 'attendant' }); setEditError(''); }}>Editar</button>
                       <button style={S.outlineBtn} onClick={() => toggleAttendant(a.id, a.active)}>{a.active ? 'Desativar' : 'Ativar'}</button>
                     </td>
                   </tr>
@@ -787,7 +796,7 @@ export default function AdminPanel({ socket }) {
             onClick={() => setEditingUser(null)}>
             <div onClick={e => e.stopPropagation()} style={{ background: 'var(--card)', borderRadius: 'var(--r-md)', boxShadow: 'var(--sh-md)', width: '100%', maxWidth: '380px', padding: '1.5rem', display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <strong style={{ fontSize: '1rem' }}>✏️ Editar atendente</strong>
+                <strong style={{ fontSize: '1rem' }}>✏️ Editar utilizador</strong>
                 <button onClick={() => setEditingUser(null)} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: '1rem', color: 'var(--muted)' }}>✕</button>
               </div>
               <div>
@@ -801,6 +810,17 @@ export default function AdminPanel({ socket }) {
               <div>
                 <label style={{ fontSize: '0.82rem', fontWeight: 600, color: 'var(--muted)', display: 'block', marginBottom: '0.3rem' }}>Nova senha <span style={{ fontWeight: 400, color: 'var(--hint)' }}>(deixar em branco para não alterar)</span></label>
                 <input style={S.input} type="password" placeholder="Mínimo 6 caracteres" value={editForm.password} onChange={e => setEditForm(p => ({ ...p, password: e.target.value }))} />
+              </div>
+              <div>
+                <label style={{ fontSize: '0.82rem', fontWeight: 600, color: 'var(--muted)', display: 'block', marginBottom: '0.3rem' }}>Função</label>
+                <select style={S.input} value={editForm.role} onChange={e => setEditForm(p => ({ ...p, role: e.target.value }))}>
+                  <option value="attendant">👤 Atendente</option>
+                  <option value="supervisor">🛡️ Supervisor</option>
+                  <option value="owner">👑 Owner</option>
+                </select>
+                <p style={{ margin: '0.25rem 0 0', fontSize: '0.72rem', color: 'var(--hint)' }}>
+                  Supervisor: vê painel de monitorização e relatórios mas não gere configurações. Owner: acesso total.
+                </p>
               </div>
               {editError && <p style={{ margin: 0, color: 'var(--danger)', fontSize: '0.83rem', background: 'var(--danger-l)', padding: '0.4rem 0.6rem', borderRadius: 'var(--r-sm)' }}>{editError}</p>}
               <div style={{ display: 'flex', gap: '0.5rem', justifyContent: 'flex-end', marginTop: '0.25rem' }}>
