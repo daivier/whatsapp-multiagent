@@ -733,6 +733,17 @@ async function editMessage(lineId, waMessageId, newBody) {
   await state.sock.sendMessage(jid, { text: newBody, edit: { id: waMessageId, fromMe: true, remoteJid: jid } });
 }
 
+// Apagar mensagem ("Apagar para todos" no WhatsApp). Substitui no telemóvel
+// do destinatário por "Esta mensagem foi apagada".
+async function deleteMessageForAll(lineId, waMessageId) {
+  const state = lineStates.get(resolveLineId(lineId));
+  if (!state?.isReady || !state.sock) throw new Error('WhatsApp não está conectado nesta linha');
+  const msgInDb = db.prepare(`SELECT m.wa_message_id, con.wa_id, con.phone FROM messages m JOIN conversations conv ON conv.id = m.conversation_id JOIN contacts con ON con.id = conv.contact_id WHERE m.wa_message_id = ? AND m.from_me = 1`).get(waMessageId);
+  if (!msgInDb) throw new Error('Mensagem não encontrada');
+  const jid = normalizeJid(state, msgInDb.wa_id || msgInDb.phone);
+  await state.sock.sendMessage(jid, { delete: { id: waMessageId, fromMe: true, remoteJid: jid } });
+}
+
 function convertToOggOpus(inputPath) {
   return new Promise((resolve, reject) => {
     const tmpOut = path.join(os.tmpdir(), `wa-audio-${Date.now()}.ogg`);
@@ -830,6 +841,7 @@ module.exports = {
   sendMessage,
   sendMedia,
   editMessage,
+  deleteMessageForAll,
   getStatus,
   getAllStatuses,
   disconnectWhatsApp,

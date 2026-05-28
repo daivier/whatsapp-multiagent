@@ -1,7 +1,7 @@
 const express = require('express');
 const db = require('../db/schema');
 const { authMiddleware } = require('../middleware/auth');
-const { sendMessage, editMessage } = require('../whatsapp/client');
+const { sendMessage, editMessage, deleteMessageForAll } = require('../whatsapp/client');
 
 const router = express.Router();
 
@@ -89,6 +89,34 @@ router.patch('/:id', authMiddleware, async (req, res) => {
   // Emitir via socket para todos os clientes actualizarem a mensagem
   const ioInstance = require('../io-instance').get();
   ioInstance?.to(`conv:${msg.conversation_id}`).emit('message:edited', updated);
+
+  res.json(updated);
+});
+
+// DELETE /messages/:id — apaga a mensagem no WhatsApp do destinatário (revoke)
+// e marca como deleted=1 na BD. Só funciona para mensagens nossas (from_me=1).
+// Atendente só pode apagar mensagens das próprias conversas; owner/supervisor em qualquer.
+router.delete('/:id', authMiddleware, async (req, res) => {
+  const msg = db.prepare(`SELECT m.*, conv.assigned_to, conv.line_id FROM messages m JOIN conversations conv ON conv.id = m.conversation_id WHERE m.id = ?`).get(req.params.id);
+  if (!msg) return res.status(404).json({ error: 'Mensagem não encontrada' });
+  if (!msg.from_me) return res.status(400).json({ error: 'Só é possível apagar mensagens enviadas por nós' });
+  if (msg.deleted) return res.status(400).json({ error: 'Mensagem já está apagada' });
+  if (req.user.role === 'attendant' && msg.assigned_to !== req.user.id) return res.status(403).json({ error: 'Sem permissão' });
+
+  if (msg.wa_message_id) {
+    try {
+      await deleteMessageForAll(msg.line_id, msg.wa_message_id);
+    } catch (err) {
+      console.error('[delete-msg] WhatsApp:', err.message);
+      return res.status(503).json({ error: 'Não foi possível apagar no WhatsApp: ' + err.message });
+    }
+  }
+
+  db.prepare('UPDATE messages SET deleted = 1 WHERE id = ?').run(msg.id);
+  const updated = db.prepare('SELECT * FROM messages WHERE id = ?').get(msg.id);
+
+  const ioInstance = require('../io-instance').get();
+  ioInstance?.emit('message:deleted', { id: msg.id, conversation_id: msg.conversation_id });
 
   res.json(updated);
 });
