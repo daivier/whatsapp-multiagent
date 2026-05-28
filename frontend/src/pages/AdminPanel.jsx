@@ -5,6 +5,7 @@ import ChatWindow from '../components/ChatWindow';
 import { useAuth } from '../context/AuthContext';
 import { useNotifications } from '../hooks/useNotifications';
 import PushNotificationsButton from '../components/PushNotificationsButton';
+import { useTheme } from '../hooks/useTheme';
 import ReportsPage from './ReportsPage';
 import DashboardPage from './DashboardPage';
 
@@ -26,6 +27,7 @@ function SimpleBar({ label, value, max, color }) {
 
 export default function AdminPanel({ socket }) {
   const { user, logout } = useAuth();
+  const { dark, toggle: toggleTheme } = useTheme();
   const [tab, setTab] = useState('dashboard');
   const [selectedConv, setSelectedConv] = useState(null);
   const [takenNotice, setTakenNotice] = useState(null);
@@ -122,6 +124,22 @@ export default function AdminPanel({ socket }) {
   const [broadcastSending, setBroadcastSending] = useState(false);
   const [broadcastProgress, setBroadcastProgress] = useState(null); // { sent, failed, total }
   const [broadcastDone, setBroadcastDone] = useState(null); // { sent, failed, total }
+  const [broadcastLineId, setBroadcastLineId] = useState("");
+
+  // Search filters for user lists
+  const [deptMemberSearch, setDeptMemberSearch] = useState('');
+  const [attendantSearch, setAttendantSearch] = useState('');
+
+  // Per-line bot settings
+  const [selectedBotLine, setSelectedBotLine] = useState(null);
+  const [botSettings, setBotSettings] = useState({
+    enabled: 0, message: '',
+    hours_0: 'closed', hours_1: '07:00-18:00', hours_2: '07:00-18:00',
+    hours_3: '07:00-18:00', hours_4: '07:00-18:00', hours_5: '07:00-18:00',
+    hours_6: '07:00-12:00',
+  });
+  const [botSaved, setBotSaved] = useState(false);
+  const [broadcastLogs, setBroadcastLogs] = useState([]);
 
   const [settings, setSettings] = useState({
     bot_enabled: '0', bot_message: '', rating_enabled: '0', rating_message: '',
@@ -142,10 +160,12 @@ export default function AdminPanel({ socket }) {
     if (tab === 'contacts') loadContacts();
     if (tab === 'transfers') loadTransferLogs();
     if (tab === 'automation') { loadKeywordRules(); loadAttendants(); loadDepartments(); loadTags(); }
+    if (tab === 'tags') { loadTags(); loadDepartments(); }
     if (tab === 'blacklist') loadBlacklist();
-    if (tab === 'broadcast') loadBroadcastContacts();
+    if (tab === 'broadcast') { loadBroadcastContacts(); loadBroadcastLogs(); }
     if (tab === 'departments') { loadDepartments(); loadAttendants(); }
     if (tab === 'lines') { loadLines(); loadDepartments(); }
+    if (tab === 'bot') { loadLines(); }
   }, [tab]);
 
   useEffect(() => {
@@ -173,6 +193,7 @@ export default function AdminPanel({ socket }) {
       setBroadcastProgress(null);
       setBroadcastDone(data);
       setBroadcastSending(false);
+      loadBroadcastLogs();
     });
     return () => {
       socket.off('whatsapp:qr'); socket.off('whatsapp:ready');
@@ -380,7 +401,7 @@ export default function AdminPanel({ socket }) {
     e.preventDefault();
     if (!newTag.name) return;
     await api.post('/tags', newTag);
-    setNewTag({ name: '', color: '#25D366' }); loadTags();
+    setNewTag({ name: '', color: '#25D366', department_id: '' }); loadTags();
   }
   async function deleteTag(id) {
     await api.delete(`/tags/${id}`); loadTags();
@@ -427,6 +448,33 @@ export default function AdminPanel({ socket }) {
   }
 
   // --- Linhas WhatsApp ---
+  async function loadBotSettings(lineId) {
+    if (!lineId) return;
+    try {
+      const { data } = await api.get(`/lines/${lineId}/bot`);
+      setBotSettings({
+        enabled: data.enabled || 0,
+        message: data.message || '',
+        hours_0: data.hours_0 || 'closed',
+        hours_1: data.hours_1 || '07:00-18:00',
+        hours_2: data.hours_2 || '07:00-18:00',
+        hours_3: data.hours_3 || '07:00-18:00',
+        hours_4: data.hours_4 || '07:00-18:00',
+        hours_5: data.hours_5 || '07:00-18:00',
+        hours_6: data.hours_6 || '07:00-12:00',
+      });
+    } catch (e) { console.error('loadBotSettings', e); }
+  }
+
+  async function saveBotSettings() {
+    if (!selectedBotLine) return;
+    try {
+      await api.post(`/lines/${selectedBotLine}/bot`, botSettings);
+      setBotSaved(true);
+      setTimeout(() => setBotSaved(false), 2000);
+    } catch (e) { console.error('saveBotSettings', e); }
+  }
+
   async function loadLines() {
     try { const { data } = await api.get('/lines'); setLines(Array.isArray(data) ? data : []); }
     catch (_) {}
@@ -502,6 +550,7 @@ export default function AdminPanel({ socket }) {
   }
   async function openMembers(deptId) {
     try {
+      setDeptMemberSearch('');
       const { data } = await api.get(`/departments/${deptId}/members`);
       setDeptMembers(Array.isArray(data) ? data.map(m => m.id) : []);
       setDeptMembersFor(deptId);
@@ -533,6 +582,9 @@ export default function AdminPanel({ socket }) {
     }
   }
 
+  async function loadBroadcastLogs() {
+    try { const { data } = await api.get('/broadcast/logs'); setBroadcastLogs(Array.isArray(data) ? data : []); } catch (_) {}
+  }
   async function loadBroadcastContacts(q = '') {
     const { data } = await api.get('/contacts', { params: q ? { q } : {} });
     setBroadcastContacts(Array.isArray(data) ? data.filter(c => c.phone && !c.phone.includes('@')) : []);
@@ -547,6 +599,7 @@ export default function AdminPanel({ socket }) {
       await api.post('/broadcast', {
         contact_ids: Array.from(broadcastSelected),
         message: broadcastMessage.trim(),
+        ...(broadcastLineId ? { line_id: parseInt(broadcastLineId, 10) } : {}),
       });
     } catch (err) {
       alert('Erro ao iniciar envio: ' + (err.response?.data?.error || err.message));
@@ -625,6 +678,7 @@ export default function AdminPanel({ socket }) {
         <div style={{ margin: '0 1rem 0.5rem', display: 'flex', justifyContent: 'center' }}>
           <PushNotificationsButton />
         </div>
+        <button onClick={toggleTheme} title={dark ? 'Modo claro' : 'Modo escuro'} style={{ ...S.logoutBtn, marginBottom: '0.4rem', textAlign: 'center' }}>{dark ? '☀️ Modo claro' : '🌙 Modo escuro'}</button>
         <button style={{ ...S.logoutBtn, background: 'var(--accent-l)', color: 'var(--accent)', marginBottom: '0.4rem' }} onClick={() => { setProfileForm({ name: user.name || '', email: user.email || '', current_password: '', password: '', password2: '' }); setProfileError(''); setProfileSuccess(''); setShowProfile(true); }}>👤 Perfil / Senha</button>
         <button style={S.logoutBtn} onClick={logout}>Sair</button>
       </aside>
@@ -688,10 +742,16 @@ export default function AdminPanel({ socket }) {
               <input style={S.input} type="password" placeholder="Password" value={newUser.password} onChange={e => setNewUser(p => ({ ...p, password: e.target.value }))} required />
               <button style={S.addBtn} type="submit">Adicionar</button>
             </form>
+            <input
+              style={{ ...S.input, width: '100%', maxWidth: '300px', boxSizing: 'border-box', marginBottom: '0.75rem' }}
+              placeholder="Filtrar por nome..."
+              value={attendantSearch}
+              onChange={e => setAttendantSearch(e.target.value)}
+            />
             <table style={S.table}>
               <thead><tr><th>Nome</th><th>Email</th><th>Departamentos</th><th>Estado</th><th>Ativo</th><th></th></tr></thead>
               <tbody>
-                {attendants.map(a => (
+                {attendants.filter(a => !attendantSearch || a.name.toLowerCase().includes(attendantSearch.toLowerCase())).map(a => (
                   <tr key={a.id}>
                     <td style={{ fontWeight: 600 }}>{a.name}</td>
                     <td style={{ color: 'var(--muted)' }}>{a.email}</td>
@@ -846,9 +906,17 @@ export default function AdminPanel({ socket }) {
                   <p style={{ color: 'var(--muted)', fontSize: '0.83rem', marginTop: 0, marginBottom: '0.75rem' }}>
                     Atendentes marcados vão receber conversas roteadas para este departamento.
                   </p>
-                  <div style={{ maxHeight: '40vh', overflowY: 'auto', border: '1px solid var(--border)', borderRadius: 'var(--r-sm)', padding: '0.5rem', marginBottom: '1rem' }}>
-                    {activeAttendants.length === 0 && <p style={{ margin: 0, color: 'var(--hint)', fontSize: '0.85rem' }}>Sem atendentes activos</p>}
-                    {activeAttendants.map(a => (
+                  <input
+                    style={{ ...S.input, width: '100%', boxSizing: 'border-box', marginBottom: '0.5rem' }}
+                    placeholder="Filtrar por nome..."
+                    value={deptMemberSearch}
+                    onChange={e => setDeptMemberSearch(e.target.value)}
+                  />
+                  <div style={{ maxHeight: '38vh', overflowY: 'auto', border: '1px solid var(--border)', borderRadius: 'var(--r-sm)', padding: '0.5rem', marginBottom: '1rem' }}>
+                    {activeAttendants.filter(a => !deptMemberSearch || a.name.toLowerCase().includes(deptMemberSearch.toLowerCase())).length === 0 && (
+                      <p style={{ margin: 0, color: 'var(--hint)', fontSize: '0.85rem' }}>Nenhum resultado</p>
+                    )}
+                    {activeAttendants.filter(a => !deptMemberSearch || a.name.toLowerCase().includes(deptMemberSearch.toLowerCase())).map(a => (
                       <label key={a.id} style={{ display: 'flex', alignItems: 'center', gap: '0.6rem', padding: '0.4rem 0.5rem', cursor: 'pointer', fontSize: '0.9rem', borderRadius: 'var(--r-sm)' }}>
                         <input type="checkbox" checked={deptMembers.includes(a.id)}
                           onChange={e => setDeptMembers(prev => e.target.checked ? [...prev, a.id] : prev.filter(x => x !== a.id))} />
@@ -1316,26 +1384,68 @@ export default function AdminPanel({ socket }) {
         {tab === 'tags' && (
           <div style={S.section}>
             <h2 style={S.sectionTitle}>Etiquetas</h2>
-            <form onSubmit={addTag} style={S.form}>
-              <input style={S.input} placeholder="Nome da etiqueta" value={newTag.name}
+            <p style={{ color: 'var(--muted)', fontSize: '0.85rem', marginBottom: '1rem' }}>
+              Etiquetas globais aparecem em todos os departamentos. Etiquetas de departamento aparecem apenas nas conversas desse departamento.
+            </p>
+            <form onSubmit={addTag} style={{ ...S.form, flexWrap: 'wrap', marginBottom: '1rem' }}>
+              <input style={{ ...S.input, flex: '1 1 140px' }} placeholder="Nome da etiqueta" value={newTag.name}
                 onChange={e => setNewTag(p => ({ ...p, name: e.target.value }))} required />
+              {user.role === 'owner' && (
+                <select style={{ ...S.select, flex: '1 1 160px' }} value={newTag.department_id || ''}
+                  onChange={e => setNewTag(p => ({ ...p, department_id: e.target.value }))}>
+                  <option value="">🌐 Global (todos os dept.)</option>
+                  {departments.filter(d => d.active).map(d => (
+                    <option key={d.id} value={d.id}>{d.name}</option>
+                  ))}
+                </select>
+              )}
               <div style={{ display: 'flex', gap: '0.3rem', flexWrap: 'wrap', alignItems: 'center' }}>
-                {COLORS.map(c => (
-                  <div key={c} onClick={() => setNewTag(p => ({ ...p, color: c }))}
-                    style={{ width: 22, height: 22, background: c, borderRadius: '50%', cursor: 'pointer', border: newTag.color === c ? '3px solid var(--text)' : '3px solid transparent', transition: 'border .1s' }} />
+                {COLORS.map(col => (
+                  <div key={col} onClick={() => setNewTag(p => ({ ...p, color: col }))}
+                    style={{ width: 22, height: 22, background: col, borderRadius: '50%', cursor: 'pointer', border: newTag.color === col ? '3px solid var(--text)' : '3px solid transparent', transition: 'border .1s' }} />
                 ))}
               </div>
               <button style={S.addBtn} type="submit">Adicionar</button>
             </form>
-            <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap', marginTop: '1rem' }}>
-              {tags.map(t => (
+
+            {/* Group by dept */}
+            {(() => {
+              const global = tags.filter(t => !t.department_id);
+              const byDept = {};
+              tags.filter(t => t.department_id).forEach(t => {
+                if (!byDept[t.department_id]) byDept[t.department_id] = [];
+                byDept[t.department_id].push(t);
+              });
+              const renderTag = t => (
                 <div key={t.id} style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', background: t.color + '18', border: `1px solid ${t.color}55`, borderRadius: '999px', padding: '0.3rem 0.75rem' }}>
                   <span style={{ width: 8, height: 8, borderRadius: '50%', background: t.color, flexShrink: 0 }} />
                   <span style={{ color: t.color, fontWeight: 600, fontSize: '0.83rem' }}>{t.name}</span>
                   <button onClick={() => deleteTag(t.id)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: t.color, fontSize: '0.75rem', padding: 0, lineHeight: 1 }}>✕</button>
                 </div>
-              ))}
-            </div>
+              );
+              return (
+                <>
+                  {global.length > 0 && (
+                    <div style={{ marginBottom: '1rem' }}>
+                      <p style={{ margin: '0 0 0.5rem', fontSize: '0.78rem', fontWeight: 700, color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: '0.04em' }}>🌐 Global</p>
+                      <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>{global.map(renderTag)}</div>
+                    </div>
+                  )}
+                  {Object.entries(byDept).map(([deptId, deptTags]) => {
+                    const dept = departments.find(d => String(d.id) === String(deptId));
+                    return (
+                      <div key={deptId} style={{ marginBottom: '1rem' }}>
+                        <p style={{ margin: '0 0 0.5rem', fontSize: '0.78rem', fontWeight: 700, color: dept?.color || 'var(--muted)', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+                          🏢 {dept?.name || `Dept #${deptId}`}
+                        </p>
+                        <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>{deptTags.map(renderTag)}</div>
+                      </div>
+                    );
+                  })}
+                  {tags.length === 0 && <p style={{ color: 'var(--hint)', fontSize: '0.85rem' }}>Sem etiquetas. Cria a primeira acima.</p>}
+                </>
+              );
+            })()}
           </div>
         )}
 
@@ -1555,53 +1665,78 @@ export default function AdminPanel({ socket }) {
         {tab === 'bot' && (
           <div style={S.section}>
             <h2 style={S.sectionTitle}>Bot de Triagem</h2>
-            <p style={{ color: 'var(--muted)', fontSize: '0.85rem', marginBottom: '1.5rem' }}>Envia resposta automática fora do horário de atendimento.</p>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem', maxWidth: '560px' }}>
-              <label style={S.settingRow}>
-                <span style={{ fontWeight: 500 }}>Ativar bot</span>
-                <input type="checkbox" checked={settings.bot_enabled === '1'}
-                  onChange={e => setSettings(s => ({ ...s, bot_enabled: e.target.checked ? '1' : '0' }))} />
-              </label>
-              <div>
-                <p style={{ margin: '0 0 0.75rem', fontSize: '0.9rem', fontWeight: 600, color: 'var(--text)' }}>Horário por dia</p>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
-                  {[['Dom',0],['Seg',1],['Ter',2],['Qua',3],['Qui',4],['Sex',5],['Sáb',6]].map(([label, i]) => {
-                    const key = `hours_${i}`;
-                    const val = settings[key] || 'closed';
-                    const isOpen = val !== 'closed';
-                    const [start, end] = isOpen ? val.split('-') : ['08:00', '18:00'];
-                    return (
-                      <div key={i} style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', fontSize: '0.88rem' }}>
-                        <span style={{ width: '36px', fontWeight: 600, color: 'var(--text)' }}>{label}</span>
-                        <input type="checkbox" checked={isOpen} onChange={e => {
-                          setSettings(s => ({ ...s, [key]: e.target.checked ? `${start}-${end}` : 'closed' }));
-                        }} />
-                        {isOpen ? (
-                          <>
-                            <input type="time" style={{ ...S.input, padding: '0.25rem 0.5rem' }} value={start}
-                              onChange={e => setSettings(s => ({ ...s, [key]: `${e.target.value}-${end}` }))} />
-                            <span style={{ color: 'var(--hint)' }}>até</span>
-                            <input type="time" style={{ ...S.input, padding: '0.25rem 0.5rem' }} value={end}
-                              onChange={e => setSettings(s => ({ ...s, [key]: `${start}-${e.target.value}` }))} />
-                          </>
-                        ) : (
-                          <span style={{ color: 'var(--hint)', fontSize: '0.8rem' }}>Fechado</span>
-                        )}
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
-              <div>
-                <label style={{ fontSize: '0.85rem', color: 'var(--muted)', display: 'block', marginBottom: '0.35rem', fontWeight: 600 }}>Mensagem automática</label>
-                <textarea style={{ ...S.input, width: '100%', resize: 'vertical', minHeight: '80px', boxSizing: 'border-box' }}
-                  value={settings.bot_message}
-                  onChange={e => setSettings(s => ({ ...s, bot_message: e.target.value }))} />
-              </div>
-              <button style={{ ...S.addBtn, alignSelf: 'flex-start' }} onClick={saveSettings}>
-                {settingsSaved ? '✓ Guardado' : 'Guardar'}
-              </button>
+            <p style={{ color: 'var(--muted)', fontSize: '0.85rem', marginBottom: '1.5rem' }}>
+              Envia resposta automática fora do horário de atendimento. Configurado por linha.
+            </p>
+            {/* Line selector */}
+            <div style={{ marginBottom: '1.5rem', maxWidth: '360px' }}>
+              <label style={{ fontSize: '0.85rem', color: 'var(--muted)', display: 'block', marginBottom: '0.35rem', fontWeight: 600 }}>Linha</label>
+              <select style={{ ...S.select, width: '100%', boxSizing: 'border-box' }}
+                value={selectedBotLine || ''}
+                onChange={e => {
+                  const id = e.target.value ? parseInt(e.target.value, 10) : null;
+                  setSelectedBotLine(id);
+                  if (id) loadBotSettings(id);
+                }}>
+                <option value="">— Selecionar linha —</option>
+                {lines.map(l => (
+                  <option key={l.id} value={l.id}>{l.name}</option>
+                ))}
+              </select>
             </div>
+
+            {selectedBotLine && (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem', maxWidth: '560px' }}>
+                <label style={S.settingRow}>
+                  <span style={{ fontWeight: 500 }}>Ativar bot nesta linha</span>
+                  <input type="checkbox" checked={!!botSettings.enabled}
+                    onChange={e => setBotSettings(s => ({ ...s, enabled: e.target.checked ? 1 : 0 }))} />
+                </label>
+                <div>
+                  <p style={{ margin: '0 0 0.75rem', fontSize: '0.9rem', fontWeight: 600, color: 'var(--text)' }}>Horário de atendimento por dia</p>
+                  <p style={{ margin: '-0.5rem 0 0.75rem', fontSize: '0.78rem', color: 'var(--hint)' }}>
+                    O bot dispara <strong>fora</strong> deste horário. Dias marcados como "Fechado" = bot activo o dia todo.
+                  </p>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+                    {[['Dom',0],['Seg',1],['Ter',2],['Qua',3],['Qui',4],['Sex',5],['Sáb',6]].map(([label, i]) => {
+                      const key = `hours_${i}`;
+                      const val = botSettings[key] || 'closed';
+                      const isOpen = val !== 'closed';
+                      const [start, end] = isOpen ? val.split('-') : ['07:00', '18:00'];
+                      return (
+                        <div key={i} style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', fontSize: '0.88rem' }}>
+                          <span style={{ width: '36px', fontWeight: 600, color: 'var(--text)' }}>{label}</span>
+                          <input type="checkbox" checked={isOpen} onChange={e => {
+                            setBotSettings(s => ({ ...s, [key]: e.target.checked ? `${start}-${end}` : 'closed' }));
+                          }} />
+                          {isOpen ? (
+                            <>
+                              <input type="time" style={{ ...S.input, padding: '0.25rem 0.5rem' }} value={start}
+                                onChange={e => setBotSettings(s => ({ ...s, [key]: `${e.target.value}-${end}` }))} />
+                              <span style={{ color: 'var(--hint)' }}>até</span>
+                              <input type="time" style={{ ...S.input, padding: '0.25rem 0.5rem' }} value={end}
+                                onChange={e => setBotSettings(s => ({ ...s, [key]: `${start}-${e.target.value}` }))} />
+                            </>
+                          ) : (
+                            <span style={{ color: 'var(--hint)', fontSize: '0.8rem' }}>Fechado (bot activo)</span>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+                <div>
+                  <label style={{ fontSize: '0.85rem', color: 'var(--muted)', display: 'block', marginBottom: '0.35rem', fontWeight: 600 }}>Mensagem automática</label>
+                  <textarea style={{ ...S.input, width: '100%', resize: 'vertical', minHeight: '90px', boxSizing: 'border-box' }}
+                    value={botSettings.message}
+                    onChange={e => setBotSettings(s => ({ ...s, message: e.target.value }))}
+                    placeholder="Ex: Olá! Estamos fora do horário de atendimento. Voltaremos em breve." />
+                </div>
+                <button style={{ ...S.addBtn, alignSelf: 'flex-start' }} onClick={saveBotSettings}>
+                  {botSaved ? '✓ Guardado' : 'Guardar'}
+                </button>
+              </div>
+            )}
           </div>
         )}
 
@@ -1779,6 +1914,15 @@ export default function AdminPanel({ socket }) {
 
                 {/* Painel direito: mensagem + envio */}
                 <div style={{ flex: '1 1 320px', minWidth: '280px', display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+                  <div style={{ marginBottom: "0.75rem" }}>
+                    <label style={{ ...S.fieldLabel, marginBottom: "0.4rem" }}>Linha de envio</label>
+                    <select style={{ ...S.input, width: "100%" }} value={broadcastLineId} onChange={e => setBroadcastLineId(e.target.value)} disabled={broadcastSending}>
+                      <option value="">Linha padrão</option>
+                      {lines.filter(l => l.active).map(ln => (
+                        <option key={ln.id} value={ln.id}>{ln.name || ln.phone_number} {ln.is_default ? "(padrão)" : ""}</option>
+                      ))}
+                    </select>
+                  </div>
                   <div>
                     <label style={{ ...S.fieldLabel, marginBottom: '0.4rem' }}>Mensagem a enviar</label>
                     <textarea
@@ -1833,6 +1977,49 @@ export default function AdminPanel({ socket }) {
                     </div>
                   )}
                 </div>
+              </div>
+
+              {/* Historico de disparos */}
+              <div style={{ marginTop: '1.5rem' }}>
+                <h3 style={{ fontSize: '0.95rem', fontWeight: 700, marginBottom: '0.75rem', color: 'var(--text)' }}>Historico de Disparos</h3>
+                {broadcastLogs.length === 0 ? (
+                  <p style={{ color: 'var(--muted)', fontSize: '0.85rem' }}>Nenhum disparo registado ainda.</p>
+                ) : (
+                  <div style={{ overflowX: 'auto' }}>
+                    <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.83rem' }}>
+                      <thead>
+                        <tr style={{ borderBottom: '2px solid var(--border)', textAlign: 'left' }}>
+                          <th style={{ padding: '0.4rem 0.6rem', color: 'var(--muted)', fontWeight: 600 }}>Data</th>
+                          <th style={{ padding: '0.4rem 0.6rem', color: 'var(--muted)', fontWeight: 600 }}>Usuario</th>
+                          <th style={{ padding: '0.4rem 0.6rem', color: 'var(--muted)', fontWeight: 600 }}>Linha</th>
+                          <th style={{ padding: '0.4rem 0.6rem', color: 'var(--muted)', fontWeight: 600, maxWidth: 220 }}>Mensagem</th>
+                          <th style={{ padding: '0.4rem 0.6rem', color: 'var(--muted)', fontWeight: 600, textAlign: 'center' }}>Total</th>
+                          <th style={{ padding: '0.4rem 0.6rem', color: 'var(--muted)', fontWeight: 600, textAlign: 'center' }}>Enviados</th>
+                          <th style={{ padding: '0.4rem 0.6rem', color: 'var(--muted)', fontWeight: 600, textAlign: 'center' }}>Falhas</th>
+                          <th style={{ padding: '0.4rem 0.6rem', color: 'var(--muted)', fontWeight: 600, textAlign: 'center' }}>Status</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {broadcastLogs.map(log => (
+                          <tr key={log.id} style={{ borderBottom: '1px solid var(--border)' }}>
+                            <td style={{ padding: '0.45rem 0.6rem', whiteSpace: 'nowrap', color: 'var(--muted)' }}>{new Date(log.created_at).toLocaleString('pt-BR')}</td>
+                            <td style={{ padding: '0.45rem 0.6rem' }}>{log.user_name || '—'}</td>
+                            <td style={{ padding: '0.45rem 0.6rem' }}>{log.line_name || log.line_id || '—'}</td>
+                            <td style={{ padding: '0.45rem 0.6rem', maxWidth: 220, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={log.message}>{log.message}</td>
+                            <td style={{ padding: '0.45rem 0.6rem', textAlign: 'center' }}>{log.total}</td>
+                            <td style={{ padding: '0.45rem 0.6rem', textAlign: 'center', color: 'var(--success)', fontWeight: 600 }}>{log.sent}</td>
+                            <td style={{ padding: '0.45rem 0.6rem', textAlign: 'center', color: log.failed > 0 ? 'var(--danger)' : 'var(--muted)', fontWeight: log.failed > 0 ? 600 : 400 }}>{log.failed}</td>
+                            <td style={{ padding: '0.45rem 0.6rem', textAlign: 'center' }}>
+                              <span style={{ fontSize: '0.75rem', fontWeight: 600, padding: '0.15rem 0.5rem', borderRadius: '99px', background: log.status === 'done' ? '#dcfce7' : '#fef9c3', color: log.status === 'done' ? '#16a34a' : '#92400e' }}>
+                                {log.status === 'done' ? 'Concluido' : 'A enviar'}
+                              </span>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
               </div>
             </div>
           );
