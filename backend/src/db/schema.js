@@ -257,3 +257,21 @@ try {
 
 // Migração: etiquetas por departamento
 try { db.exec(`ALTER TABLE tags ADD COLUMN department_id INTEGER REFERENCES departments(id) ON DELETE CASCADE`); } catch (_) {}
+
+// Migração: histórico de disparos em massa (broadcast logs)
+try {
+  db.exec(`CREATE TABLE IF NOT EXISTS broadcast_logs (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id INTEGER,
+    user_name TEXT,
+    line_id INTEGER,
+    line_name TEXT,
+    message TEXT,
+    total INTEGER DEFAULT 0,
+    sent INTEGER DEFAULT 0,
+    failed INTEGER DEFAULT 0,
+    status TEXT DEFAULT 'running',
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    finished_at DATETIME
+  )`);
+} catch (_) {}
