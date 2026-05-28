@@ -11,15 +11,18 @@ const SELECT_WITH_OWNER = `
   LEFT JOIN users u ON u.id = qr.owner_user_id
 `;
 
-// GET — devolve globais (owner_user_id IS NULL) + os do utilizador actual.
-// Owner vê todos os globais que ele e outros owners criaram + os privados dele.
-// Atendente vê globais + os seus próprios.
+// GET — visibilidade:
+//   - Owner/Supervisor: TODOS (globais + pessoais de todos os atendentes) — gestão
+//   - Atendente: globais + os seus próprios
 router.get('/', authMiddleware, (req, res) => {
-  const rows = db.prepare(`
-    ${SELECT_WITH_OWNER}
-    WHERE qr.owner_user_id IS NULL OR qr.owner_user_id = ?
-    ORDER BY qr.category ASC, qr.shortcut ASC
-  `).all(req.user.id);
+  const isAdmin = req.user.role === 'owner' || req.user.role === 'supervisor';
+  const rows = isAdmin
+    ? db.prepare(`${SELECT_WITH_OWNER} ORDER BY qr.category ASC, qr.shortcut ASC`).all()
+    : db.prepare(`
+        ${SELECT_WITH_OWNER}
+        WHERE qr.owner_user_id IS NULL OR qr.owner_user_id = ?
+        ORDER BY qr.category ASC, qr.shortcut ASC
+      `).all(req.user.id);
   res.json(rows);
 });
 
