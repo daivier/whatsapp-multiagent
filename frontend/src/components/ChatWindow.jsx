@@ -166,6 +166,13 @@ export default function ChatWindow({ conversation: convProp, socket, onClose, on
   const { user } = useAuth();
   const [conversation, setConversation] = useState(convProp);
   const [messages, setMessages] = useState([]);
+  const [hasMoreMessages, setHasMoreMessages] = useState(false);
+  const [loadingOlder, setLoadingOlder] = useState(false);
+  const [searchQ, setSearchQ] = useState('');
+  const [searchActive, setSearchActive] = useState(false);
+  const [searchResults, setSearchResults] = useState([]);
+  const [searchLoading, setSearchLoading] = useState(false);
+  const PAGE_SIZE = 100;
   const [text, setText] = useState('');
   const [sending, setSending] = useState(false);
   const [warning, setWarning] = useState('');
@@ -249,7 +256,12 @@ export default function ChatWindow({ conversation: convProp, socket, onClose, on
 
   useEffect(() => {
     if (!conversation) return;
-    api.get(`/conversations/${conversation.id}/messages`).then(r => setMessages(Array.isArray(r.data) ? r.data : []));
+    api.get(`/conversations/${conversation.id}/messages?limit=${PAGE_SIZE}`).then(r => {
+      const arr = Array.isArray(r.data) ? r.data : [];
+      setMessages(arr);
+      setHasMoreMessages(arr.length === PAGE_SIZE);
+    });
+    setSearchQ(''); setSearchActive(false); setSearchResults([]);
     api.get(`/tags/conversations/${conversation.id}`).then(r => setConvTags(Array.isArray(r.data) ? r.data : []));
     socket?.emit('conv:join', { conversation_id: conversation.id });
     setIsInternal(false);
@@ -432,6 +444,49 @@ export default function ChatWindow({ conversation: convProp, socket, onClose, on
     } catch (err) {
       setWarning(err.response?.data?.error || 'Erro ao reabrir');
     }
+  }
+
+  async function loadOlderMessages() {
+    if (!conversation || loadingOlder || !hasMoreMessages || messages.length === 0) return;
+    setLoadingOlder(true);
+    try {
+      const oldest = messages[0]?.id;
+      const { data } = await api.get(`/conversations/${conversation.id}/messages?limit=${PAGE_SIZE}&before_id=${oldest}`);
+      const arr = Array.isArray(data) ? data : [];
+      setMessages(prev => [...arr, ...prev]);
+      setHasMoreMessages(arr.length === PAGE_SIZE);
+    } catch (_) {}
+    setLoadingOlder(false);
+  }
+
+  async function runSearch(q) {
+    setSearchQ(q);
+    if (!q.trim()) { setSearchActive(false); setSearchResults([]); return; }
+    setSearchLoading(true);
+    setSearchActive(true);
+    try {
+      const { data } = await api.get(`/conversations/${conversation.id}/messages?q=${encodeURIComponent(q.trim())}&limit=50`);
+      setSearchResults(Array.isArray(data) ? data : []);
+    } catch (_) { setSearchResults([]); }
+    setSearchLoading(false);
+  }
+
+  function jumpToMessage(msgId) {
+    // Se já está em memória, scroll para lá; senão recarrega histórico até ele.
+    const el = document.getElementById(`msg-${msgId}`);
+    if (el) { el.scrollIntoView({ behavior: 'smooth', block: 'center' }); el.style.outline = '2px solid var(--accent)'; setTimeout(() => el.style.outline = '', 1800); return; }
+    // Fallback: carregar página em volta da msg (centrada em msgId+50, +50)
+    api.get(`/conversations/${conversation.id}/messages?before_id=${msgId + 51}&limit=100`)
+      .then(r => {
+        const arr = Array.isArray(r.data) ? r.data : [];
+        setMessages(arr);
+        setHasMoreMessages(arr.length === 100);
+        setTimeout(() => {
+          const e2 = document.getElementById(`msg-${msgId}`);
+          if (e2) { e2.scrollIntoView({ behavior: 'smooth', block: 'center' }); e2.style.outline = '2px solid var(--accent)'; setTimeout(() => e2.style.outline = '', 1800); }
+        }, 100);
+      });
+    setSearchActive(false);
   }
 
   async function send() {
@@ -890,6 +945,11 @@ export default function ChatWindow({ conversation: convProp, socket, onClose, on
             )}
           </div>
 
+          {/* Botão pesquisar dentro da conversa */}
+          <button style={{ ...S.iconBtn, color: searchActive ? 'var(--accent)' : 'var(--muted)', borderColor: searchActive ? 'var(--accent)' : 'var(--border-m)' }}
+            onClick={() => { if (searchActive) { setSearchActive(false); setSearchQ(''); setSearchResults([]); } else { setSearchActive(true); setTimeout(() => document.getElementById('conv-search-input')?.focus(), 50); } }}
+            title="Pesquisar nesta conversa">🔍</button>
+
           {/* Menu ⋯ — ações secundárias */}
           <div style={{ position: 'relative' }}>
             <button style={{ ...S.iconBtn, fontWeight: 700, fontSize: '1.1rem', letterSpacing: '-1px', color: showOverflow ? 'var(--accent)' : 'var(--muted)', borderColor: showOverflow ? 'var(--accent)' : 'var(--border-m)' }}
@@ -1062,14 +1122,55 @@ export default function ChatWindow({ conversation: convProp, socket, onClose, on
         </div>
       )}
 
+      {/* Barra de pesquisa dentro da conversa */}
+      {searchActive && (
+        <div style={{ position: 'relative', padding: '0.5rem 1rem', borderBottom: '1px solid var(--border)', background: 'var(--card)', display: 'flex', gap: '0.5rem', alignItems: 'center', flexShrink: 0 }}>
+          <span style={{ color: 'var(--muted)', fontSize: '0.85rem' }}>🔍</span>
+          <input id="conv-search-input"
+            placeholder="Pesquisar nesta conversa..."
+            value={searchQ}
+            onChange={e => runSearch(e.target.value)}
+            style={{ flex: 1, padding: '0.35rem 0.5rem', border: '1px solid var(--border-m)', borderRadius: 'var(--r-sm)', fontSize: '0.85rem', background: 'var(--bg)', color: 'var(--text)' }} />
+          <button onClick={() => { setSearchActive(false); setSearchQ(''); setSearchResults([]); }}
+            style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: '0.9rem', color: 'var(--muted)' }}>✕</button>
+          {searchQ.trim() && (
+            <div style={{ position: 'absolute', top: '100%', left: 0, right: 0, background: 'var(--card)', border: '1px solid var(--border)', borderRadius: '0 0 var(--r-md) var(--r-md)', maxHeight: '320px', overflowY: 'auto', zIndex: 250, boxShadow: 'var(--sh-md)' }}>
+              {searchLoading && <div style={{ padding: '0.6rem 1rem', color: 'var(--hint)', fontSize: '0.85rem' }}>A pesquisar...</div>}
+              {!searchLoading && searchResults.length === 0 && <div style={{ padding: '0.6rem 1rem', color: 'var(--hint)', fontSize: '0.85rem' }}>Sem resultados.</div>}
+              {searchResults.map(r => (
+                <div key={r.id} onClick={() => jumpToMessage(r.id)}
+                  style={{ padding: '0.5rem 1rem', borderBottom: '1px solid var(--border)', cursor: 'pointer', fontSize: '0.82rem' }}
+                  onMouseEnter={e => e.currentTarget.style.background = 'var(--bg)'}
+                  onMouseLeave={e => e.currentTarget.style.background = 'none'}>
+                  <div style={{ color: 'var(--text)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                    {r.from_me ? '↗' : '↙'} {(r.body || '').slice(0, 100)}
+                  </div>
+                  <div style={{ fontSize: '0.7rem', color: 'var(--hint)', marginTop: '2px' }}>
+                    {utc(r.timestamp).toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' })}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
       {/* Messages */}
       <div ref={messagesRef} style={S.messages}>
+        {hasMoreMessages && (
+          <div style={{ textAlign: 'center', padding: '0.5rem 0' }}>
+            <button onClick={loadOlderMessages} disabled={loadingOlder}
+              style={{ background: 'var(--card)', border: '1px solid var(--border-m)', borderRadius: '999px', padding: '0.25rem 0.85rem', fontSize: '0.78rem', color: 'var(--muted)', cursor: 'pointer' }}>
+              {loadingOlder ? 'A carregar...' : '↑ Carregar mensagens anteriores'}
+            </button>
+          </div>
+        )}
         {messages.map((msg) => {
           const isEditing = editingMsg?.id === msg.id;
           const canEdit = !!msg.from_me && !msg.is_internal && (Date.now() - utc(msg.timestamp).getTime()) < 15 * 60 * 1000;
           const hasQuote = !!msg.quoted_body || msg.quoted_media_type;
           return (
-            <div key={msg.id} style={{ ...S.bubble, ...(msg.from_me ? S.mine : S.theirs), ...(msg.is_internal ? S.internal : {}), position: 'relative' }}
+            <div key={msg.id} id={`msg-${msg.id}`} style={{ ...S.bubble, ...(msg.from_me ? S.mine : S.theirs), ...(msg.is_internal ? S.internal : {}), position: 'relative' }}
               onMouseEnter={e => {
                 e.currentTarget.querySelector('.reply-btn').style.opacity = '1';
                 if (canEdit) e.currentTarget.querySelector('.edit-btn')?.style && (e.currentTarget.querySelector('.edit-btn').style.opacity = '1');

@@ -101,6 +101,9 @@ export default function AdminPanel({ socket }) {
   const [scheduled, setScheduled] = useState([]);
   const [transferLogs, setTransferLogs] = useState([]);
   const [keywordRules, setKeywordRules] = useState([]);
+  const [faqItems, setFaqItems] = useState([]);
+  const [faqForm, setFaqForm] = useState({ id: null, question: '', answer: '', variations: '', department_id: '', active: true });
+  const [faqError, setFaqError] = useState('');
   const [newKR, setNewKR] = useState({ keyword: '', response: '', department_id: '', tag_id: '', priority: 100 });
 
   const [blacklist, setBlacklist] = useState([]);
@@ -172,6 +175,7 @@ export default function AdminPanel({ socket }) {
     if (tab === 'departments') { loadDepartments(); loadAttendants(); }
     if (tab === 'lines') { loadLines(); loadDepartments(); }
     if (tab === 'bot') { loadLines(); }
+    if (tab === 'faq') { loadFaq(); loadDepartments(); }
   }, [tab]);
 
   useEffect(() => {
@@ -442,6 +446,38 @@ export default function AdminPanel({ socket }) {
     const { data } = await api.get('/keyword-rules');
     setKeywordRules(Array.isArray(data) ? data : []);
   }
+  async function loadFaq() {
+    try { const { data } = await api.get('/faq'); setFaqItems(Array.isArray(data) ? data : []); } catch (_) { setFaqItems([]); }
+  }
+  async function saveFaq(e) {
+    e?.preventDefault?.();
+    setFaqError('');
+    if (!faqForm.question.trim() || !faqForm.answer.trim()) { setFaqError('Pergunta e resposta são obrigatórios'); return; }
+    const payload = {
+      question: faqForm.question.trim(),
+      answer: faqForm.answer.trim(),
+      variations: faqForm.variations.trim() || null,
+      department_id: faqForm.department_id ? parseInt(faqForm.department_id, 10) : null,
+      active: !!faqForm.active,
+    };
+    try {
+      if (faqForm.id) await api.patch(`/faq/${faqForm.id}`, payload);
+      else await api.post('/faq', payload);
+      setFaqForm({ id: null, question: '', answer: '', variations: '', department_id: '', active: true });
+      loadFaq();
+    } catch (err) {
+      setFaqError(err.response?.data?.error || 'Erro ao guardar');
+    }
+  }
+  async function deleteFaq(id, question) {
+    if (!confirm(`Eliminar FAQ "${question}"?`)) return;
+    await api.delete(`/faq/${id}`);
+    loadFaq();
+  }
+  async function toggleFaqActive(item) {
+    await api.patch(`/faq/${item.id}`, { active: !item.active });
+    loadFaq();
+  }
   async function addKeywordRule(e) {
     e.preventDefault();
     if (!newKR.keyword?.trim()) return;
@@ -662,7 +698,7 @@ export default function AdminPanel({ socket }) {
     ['dashboard','📊 Dashboard'],['conversations','Conversas'],['attendants','Atendentes'],['departments','🏢 Departamentos'],['lines','📱 Linhas WhatsApp'],['contacts','Contactos'],
     ['reports','Relatórios'],['scheduled','Agendamentos'],
     ['transfers','Transferências'],['quickreplies','Respostas Rápidas'],
-    ['tags','Etiquetas'],['automation','🤖 Automação'],['bot','Bot'],
+    ['tags','Etiquetas'],['automation','🤖 Automação'],['bot','Bot'],['faq','❓ FAQ Bot'],
     ['signature','🔔 Assinatura'],['rating','⭐ Avaliação'],
     ['blacklist','🚫 Blacklist'],['broadcast','📣 Envio em Massa'],['whatsapp','WhatsApp'],['chat','💬 Chat Interno'],
   ];
@@ -1851,6 +1887,115 @@ export default function AdminPanel({ socket }) {
                 </button>
               </div>
             )}
+          </div>
+        )}
+
+        {/* FAQ BOT */}
+        {tab === 'faq' && (
+          <div style={S.section}>
+            <h2 style={S.sectionTitle}>❓ FAQ Bot — Respostas Automáticas</h2>
+            <p style={{ color: 'var(--muted)', fontSize: '0.85rem', marginBottom: '1.25rem' }}>
+              Quando um cliente faz uma pergunta nova, o sistema procura na lista abaixo. Se encontrar
+              uma resposta com confiança suficiente, responde automaticamente. Se não encontrar (ou o
+              cliente continuar a falar), o atendimento humano corre normal.
+            </p>
+
+            {/* Form */}
+            <div style={{ background: 'var(--card)', border: '1px solid var(--border)', borderRadius: 'var(--r-md)', padding: '1rem', marginBottom: '1.25rem' }}>
+              <h3 style={{ margin: '0 0 0.75rem', fontSize: '0.95rem' }}>{faqForm.id ? '✏️ Editar item' : '+ Novo item'}</h3>
+              <form onSubmit={saveFaq} style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+                <label style={S.fieldLabel}>Pergunta canónica *</label>
+                <input style={S.input} placeholder="Ex: Quais são as formas de pagamento?"
+                  value={faqForm.question} onChange={e => setFaqForm(f => ({ ...f, question: e.target.value }))} />
+
+                <label style={S.fieldLabel}>Resposta *</label>
+                <textarea style={{ ...S.input, resize: 'vertical', minHeight: '80px' }}
+                  placeholder="Ex: Aceitamos PIX, cartão de crédito (até 10x sem juros) e dinheiro na entrega."
+                  value={faqForm.answer} onChange={e => setFaqForm(f => ({ ...f, answer: e.target.value }))} />
+
+                <label style={S.fieldLabel}>Variações <span style={{ color: 'var(--hint)', fontWeight: 400 }}>(uma por linha — opcional)</span></label>
+                <textarea style={{ ...S.input, resize: 'vertical', minHeight: '60px' }}
+                  placeholder="como pagar&#10;quais formas de pagamento aceita&#10;posso parcelar"
+                  value={faqForm.variations} onChange={e => setFaqForm(f => ({ ...f, variations: e.target.value }))} />
+
+                <div style={{ display: 'flex', gap: '0.75rem', flexWrap: 'wrap' }}>
+                  <div style={{ flex: 1, minWidth: '160px' }}>
+                    <label style={S.fieldLabel}>Departamento</label>
+                    <select style={S.input}
+                      value={faqForm.department_id} onChange={e => setFaqForm(f => ({ ...f, department_id: e.target.value }))}>
+                      <option value="">Todos os departamentos</option>
+                      {departments.map(d => <option key={d.id} value={d.id}>{d.name}</option>)}
+                    </select>
+                  </div>
+                  <div style={{ display: 'flex', alignItems: 'flex-end', gap: '0.4rem' }}>
+                    <input type="checkbox" id="faq-active" checked={faqForm.active} onChange={e => setFaqForm(f => ({ ...f, active: e.target.checked }))} />
+                    <label htmlFor="faq-active" style={{ fontSize: '0.88rem', color: 'var(--text)' }}>Activo</label>
+                  </div>
+                </div>
+
+                {faqError && <p style={{ color: 'var(--danger)', fontSize: '0.82rem', margin: 0 }}>{faqError}</p>}
+
+                <div style={{ display: 'flex', gap: '0.5rem', justifyContent: 'flex-end', marginTop: '0.5rem' }}>
+                  {faqForm.id && (
+                    <button type="button" style={S.outlineBtn}
+                      onClick={() => setFaqForm({ id: null, question: '', answer: '', variations: '', department_id: '', active: true })}>
+                      Cancelar
+                    </button>
+                  )}
+                  <button type="submit" style={S.addBtn}>{faqForm.id ? 'Guardar' : '+ Adicionar'}</button>
+                </div>
+              </form>
+            </div>
+
+            {/* Lista */}
+            <h3 style={{ fontSize: '0.95rem', marginBottom: '0.5rem' }}>{faqItems.length} item(s)</h3>
+            {faqItems.length === 0 && (
+              <p style={{ color: 'var(--hint)', fontSize: '0.88rem' }}>Sem items ainda. Cria o primeiro acima.</p>
+            )}
+            {faqItems.map(item => (
+              <div key={item.id} style={{ background: 'var(--card)', border: '1px solid var(--border)', borderRadius: 'var(--r-md)', padding: '0.85rem 1rem', marginBottom: '0.6rem', opacity: item.active ? 1 : 0.55 }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '0.75rem' }}>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ fontWeight: 700, fontSize: '0.92rem', color: 'var(--text)', marginBottom: '0.25rem' }}>
+                      Q: {item.question}
+                    </div>
+                    <div style={{ fontSize: '0.85rem', color: 'var(--muted)', whiteSpace: 'pre-wrap', marginBottom: '0.35rem' }}>
+                      A: {item.answer}
+                    </div>
+                    {item.variations && (
+                      <div style={{ fontSize: '0.75rem', color: 'var(--hint)', fontStyle: 'italic' }}>
+                        Variações: {item.variations.split('\n').filter(Boolean).join(' · ')}
+                      </div>
+                    )}
+                    <div style={{ display: 'flex', gap: '0.5rem', marginTop: '0.4rem', fontSize: '0.72rem' }}>
+                      {item.department_name ? (
+                        <span style={{ background: (item.department_color || '#6b7280') + '20', color: item.department_color || '#6b7280', borderRadius: '999px', padding: '1px 8px', fontWeight: 600 }}>
+                          🏢 {item.department_name}
+                        </span>
+                      ) : (
+                        <span style={{ background: 'var(--bg)', color: 'var(--muted)', borderRadius: '999px', padding: '1px 8px' }}>
+                          Todos os departamentos
+                        </span>
+                      )}
+                      <span style={{ background: 'var(--accent-l)', color: 'var(--accent)', borderRadius: '999px', padding: '1px 8px', fontWeight: 600 }}>
+                        🎯 {item.hit_count} acerto{item.hit_count !== 1 ? 's' : ''}
+                      </span>
+                    </div>
+                  </div>
+                  <div style={{ display: 'flex', gap: '0.35rem', flexShrink: 0 }}>
+                    <button style={S.outlineBtn} onClick={() => toggleFaqActive(item)}>{item.active ? '⏸ Pausar' : '▶ Activar'}</button>
+                    <button style={S.outlineBtn} onClick={() => setFaqForm({
+                      id: item.id, question: item.question, answer: item.answer,
+                      variations: item.variations || '',
+                      department_id: item.department_id ? String(item.department_id) : '',
+                      active: !!item.active,
+                    })}>Editar</button>
+                    <button style={{ ...S.outlineBtn, borderColor: 'var(--danger)', color: 'var(--danger)' }}
+                      onClick={() => deleteFaq(item.id, item.question)}>🗑️</button>
+                  </div>
+                </div>
+              </div>
+            ))}
           </div>
         )}
 

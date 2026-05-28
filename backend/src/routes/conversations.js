@@ -242,6 +242,11 @@ router.post('/outbound', authMiddleware, async (req, res) => {
 });
 
 // GET /conversations/:id/messages
+// Query params (opcionais):
+//   ?limit=50         — quantas msgs devolver (default 100, max 200)
+//   ?before_id=<n>    — só msgs com id < n (paginação para trás)
+//   ?q=<text>         — busca substring em body (case-insensitive)
+// Devolve sempre em ORDER ASC para o frontend renderizar como antes.
 router.get('/:id/messages', authMiddleware, (req, res) => {
   const conv = db.prepare('SELECT * FROM conversations WHERE id = ?').get(req.params.id);
   if (!conv) return res.status(404).json({ error: 'Conversa não encontrada' });
@@ -250,22 +255,36 @@ router.get('/:id/messages', authMiddleware, (req, res) => {
     return res.status(403).json({ error: 'Sem permissão' });
   }
 
-  const messages = db
-    .prepare(`
-      SELECT m.*, u.name as sender_name,
-        q.body as quoted_body, q.from_me as quoted_from_me,
-        qu.name as quoted_sender_name, q.media_type as quoted_media_type
-      FROM messages m
-      LEFT JOIN users u ON u.id = m.sender_id
-      LEFT JOIN messages q ON q.id = m.reply_to_id
-      LEFT JOIN users qu ON qu.id = q.sender_id
-      WHERE m.conversation_id = ?
-      ORDER BY m.timestamp ASC
-    `)
-    .all(req.params.id);
+  const limit = Math.min(Math.max(parseInt(req.query.limit, 10) || 100, 1), 200);
+  const beforeId = req.query.before_id ? parseInt(req.query.before_id, 10) : null;
+  const q = req.query.q?.trim() || null;
 
-  // Mark as read
-  db.prepare('UPDATE messages SET read = 1 WHERE conversation_id = ? AND from_me = 0').run(req.params.id);
+  const conds = ['m.conversation_id = ?'];
+  const params = [req.params.id];
+  if (beforeId) { conds.push('m.id < ?'); params.push(beforeId); }
+  if (q) { conds.push('LOWER(m.body) LIKE ?'); params.push(`%${q.toLowerCase()}%`); }
+
+  // Pega DESC (últimas N antes do cursor), depois inverte ASC no JS.
+  const rows = db.prepare(`
+    SELECT m.*, u.name as sender_name,
+      qm.body as quoted_body, qm.from_me as quoted_from_me,
+      qu.name as quoted_sender_name, qm.media_type as quoted_media_type
+    FROM messages m
+    LEFT JOIN users u ON u.id = m.sender_id
+    LEFT JOIN messages qm ON qm.id = m.reply_to_id
+    LEFT JOIN users qu ON qu.id = qm.sender_id
+    WHERE ${conds.join(' AND ')}
+    ORDER BY m.id DESC
+    LIMIT ?
+  `).all(...params, limit);
+
+  const messages = rows.reverse();
+
+  // Mark as read — só na carga inicial (sem cursor) para não disparar em
+  // paginação para trás ou busca.
+  if (!beforeId && !q) {
+    db.prepare('UPDATE messages SET read = 1 WHERE conversation_id = ? AND from_me = 0').run(req.params.id);
+  }
 
   res.json(messages);
 });

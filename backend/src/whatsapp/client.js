@@ -21,6 +21,7 @@ const db = require('../db/schema');
 const { computeTargetDepartment, pickLeastBusyAttendant } = require('./routing');
 const { transcribeAudio } = require('./transcribe');
 const { analyzeSentiment } = require('../utils/sentiment');
+const { matchFaq } = require('../utils/faq-matcher');
 const push = require('../push');
 const fs = require('fs');
 const path = require('path');
@@ -768,6 +769,26 @@ async function handleIncomingMessage(msg, lineId) {
         db.prepare('UPDATE conversations SET awaiting_rating = 0 WHERE id = ?').run(conversation.id);
       } catch (err) { console.error('[rating]', err.message); }
     }
+  }
+
+  // Bot FAQ semântico — só na primeira mensagem da conversa, se ainda não
+  // respondeu uma vez e a conv não tem msgs nossas. Não bloqueia outros bots.
+  if (!fromMe && body && body.trim() && !conversation.faq_responded) {
+    try {
+      const ourMsgs = db.prepare('SELECT COUNT(*) AS c FROM messages WHERE conversation_id = ? AND from_me = 1').get(conversation.id).c;
+      if (ourMsgs <= 1) { // 0 ou só a signature
+        const match = matchFaq(body, conversation.department_id);
+        if (match) {
+          const faqWaId = await sendMessage(lineId, waId, match.item.answer).catch(() => null);
+          db.prepare('INSERT INTO messages (conversation_id, from_me, body, wa_message_id) VALUES (?, 1, ?, ?)').run(conversation.id, match.item.answer, faqWaId || null);
+          db.prepare('UPDATE faq_items SET hit_count = hit_count + 1 WHERE id = ?').run(match.item.id);
+          db.prepare('UPDATE conversations SET faq_responded = 1, updated_at = CURRENT_TIMESTAMP WHERE id = ?').run(conversation.id);
+          const faqMsg = db.prepare('SELECT * FROM messages WHERE conversation_id = ? ORDER BY id DESC LIMIT 1').get(conversation.id);
+          if (io) io.emit('message:new', { message: faqMsg, conversation: getConversationWithContact(conversation.id) });
+          console.log(`[faq] linha ${lineId} conv ${conversation.id} → item ${match.item.id} (score ${match.score.toFixed(2)})`);
+        }
+      }
+    } catch (err) { console.error('[faq]', err.message); }
   }
 
   // Bot por palavra-chave + auto-tag

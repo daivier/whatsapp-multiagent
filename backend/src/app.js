@@ -28,6 +28,7 @@ const departmentsRoutes = require('./routes/departments');
 const pushRoutes = require('./routes/push');
 const linesRoutes = require('./routes/lines');
 const internalChatRoutes = require('./routes/internal-chat');
+const faqRoutes = require('./routes/faq');
 const { startScheduledMessagesCron } = require('./scheduled/cron');
 
 const app = express();
@@ -108,6 +109,7 @@ app.use('/departments', departmentsRoutes);
 app.use('/push', pushRoutes);
 app.use('/lines', linesRoutes);
 app.use('/internal-chat', internalChatRoutes);
+app.use('/faq', faqRoutes);
 
 // Health check — sem auth, designed para monitoring/uptime probes (UptimeRobot, etc).
 // Devolve 200 se DB responde; 503 se algo crítico está down. Nunca expõe dados sensíveis.

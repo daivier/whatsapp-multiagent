@@ -355,3 +355,23 @@ try { db.exec(`ALTER TABLE contacts ADD COLUMN created_by INTEGER REFERENCES use
 // Migração: sentiment analysis. anger_score acumula msgs negativas seguidas
 // do cliente. >= 2 mostra flag visual "😡 Irritado" na ConversationList.
 try { db.exec(`ALTER TABLE conversations ADD COLUMN anger_score INTEGER NOT NULL DEFAULT 0`); } catch (_) {}
+
+// Migração: Bot FAQ semântico. Items com pergunta canónica + resposta +
+// variações (frases parecidas, uma por linha). Activa por dept (NULL = todos).
+try {
+  db.exec(`CREATE TABLE IF NOT EXISTS faq_items (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    question TEXT NOT NULL,
+    answer TEXT NOT NULL,
+    variations TEXT,
+    department_id INTEGER REFERENCES departments(id) ON DELETE SET NULL,
+    active INTEGER NOT NULL DEFAULT 1,
+    hit_count INTEGER NOT NULL DEFAULT 0,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+  );
+  CREATE INDEX IF NOT EXISTS idx_faq_dept ON faq_items(department_id);
+  CREATE INDEX IF NOT EXISTS idx_faq_active ON faq_items(active);`);
+} catch (_) {}
+// Flag em conversations para não responder FAQ duas vezes na mesma conv.
+try { db.exec(`ALTER TABLE conversations ADD COLUMN faq_responded INTEGER NOT NULL DEFAULT 0`); } catch (_) {}
