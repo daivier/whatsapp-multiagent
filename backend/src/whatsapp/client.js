@@ -567,10 +567,22 @@ async function handleIncomingMessage(msg, lineId) {
           const attendantUser = db.prepare('SELECT name FROM users WHERE id = ?').get(attendant.id);
           const sigBody = sigTemplate.replace(/\{\{nome\}\}/gi, attendantUser?.name || '').trim();
           if (sigBody) {
-            try {
-              const sigWaId = await sendMessage(lineId, waId, sigBody);
-              db.prepare('INSERT INTO messages (conversation_id, from_me, body, wa_message_id) VALUES (?, 1, ?, ?)').run(conversation.id, sigBody, sigWaId || null);
-            } catch (err) { console.error('[signature]', err.message); }
+            // Re-verificar antes do await: se outro atendente tomou a conversa
+            // (ex: outbound force com takeover) entre o UPDATE acima e este envio,
+            // a signature ficaria com o nome do atendente velho. Aborta nesse caso.
+            const cur = db.prepare('SELECT assigned_to FROM conversations WHERE id = ?').get(conversation.id);
+            if (cur?.assigned_to !== attendant.id) {
+              console.log(`[signature] linha ${lineId}: conv ${conversation.id} tomada antes do send — abort`);
+            } else {
+              try {
+                const sigWaId = await sendMessage(lineId, waId, sigBody);
+                // Segundo check antes do INSERT — janela ainda menor mas continua a existir
+                const still = db.prepare('SELECT assigned_to FROM conversations WHERE id = ?').get(conversation.id);
+                if (still?.assigned_to === attendant.id) {
+                  db.prepare('INSERT INTO messages (conversation_id, from_me, body, wa_message_id) VALUES (?, 1, ?, ?)').run(conversation.id, sigBody, sigWaId || null);
+                }
+              } catch (err) { console.error('[signature]', err.message); }
+            }
           }
         }
       }
