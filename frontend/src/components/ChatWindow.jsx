@@ -1029,10 +1029,12 @@ export default function ChatWindow({ conversation: convProp, socket, onClose, on
               onMouseEnter={e => {
                 e.currentTarget.querySelector('.reply-btn').style.opacity = '1';
                 if (canEdit) e.currentTarget.querySelector('.edit-btn')?.style && (e.currentTarget.querySelector('.edit-btn').style.opacity = '1');
+                const del = e.currentTarget.querySelector('.delete-btn'); if (del) del.style.opacity = '1';
               }}
               onMouseLeave={e => {
                 e.currentTarget.querySelector('.reply-btn').style.opacity = '0';
                 e.currentTarget.querySelector('.edit-btn')?.style && (e.currentTarget.querySelector('.edit-btn').style.opacity = '0');
+                const del = e.currentTarget.querySelector('.delete-btn'); if (del) del.style.opacity = '0';
               }}>
               {!!msg.from_me && msg.sender_name && (
                 <span style={S.senderName}>{msg.sender_name}{msg.is_internal ? ' · nota interna' : ''}</span>
@@ -1107,6 +1109,17 @@ export default function ChatWindow({ conversation: convProp, socket, onClose, on
                 <button className="edit-btn" onClick={() => { setEditingMsg(msg); setEditBody(msg.body); }}
                   style={{ opacity: 0, transition: 'opacity .15s', position: 'absolute', top: '4px', left: msg.from_me ? '-28px' : 'auto', right: msg.from_me ? 'auto' : '-28px', background: 'var(--card)', border: '1px solid var(--border-m)', borderRadius: '50%', width: 22, height: 22, cursor: 'pointer', fontSize: '0.7rem', display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: 'var(--sh)' }}>
                   ✏️
+                </button>
+              )}
+              {!!msg.from_me && !msg.is_internal && !msg.deleted && (
+                <button className="delete-btn" title="Apagar para todos"
+                  onClick={async () => {
+                    if (!window.confirm('Apagar esta mensagem? Vai também ser apagada no WhatsApp do destinatário.')) return;
+                    try { await api.delete(`/messages/${msg.id}`); }
+                    catch (err) { setWarning(err.response?.data?.error || 'Erro ao apagar mensagem'); }
+                  }}
+                  style={{ opacity: 0, transition: 'opacity .15s', position: 'absolute', top: '4px', left: msg.from_me ? '-76px' : 'auto', right: msg.from_me ? 'auto' : '-76px', background: 'var(--card)', border: '1px solid var(--border-m)', borderRadius: '50%', width: 22, height: 22, cursor: 'pointer', fontSize: '0.7rem', display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: 'var(--sh)', color: 'var(--danger)' }}>
+                  🗑️
                 </button>
               )}
             </div>
