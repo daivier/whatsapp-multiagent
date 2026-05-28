@@ -121,6 +121,40 @@ export default function NewConversationModal({ onClose, onCreated }) {
     await submit(false);
   }
 
+  // Cria contacto sem enviar mensagem nem abrir conversa. Usa contactSearch
+  // como nome se for texto (não dígitos), senão phone como fallback.
+  async function saveContactOnly() {
+    setError('');
+    const cleanPhone = phone.replace(/\D/g, '');
+    if (!cleanPhone || cleanPhone.length < 8) {
+      setError('Número inválido. Usa apenas dígitos com código do país (ex: 5585999990000).');
+      return;
+    }
+    // Se contactSearch tem texto não-numérico, é nome; senão pede via prompt
+    let name = '';
+    if (contactSearch && !/^\d+$/.test(contactSearch.replace(/\D/g, ''))) {
+      name = contactSearch.trim();
+    }
+    if (!name) {
+      name = window.prompt('Nome do contacto (ou vazio para usar o número):', '') || '';
+      name = name.trim();
+    }
+    setSending(true);
+    try {
+      const { data } = await api.post('/contacts', { phone: cleanPhone, name: name || cleanPhone });
+      onClose();
+      // Avisa o utilizador no nível de toast simples — sem componente dedicado
+      window.alert(`Contacto ${data.name} guardado.`);
+    } catch (err) {
+      if (err.response?.status === 409) {
+        setError('Este contacto já existe.');
+      } else {
+        setError(err.response?.data?.error || 'Erro ao guardar contacto');
+      }
+    }
+    setSending(false);
+  }
+
   if (conflict) {
     return (
       <div style={S.overlay} onClick={e => e.target === e.currentTarget && onClose()}>
@@ -241,20 +275,27 @@ export default function NewConversationModal({ onClose, onCreated }) {
             </>
           )}
 
-          <label style={S.label}>Primeira mensagem</label>
+          <label style={S.label}>Primeira mensagem <span style={{ color: 'var(--hint)', fontWeight: 400 }}>(opcional se for só guardar)</span></label>
           <textarea
             style={{ ...S.input, resize: 'vertical', minHeight: '80px' }}
             placeholder="Olá! Gostaria de..."
             value={message}
             onChange={e => setMessage(e.target.value)}
             onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSubmit(e); } }}
-            required
           />
 
           {error && <p style={S.error}>{error}</p>}
 
           <div style={S.actions}>
             <button type="button" onClick={onClose} style={S.cancelBtn}>Cancelar</button>
+            {!selectedContact && (
+              <button type="button" onClick={saveContactOnly}
+                disabled={sending || !phone.trim()}
+                title="Guarda na agenda sem abrir conversa nem enviar mensagem"
+                style={{ ...S.cancelBtn, color: 'var(--accent)', borderColor: 'var(--accent)' }}>
+                💾 Só guardar
+              </button>
+            )}
             <button type="submit" style={S.sendBtn} disabled={sending || (!phone.trim() && !selectedContact) || !message.trim()}>
               {sending ? 'A enviar...' : '▶ Enviar'}
             </button>
