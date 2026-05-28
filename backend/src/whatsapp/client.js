@@ -827,15 +827,27 @@ async function getProfilePictureUrl(lineId, phoneOrJid) {
   const key = `${state.lineId}:${jid}`;
   const cached = avatarCache.get(key);
   if (cached && (Date.now() - cached.ts) < AVATAR_TTL_MS) return cached.url;
-  try {
-    const url = await state.sock.profilePictureUrl(jid, 'image');
-    avatarCache.set(key, { url: url || null, ts: Date.now() });
-    return url || null;
-  } catch (err) {
-    // Cliente sem foto, sem privacidade aberta, ou erro de rede
-    avatarCache.set(key, { url: null, ts: Date.now() });
-    return null;
+  // Tentar várias variantes de JID — em alguns casos LID dá resposta correcta
+  const candidates = [jid];
+  // Se temos `<numero>@s.whatsapp.net`, tentar também a forma alternativa @c.us (legacy)
+  if (jid.endsWith('@s.whatsapp.net')) candidates.push(jid.replace('@s.whatsapp.net', '@c.us'));
+  for (const candidate of candidates) {
+    try {
+      const url = await state.sock.profilePictureUrl(candidate, 'image');
+      if (url) {
+        avatarCache.set(key, { url, ts: Date.now() });
+        return url;
+      }
+    } catch (err) {
+      // 401/404 normais; logar apenas erros inesperados
+      const code = err?.output?.statusCode;
+      if (code && code !== 401 && code !== 404) {
+        console.error(`[avatar] linha ${state.lineId} jid ${candidate}: ${err.message} (status ${code})`);
+      }
+    }
   }
+  avatarCache.set(key, { url: null, ts: Date.now() });
+  return null;
 }
 
 // Subscribe presence para um chat (necessário antes do Baileys enviar updates).
