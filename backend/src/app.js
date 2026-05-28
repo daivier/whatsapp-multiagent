@@ -4,7 +4,7 @@ const http = require('http');
 const { Server } = require('socket.io');
 const cors = require('cors');
 const bcrypt = require('bcryptjs');
-const rateLimit = require('express-rate-limit');
+const { rateLimit, ipKeyGenerator } = require('express-rate-limit');
 
 const db = require('./db/schema');
 const { initWhatsApp, getStatus, getAllStatuses, disconnectWhatsApp, getWAContacts } = require('./whatsapp/client');
@@ -57,7 +57,8 @@ const broadcastLimiter = rateLimit({
   max: 5,                   // 5 broadcasts por hora por user (key via JWT id)
   standardHeaders: true,
   legacyHeaders: false,
-  keyGenerator: (req) => req.user?.id ? `user:${req.user.id}` : req.ip,
+  // Usar user.id se autenticado; senão ipKeyGenerator helper (lida IPv6).
+  keyGenerator: (req, res) => req.user?.id ? `user:${req.user.id}` : ipKeyGenerator(req, res),
   message: { error: 'Demasiados disparos em massa. Espera 1 hora.' },
 });
 
