@@ -831,17 +831,22 @@ async function getProfilePictureUrl(lineId, phoneOrJid) {
   const candidates = [jid];
   // Se temos `<numero>@s.whatsapp.net`, tentar também a forma alternativa @c.us (legacy)
   if (jid.endsWith('@s.whatsapp.net')) candidates.push(jid.replace('@s.whatsapp.net', '@c.us'));
+  // 'preview' é o thumbnail pequeno (geralmente visível mesmo sem ser
+  // contacto guardado). 'image' é a HD que pode estar restrita.
   for (const candidate of candidates) {
-    try {
-      const url = await state.sock.profilePictureUrl(candidate, 'image');
-      console.log(`[avatar] linha ${state.lineId} jid ${candidate}: url=${url || '(empty)'}`);
-      if (url) {
-        avatarCache.set(key, { url, ts: Date.now() });
-        return url;
+    for (const type of ['preview', 'image']) {
+      try {
+        const url = await state.sock.profilePictureUrl(candidate, type);
+        if (url) {
+          avatarCache.set(key, { url, ts: Date.now() });
+          return url;
+        }
+      } catch (err) {
+        const code = err?.output?.statusCode;
+        if (code && code !== 401 && code !== 404) {
+          console.error(`[avatar] linha ${state.lineId} jid ${candidate} type ${type}: ${err.message} (status ${code})`);
+        }
       }
-    } catch (err) {
-      const code = err?.output?.statusCode;
-      console.error(`[avatar] linha ${state.lineId} jid ${candidate}: ${err.message} (status ${code || '?'})`);
     }
   }
   avatarCache.set(key, { url: null, ts: Date.now() });
