@@ -2,6 +2,7 @@ import { useState, useEffect, useLayoutEffect, useRef } from 'react';
 import api from '../api';
 import { useAuth } from '../context/AuthContext';
 import ContactHistory from './ContactHistory';
+import ContactAvatar from './ContactAvatar';
 
 const API = import.meta.env.VITE_API_URL || '';
 
@@ -169,6 +170,8 @@ export default function ChatWindow({ conversation: convProp, socket, onClose, on
   const [sending, setSending] = useState(false);
   const [warning, setWarning] = useState('');
   const [typers, setTypers] = useState({});
+  const [clientPresence, setClientPresence] = useState(null); // 'composing' | 'recording' | null
+  const clientPresenceTimer = useRef(null);
   const [quickReplies, setQuickReplies] = useState([]);
   const [qrSuggestions, setQrSuggestions] = useState([]);
   const [showHistory, setShowHistory] = useState(false);
@@ -295,6 +298,17 @@ export default function ChatWindow({ conversation: convProp, socket, onClose, on
       if (conversation_id !== conversation.id) return;
       setMessages(prev => prev.map(m => m.id === id ? { ...m, reactions: JSON.stringify(reactions) } : m));
     }
+    function onPresence({ conversation_id, status }) {
+      if (conversation_id !== conversation.id) return;
+      if (clientPresenceTimer.current) clearTimeout(clientPresenceTimer.current);
+      if (status === 'composing' || status === 'recording') {
+        setClientPresence(status);
+        // Auto-clear se Baileys não enviar update de "parou" em ~8s
+        clientPresenceTimer.current = setTimeout(() => setClientPresence(null), 8000);
+      } else {
+        setClientPresence(null);
+      }
+    }
     function onTagsUpdated({ conversation_id, tags }) {
       if (Number(conversation_id) !== conversation.id) return;
       setConvTags(tags);
@@ -315,6 +329,7 @@ export default function ChatWindow({ conversation: convProp, socket, onClose, on
     socket.on('message:deleted', onDeleted);
     socket.on('message:status', onStatus);
     socket.on('message:reactions', onReactions);
+    socket.on('whatsapp:presence', onPresence);
     socket.on('conversation:tags_updated', onTagsUpdated);
     socket.on('conversation:updated', onConversationUpdated);
     socket.on('contact:updated', onContactUpdated);
@@ -327,6 +342,8 @@ export default function ChatWindow({ conversation: convProp, socket, onClose, on
       socket.off('message:deleted', onDeleted);
       socket.off('message:status', onStatus);
       socket.off('message:reactions', onReactions);
+      socket.off('whatsapp:presence', onPresence);
+      if (clientPresenceTimer.current) clearTimeout(clientPresenceTimer.current);
       socket.off('conversation:tags_updated', onTagsUpdated);
       socket.off('conversation:updated', onConversationUpdated);
       socket.off('contact:updated', onContactUpdated);
@@ -824,6 +841,13 @@ export default function ChatWindow({ conversation: convProp, socket, onClose, on
     <div style={S.container}>
       {/* Header */}
       <div style={S.header}>
+        <ContactAvatar
+          contactId={conversation.contact_id}
+          name={conversation.contact_name}
+          phone={conversation.phone}
+          size={36}
+          style={{ marginRight: '0.6rem' }}
+        />
         <div style={{ flex: 1, minWidth: 0 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flexWrap: 'wrap' }}>
             <strong style={{ fontSize: '0.9rem', color: 'var(--text)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: '40vw' }}>{conversation.contact_name || conversation.phone}</strong>
@@ -1223,10 +1247,16 @@ export default function ChatWindow({ conversation: convProp, socket, onClose, on
         <div ref={bottomRef} />
       </div>
 
-      {typerNames.length > 0 && (
+      {(typerNames.length > 0 || clientPresence) && (
         <div style={S.typingBar}>
           <span style={{ color: 'var(--wa-green)', fontSize: '0.55rem', letterSpacing: '3px' }}>●●●</span>
-          <span style={{ color: 'var(--muted)', fontSize: '0.8rem' }}>{typerNames.join(', ')} a digitar...</span>
+          <span style={{ color: 'var(--muted)', fontSize: '0.8rem' }}>
+            {clientPresence === 'recording'
+              ? `${conversation.contact_name || conversation.phone} está a gravar áudio...`
+              : clientPresence === 'composing'
+                ? `${conversation.contact_name || conversation.phone} está a digitar...`
+                : `${typerNames.join(', ')} a digitar...`}
+          </span>
         </div>
       )}
 

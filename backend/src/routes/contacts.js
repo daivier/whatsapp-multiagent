@@ -2,7 +2,7 @@ const express = require('express');
 const router = express.Router();
 const db = require('../db/schema');
 const { authMiddleware } = require('../middleware/auth');
-const { runLidMerge } = require('../whatsapp/client');
+const { runLidMerge, getProfilePictureUrl, getDefaultLineId } = require('../whatsapp/client');
 const ioInstance = require('../io-instance');
 
 router.use(authMiddleware);
@@ -147,6 +147,21 @@ router.patch('/:id', (req, res) => {
   const updated = db.prepare('SELECT * FROM contacts WHERE id = ?').get(req.params.id);
   ioInstance.get()?.emit('contact:updated', updated);
   res.json(updated);
+});
+
+// GET /contacts/:id/avatar — devolve { url: string|null } com a foto de
+// perfil do contacto no WhatsApp. Usa cache em memória (TTL 6h). Apanha a
+// linha mais recente onde o contacto tem conversa, ou cai na default.
+router.get('/:id/avatar', async (req, res) => {
+  const contact = db.prepare('SELECT phone, wa_id FROM contacts WHERE id = ?').get(req.params.id);
+  if (!contact) return res.status(404).json({ error: 'Contacto não encontrado' });
+  const lineRow = db.prepare(`
+    SELECT line_id FROM conversations WHERE contact_id = ? ORDER BY id DESC LIMIT 1
+  `).get(req.params.id);
+  const lineId = lineRow?.line_id || getDefaultLineId();
+  if (!lineId) return res.json({ url: null });
+  const url = await getProfilePictureUrl(lineId, contact.wa_id || contact.phone);
+  res.json({ url });
 });
 
 module.exports = router;

@@ -307,6 +307,31 @@ async function startLine(lineId) {
     }
   });
 
+  // Presence — emit 'whatsapp:presence' { conversation_id, status } quando o
+  // outro lado começa a digitar/gravar/etc. Frontend mostra "a digitar..." no
+  // header da conversa. Subscribe é on-demand via socket 'presence:subscribe'.
+  sock.ev.on('presence.update', ({ id: jid, presences }) => {
+    if (!jid || !presences) return;
+    // Sem grupos
+    if (jid.endsWith('@g.us') || jid.endsWith('@newsletter')) return;
+    // A presença do participante (single chat) vem indexada pelo próprio jid
+    const presence = presences[jid] || Object.values(presences)[0];
+    if (!presence) return;
+    const status = presence.lastKnownPresence;
+    if (!['composing', 'recording', 'paused', 'available', 'unavailable'].includes(status)) return;
+    // Resolver conversa via wa_id ou phone
+    try {
+      const phone = jid.split('@')[0];
+      const conv = db.prepare(`
+        SELECT c.id FROM conversations c
+        JOIN contacts ct ON ct.id = c.contact_id
+        WHERE (ct.wa_id = ? OR ct.phone = ? OR ct.phone = ?) AND c.line_id = ? AND c.status != 'closed'
+        ORDER BY c.id DESC LIMIT 1
+      `).get(jid, phone, phone.replace(/^55/, ''), lineId);
+      if (conv && io) io.emit('whatsapp:presence', { conversation_id: conv.id, status });
+    } catch (_) {}
+  });
+
   sock.ev.on('messages.update', (updates) => {
     for (const { key, update } of updates) {
       if (update.status >= 2 && state.pendingQueue.has(key.id)) state.pendingQueue.delete(key.id);
@@ -790,6 +815,44 @@ async function editMessage(lineId, waMessageId, newBody) {
   await state.sock.sendMessage(jid, { text: newBody, edit: { id: waMessageId, fromMe: true, remoteJid: jid } });
 }
 
+// Cache de URLs de foto de perfil (TTL 6h). Cada URL devolvida pelo Baileys
+// aponta para CDN do WhatsApp — pode mudar/expirar, então não persistimos.
+const avatarCache = new Map(); // key: `${lineId}:${jid}`, value: { url, ts }
+const AVATAR_TTL_MS = 6 * 60 * 60 * 1000;
+
+async function getProfilePictureUrl(lineId, phoneOrJid) {
+  const state = lineStates.get(resolveLineId(lineId));
+  if (!state?.isReady || !state.sock) return null;
+  const jid = normalizeJid(state, phoneOrJid);
+  const key = `${state.lineId}:${jid}`;
+  const cached = avatarCache.get(key);
+  if (cached && (Date.now() - cached.ts) < AVATAR_TTL_MS) return cached.url;
+  try {
+    const url = await state.sock.profilePictureUrl(jid, 'image');
+    avatarCache.set(key, { url: url || null, ts: Date.now() });
+    return url || null;
+  } catch (err) {
+    // Cliente sem foto, sem privacidade aberta, ou erro de rede
+    avatarCache.set(key, { url: null, ts: Date.now() });
+    return null;
+  }
+}
+
+// Subscribe presence para um chat (necessário antes do Baileys enviar updates).
+// Frontend chama via socket quando o utilizador abre uma conversa.
+async function subscribePresence(lineId, phoneOrJid) {
+  const state = lineStates.get(resolveLineId(lineId));
+  if (!state?.isReady || !state.sock) return false;
+  const jid = normalizeJid(state, phoneOrJid);
+  try {
+    await state.sock.presenceSubscribe(jid);
+    return true;
+  } catch (err) {
+    console.error('[presence-subscribe]', err.message);
+    return false;
+  }
+}
+
 // Helper: aplica reacção ao JSON em messages.reactions e devolve o novo array.
 // `senderUser` = {id, name} (id=null para cliente externo). emoji='' remove.
 function applyReactionToList(currentJson, senderUser, emoji) {
@@ -933,6 +996,8 @@ module.exports = {
   deleteMessageForAll,
   reactToMessage,
   applyReactionToList,
+  subscribePresence,
+  getProfilePictureUrl,
   getStatus,
   getAllStatuses,
   disconnectWhatsApp,

@@ -2,6 +2,7 @@ import { useEffect, useState, useRef } from 'react';
 import api from '../api';
 import { useAuth } from '../context/AuthContext';
 import NewConversationModal from './NewConversationModal';
+import ContactAvatar from './ContactAvatar';
 
 const STATUS_LABEL = { waiting: 'Aguarda', open: 'Aberta', closed: 'Fechada' };
 const STATUS_COLOR = { waiting: 'var(--warn)', open: 'var(--success)', closed: 'var(--hint)' };
@@ -508,7 +509,7 @@ export default function ConversationList({ socket, selected, onSelect }) {
               const fakeConv = { id: r.conversation_id, contact_name: r.contact_name, phone: r.phone, status: r.status, attendant_name: r.attendant_name, updated_at: r.updated_at };
               return (
                 <div key={`${r.match_type}-${r.conversation_id}-${i}`} style={S.item} onClick={() => { onSelect(fakeConv); clearSearch(); }}>
-                  <div style={{ ...S.avatar, background: 'var(--accent-l)', color: 'var(--accent)' }}>{initial}</div>
+                  <ContactAvatar contactId={r.contact_id} name={r.contact_name} phone={r.phone} size={36} />
                   <div style={S.info}>
                     <div style={S.row}>
                       <span style={{ ...S.name, fontWeight: 600 }}>{r.contact_name || r.phone}</span>
@@ -552,9 +553,14 @@ export default function ConversationList({ socket, selected, onSelect }) {
                     <input type="checkbox" checked={!!isChecked} onChange={() => toggleBulkSelected(conv.id)} onClick={e => e.stopPropagation()} style={{ marginRight: '0.25rem', cursor: 'pointer', flexShrink: 0 }} />
                   )}
                   <div style={{ position: 'relative', flexShrink: 0 }}>
-                    <div style={{ ...S.avatar, background: isOpen ? 'var(--accent)' : 'var(--accent-l)', color: isOpen ? '#fff' : 'var(--accent)' }}>
-                      {initial}
-                    </div>
+                    <ContactAvatar
+                      contactId={conv.contact_id}
+                      name={conv.contact_name}
+                      phone={conv.phone}
+                      size={36}
+                      fallbackBg={isOpen ? 'var(--accent)' : 'var(--accent-l)'}
+                      fallbackColor={isOpen ? '#fff' : 'var(--accent)'}
+                    />
                     {unread > 0 && !isOpen && (
                       <span style={S.unreadBadge}>{unread > 99 ? '99+' : unread}</span>
                     )}

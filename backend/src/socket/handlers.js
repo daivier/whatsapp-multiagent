@@ -1,7 +1,7 @@
 const jwt = require('jsonwebtoken');
 const db = require('../db/schema');
 const { SECRET } = require('../middleware/auth');
-const { sendMessage, getStatus, editMessage } = require('../whatsapp/client');
+const { sendMessage, getStatus, editMessage, subscribePresence } = require('../whatsapp/client');
 
 function initSocket(io) {
   io.use((socket, next) => {
@@ -95,6 +95,16 @@ function initSocket(io) {
     // Sala da conversa (para typing indicator)
     socket.on('conv:join', ({ conversation_id }) => {
       socket.join(`conv:${conversation_id}`);
+      // Subscribe presence do cliente WhatsApp para ver 'a digitar...' no header.
+      // Faz em background — falha silenciosa se a linha não estiver pronta.
+      try {
+        const c = db.prepare(`
+          SELECT conv.line_id, con.wa_id, con.phone
+          FROM conversations conv JOIN contacts con ON con.id = conv.contact_id
+          WHERE conv.id = ?
+        `).get(conversation_id);
+        if (c) subscribePresence(c.line_id, c.wa_id || c.phone).catch(() => {});
+      } catch (_) {}
     });
     socket.on('conv:leave', ({ conversation_id }) => {
       socket.leave(`conv:${conversation_id}`);
