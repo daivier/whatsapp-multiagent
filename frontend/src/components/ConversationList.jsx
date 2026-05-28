@@ -535,10 +535,10 @@ export default function ConversationList({ socket, selected, onSelect }) {
                         {STATUS_LABEL[conv.status]}
                       </span>
                     </div>
-                    {user.role === 'owner' && (
+                    {(user.role === 'owner' || user.role === 'supervisor') && (
                       <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
                         <span style={S.sub}>{conv.attendant_name || 'Sem atendente'}</span>
-                        {conv.status === 'waiting' && (
+                        {user.role === 'owner' && conv.status === 'waiting' && (
                           <div style={{ position: 'relative' }} onClick={e => e.stopPropagation()}>
                             <button
                               style={{ background: 'var(--accent)', color: '#fff', border: 'none', borderRadius: '4px', fontSize: '0.65rem', fontWeight: 700, padding: '1px 5px', cursor: 'pointer', lineHeight: '1.4' }}
