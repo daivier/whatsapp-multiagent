@@ -20,6 +20,23 @@ const COMMON_ENV = {
   WHISPER_LANG: 'pt',
 };
 
+// Segredos por tenant (JWT_SECRET, OWNER_PASSWORD) — carregados de
+// `secrets.local.js` (gitignored). Gerar com bash deploy/rotate-secrets.sh.
+// Se faltar, cair em valores default INSEGUROS apenas para arranque inicial.
+let SECRETS;
+try {
+  SECRETS = require('./secrets.local.js');
+} catch (_) {
+  console.warn('[ecosystem] secrets.local.js não encontrado — a usar defaults INSEGUROS. Corre deploy/rotate-secrets.sh.');
+  SECRETS = {
+    supermercados:    { JWT_SECRET: 'change_me_supermercados',    OWNER_PASSWORD: 'admin123' },
+    sucataodejeova:   { JWT_SECRET: 'change_me_sucataodejeova',   OWNER_PASSWORD: 'admin123' },
+    diaristou:        { JWT_SECRET: 'change_me_diaristou',        OWNER_PASSWORD: 'admin123' },
+    'sac-supermercados': { JWT_SECRET: 'change_me_sac',           OWNER_PASSWORD: 'admin123' },
+  };
+}
+const S = (slug) => SECRETS[slug] || { JWT_SECRET: 'unset', OWNER_PASSWORD: 'unset' };
+
 module.exports = {
   apps: [
     // ─── Cliente 1: Supermercados Fortaleza ───────────────────────────────────
@@ -33,12 +50,12 @@ module.exports = {
         ...COMMON_ENV,
         NODE_ENV: 'production',
         PORT: 3002,
-        JWT_SECRET: 'muda_esta_chave_secreta_aqui',
+        JWT_SECRET: S('supermercados').JWT_SECRET,
         WA_SESSION_PATH: '/home/daivier/clientes/supermercados/session',
         DB_PATH: '/home/daivier/clientes/supermercados/database.sqlite',
         OWNER_NAME: 'Dono',
         OWNER_EMAIL: 'dono@loja.com',
-        OWNER_PASSWORD: 'admin123',
+        OWNER_PASSWORD: S('supermercados').OWNER_PASSWORD,
         FRONTEND_URL: 'https://atendimento.supermercadosfortaleza.com.br',
       },
     },
@@ -54,12 +71,12 @@ module.exports = {
         ...COMMON_ENV,
         NODE_ENV: 'production',
         PORT: 3005,
-        JWT_SECRET: 'sucataodejeova_secret_2024',
+        JWT_SECRET: S('sucataodejeova').JWT_SECRET,
         WA_SESSION_PATH: '/home/daivier/clientes/sucataodejeova/session',
         DB_PATH: '/home/daivier/clientes/sucataodejeova/database.sqlite',
         OWNER_NAME: 'Dono',
         OWNER_EMAIL: 'dono@loja.com',
-        OWNER_PASSWORD: 'admin123',
+        OWNER_PASSWORD: S('sucataodejeova').OWNER_PASSWORD,
         FRONTEND_URL: 'https://diaadia.code2scan.com',
       },
     },
@@ -75,12 +92,12 @@ module.exports = {
         ...COMMON_ENV,
         NODE_ENV: 'production',
         PORT: 3006,
-        JWT_SECRET: 'diaristou_secret_2024',
+        JWT_SECRET: S('diaristou').JWT_SECRET,
         WA_SESSION_PATH: '/home/daivier/clientes/diaristou/session',
         DB_PATH: '/home/daivier/clientes/diaristou/database.sqlite',
         OWNER_NAME: 'Dono',
         OWNER_EMAIL: 'dono@loja.com',
-        OWNER_PASSWORD: 'admin123',
+        OWNER_PASSWORD: S('diaristou').OWNER_PASSWORD,
         FRONTEND_URL: 'https://atendimento.diaristou.com.br',
       },
     },
@@ -96,12 +113,12 @@ module.exports = {
         ...COMMON_ENV,
         NODE_ENV: 'production',
         PORT: 3007,
-        JWT_SECRET: 'sac_supermercados_secret_2024',
+        JWT_SECRET: S('sac-supermercados').JWT_SECRET,
         WA_SESSION_PATH: '/home/daivier/clientes/sac-supermercados/session',
         DB_PATH: '/home/daivier/clientes/sac-supermercados/database.sqlite',
         OWNER_NAME: 'Dono',
         OWNER_EMAIL: 'dono@loja.com',
-        OWNER_PASSWORD: 'admin123',
+        OWNER_PASSWORD: S('sac-supermercados').OWNER_PASSWORD,
         FRONTEND_URL: 'https://atendimentosac.supermercadosfortaleza.com.br',
       },
     },

@@ -11,3 +11,6 @@ dist/
 *.log
 .recovery/
 uploads/
+secrets.local.js
+*.sqlite
+database-backup-*.sqlite
