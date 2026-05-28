@@ -221,7 +221,7 @@ function ConvPreviewModal({ convId, onClose }) {
               {msg.sender_name && msg.from_me && (
                 <span style={{ fontSize: '0.68rem', color: 'var(--muted)', marginBottom: 2 }}>{msg.sender_name}</span>
               )}
-              <div style={{ maxWidth: '78%', padding: '0.45rem 0.65rem', borderRadius: msg.from_me ? '12px 12px 2px 12px' : '12px 12px 12px 2px', background: msg.from_me ? 'var(--wa-bubble, #005c4b)' : 'var(--card)', color: msg.from_me ? '#fff' : 'var(--text)', boxShadow: '0 1px 2px rgba(0,0,0,0.15)' }}>
+              <div style={{ maxWidth: '78%', padding: '0.45rem 0.65rem', borderRadius: msg.from_me ? '12px 12px 2px 12px' : '12px 12px 12px 2px', background: msg.from_me ? 'var(--wa-bubble)' : 'var(--card)', color: 'var(--text)', boxShadow: '0 1px 2px rgba(0,0,0,0.15)' }}>
                 {renderBody(msg)}
               </div>
               <span style={{ fontSize: '0.63rem', color: 'var(--hint)', marginTop: 1 }}>
