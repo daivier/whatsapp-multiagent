@@ -73,8 +73,10 @@ export default function ConversationList({ socket, selected, onSelect }) {
       api.get('/users').then(({ data }) => setAttendants(Array.isArray(data) ? data.filter(u => u.role === 'attendant' && u.active) : [])).catch(() => {});
     }
     api.get('/departments').then(({ data }) => {
-      const mine = Array.isArray(data) ? data.filter(d => d.is_mine) : [];
-      setMyDepartments(mine);
+      // Owner/supervisor vê todos os depts (com count); atendente só os seus.
+      const all = Array.isArray(data) ? data : [];
+      const list = (user.role === 'owner' || user.role === 'supervisor') ? all : all.filter(d => d.is_mine);
+      setMyDepartments(list);
     }).catch(() => {});
     api.get('/lines').then(({ data }) => setLines(Array.isArray(data) ? data : [])).catch(() => {});
     if (user.role === 'owner') {
@@ -83,6 +85,27 @@ export default function ConversationList({ socket, selected, onSelect }) {
   }, []);
 
   useEffect(() => { load(); }, [filter, filterPriority, filterAttendant, filterTag, filterDept, filterLine]);
+
+  // Ctrl+J → saltar para a próxima conversa não lida (Chrome usa Ctrl+J para
+  // downloads — interceptamos com preventDefault).
+  useEffect(() => {
+    function onKey(e) {
+      if (!(e.ctrlKey && !e.shiftKey && !e.altKey && (e.key === 'j' || e.key === 'J'))) return;
+      // Se o foco está num input/textarea, deixa o atalho passar (não é provável
+      // o user querer saltar enquanto está a escrever — e Ctrl+J pode ter
+      // outros usos contextuais).
+      const t = e.target;
+      if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.isContentEditable)) return;
+      e.preventDefault();
+      const list = conversations.filter(c => (c.unread_count || 0) > 0);
+      if (list.length === 0) return;
+      const currentIdx = selected ? list.findIndex(c => c.id === selected.id) : -1;
+      const next = list[(currentIdx + 1) % list.length];
+      if (next) onSelect(next);
+    }
+    document.addEventListener('keydown', onKey);
+    return () => document.removeEventListener('keydown', onKey);
+  }, [conversations, selected, onSelect]);
 
   useEffect(() => {
     if (!socket) return;
@@ -428,26 +451,39 @@ export default function ConversationList({ socket, selected, onSelect }) {
             </div>
           )}
 
-          {/* Chip strip de departamentos — só atendentes em ≥2 depts */}
-          {myDepartments.length >= 2 && (
+          {/* Chip strip de departamentos. Owner/supervisor: todos.
+              Atendente: só os seus (e só se em ≥2 depts). */}
+          {((user.role === 'owner' || user.role === 'supervisor') ? myDepartments.length >= 1 : myDepartments.length >= 2) && (
             <div style={{ display: 'flex', gap: '0.3rem', padding: '0.4rem 1rem 0.2rem', flexWrap: 'wrap' }}>
               <button
                 style={{ ...S.filterBtn, ...(filterDept === '' ? S.filterActive : {}), display: 'inline-flex', alignItems: 'center', gap: '0.3rem' }}
                 onClick={() => setFilterDept('')}>
                 Todos
               </button>
-              {myDepartments.map(d => (
-                <button key={d.id}
-                  style={{
-                    ...S.filterBtn,
-                    display: 'inline-flex', alignItems: 'center', gap: '0.3rem',
-                    ...(String(filterDept) === String(d.id) ? { background: d.color, color: '#fff', border: `1px solid ${d.color}` } : { borderColor: d.color + '55', color: d.color }),
-                  }}
-                  onClick={() => setFilterDept(String(filterDept) === String(d.id) ? '' : d.id)}>
-                  <span style={{ width: 7, height: 7, borderRadius: '50%', background: String(filterDept) === String(d.id) ? '#fff' : d.color }} />
-                  {d.name}
-                </button>
-              ))}
+              {myDepartments.map(d => {
+                const active = String(filterDept) === String(d.id);
+                const count = d.active_conversations || 0;
+                return (
+                  <button key={d.id}
+                    style={{
+                      ...S.filterBtn,
+                      display: 'inline-flex', alignItems: 'center', gap: '0.3rem',
+                      ...(active ? { background: d.color, color: '#fff', border: `1px solid ${d.color}` } : { borderColor: d.color + '55', color: d.color }),
+                    }}
+                    onClick={() => setFilterDept(active ? '' : d.id)}>
+                    <span style={{ width: 7, height: 7, borderRadius: '50%', background: active ? '#fff' : d.color }} />
+                    {d.name}
+                    {count > 0 && (
+                      <span style={{
+                        background: active ? 'rgba(255,255,255,0.25)' : d.color + '22',
+                        color: active ? '#fff' : d.color,
+                        borderRadius: '999px', padding: '0 6px',
+                        fontSize: '0.65rem', fontWeight: 700, minWidth: 16, textAlign: 'center',
+                      }}>{count}</span>
+                    )}
+                  </button>
+                );
+              })}
             </div>
           )}
 

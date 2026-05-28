@@ -21,6 +21,27 @@ function playNotificationSound() {
   } catch (_) {}
 }
 
+function playMentionSound() {
+  try {
+    const ctx = new (window.AudioContext || window.webkitAudioContext)();
+    // Três tons subindo, mais audíveis e distintivos — chama atenção
+    [[660, 0, 0.32], [880, 0.13, 0.32], [1320, 0.26, 0.42]].forEach(([freq, delay, vol]) => {
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      osc.type = 'triangle'; // mais brilhante que sine
+      osc.frequency.value = freq;
+      const t = ctx.currentTime + delay;
+      gain.gain.setValueAtTime(0, t);
+      gain.gain.linearRampToValueAtTime(vol, t + 0.02);
+      gain.gain.exponentialRampToValueAtTime(0.001, t + 0.3);
+      osc.start(t);
+      osc.stop(t + 0.35);
+    });
+  } catch (_) {}
+}
+
 export function useNotifications(socket, selectedConv, user) {
   // Pede permissão ao montar
   useEffect(() => {
@@ -66,7 +87,7 @@ export function useNotifications(socket, selectedConv, user) {
     }
 
     function onMentionNew({ message, conversation, mentioned_by }) {
-      playNotificationSound();
+      playMentionSound();
       if (Notification.permission === 'granted') {
         const n = new Notification(`📌 ${mentioned_by} mencionou-te`, {
           body: `Em "${conversation?.contact_name || conversation?.phone}": ${(message?.body || '').slice(0, 80)}`,
