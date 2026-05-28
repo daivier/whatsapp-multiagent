@@ -4,6 +4,7 @@ const http = require('http');
 const { Server } = require('socket.io');
 const cors = require('cors');
 const bcrypt = require('bcryptjs');
+const rateLimit = require('express-rate-limit');
 
 const db = require('./db/schema');
 const { initWhatsApp, getStatus, getAllStatuses, disconnectWhatsApp, getWAContacts } = require('./whatsapp/client');
@@ -39,6 +40,27 @@ app.use(cors({ origin: process.env.FRONTEND_URL || 'http://localhost:5173', cred
 app.use(express.json());
 app.use('/uploads', express.static(require('path').join(__dirname, '../../uploads')));
 
+// Rate limiting — protege contra brute force no login e abuso no broadcast.
+// O nginx passa o IP real via X-Forwarded-For — confiamos no primeiro hop.
+app.set('trust proxy', 1);
+
+const loginLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 min
+  max: 10,                  // 10 tentativas por IP por janela
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'Demasiadas tentativas de login. Espera 15 minutos.' },
+});
+
+const broadcastLimiter = rateLimit({
+  windowMs: 60 * 60 * 1000, // 1 hora
+  max: 5,                   // 5 broadcasts por hora por user (key via JWT id)
+  standardHeaders: true,
+  legacyHeaders: false,
+  keyGenerator: (req) => req.user?.id ? `user:${req.user.id}` : req.ip,
+  message: { error: 'Demasiados disparos em massa. Espera 1 hora.' },
+});
+
 // Seed: criar conta do dono se não existir
 const owner = db.prepare("SELECT id FROM users WHERE role = 'owner'").get();
 if (!owner) {
@@ -67,6 +89,7 @@ if (linesCount === 0) {
 }
 
 // Rotas
+app.use('/auth/login', loginLimiter);
 app.use('/auth', authRoutes);
 app.use('/users', usersRoutes);
 app.use('/conversations', conversationsRoutes);
@@ -79,7 +102,7 @@ app.use('/contacts', contactsRoutes);
 app.use('/search', searchRoutes);
 app.use('/keyword-rules', keywordRulesRoutes);
 app.use('/blacklist', blacklistRoutes);
-app.use('/broadcast', broadcastRoutes);
+app.use('/broadcast', authMiddleware, broadcastLimiter, broadcastRoutes);
 app.use('/departments', departmentsRoutes);
 app.use('/push', pushRoutes);
 app.use('/lines', linesRoutes);
