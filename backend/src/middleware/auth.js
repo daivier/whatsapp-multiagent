@@ -23,4 +23,9 @@ function ownerOnly(req, res, next) {
   next();
 }
 
-module.exports = { authMiddleware, ownerOnly, SECRET };
+function supervisorOrOwner(req, res, next) {
+  if (req.user.role !== 'owner' && req.user.role !== 'supervisor') return res.status(403).json({ error: 'Sem permissao' });
+  next();
+}
+
+module.exports = { authMiddleware, ownerOnly, supervisorOrOwner, SECRET };

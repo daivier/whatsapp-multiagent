@@ -964,7 +964,7 @@ router.get('/ratings', authMiddleware, ownerOnly, (req, res) => {
   `).all();
 
   const recent = db.prepare(`
-    SELECT r.id, r.score, r.created_at,
+    SELECT r.id, r.score, r.created_at, r.conversation_id,
       con.name as contact_name, con.phone,
       u.name as attendant_name
     FROM ratings r

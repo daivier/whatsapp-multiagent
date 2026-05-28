@@ -287,6 +287,43 @@ async function startLine(lineId) {
       const code = lastDisconnect?.error?.output?.statusCode;
       const isLoggedOut = code === DisconnectReason.loggedOut;
       console.log(`[wa] linha ${lineId} desconectada — ${isLoggedOut ? 'LOGOUT' : code || 'desconhecido'}`);
+      if (isLoggedOut && line.session_path) {
+        // Sessao invalida — apagar para gerar novo QR automaticamente
+        try {
+          const sessionFiles = fs.readdirSync(line.session_path);
+          for (const f of sessionFiles) {
+            if (!f.startsWith('lid-mapping-')) fs.unlinkSync(path.join(line.session_path, f));
+          }
+      if (isLoggedOut && line.session_path) {
+        try {
+          const sessionFiles = fs.readdirSync(line.session_path);
+          for (const sf of sessionFiles) {
+            if (!sf.startsWith('lid-mapping-')) fs.unlinkSync(path.join(line.session_path, sf));
+          }
+          console.log(`[logout] sessao linha ${lineId} limpa, a gerar novo QR`);
+        } catch (e) { console.error('[logout] erro:', e.message); }
+      }
+          console.log(`[logout] sessao da linha ${lineId} limpa — aguardar novo QR`);
+        } catch (e) { console.error('[logout] erro ao limpar sessao:', e.message); }
+      }
+      if (isLoggedOut && line.session_path) {
+        try {
+          const sessionFiles = fs.readdirSync(line.session_path);
+          for (const sf of sessionFiles) {
+            if (!sf.startsWith('lid-mapping-')) fs.unlinkSync(path.join(line.session_path, sf));
+          }
+          console.log(`[logout] sessao linha ${lineId} limpa — aguardar novo QR`);
+        } catch (e) { console.error('[logout] erro ao limpar sessao:', e.message); }
+      }
+      if (isLoggedOut && line.session_path) {
+        try {
+          const sessionFiles = fs.readdirSync(line.session_path);
+          for (const sf of sessionFiles) {
+            if (!sf.startsWith('lid-mapping-')) fs.unlinkSync(path.join(line.session_path, sf));
+          }
+          console.log(`[logout] sessao linha ${lineId} limpa, a gerar novo QR`);
+        } catch (e) { console.error('[logout] erro:', e.message); }
+      }
       if (io) io.emit('whatsapp:disconnected', { line_id: lineId });
       setTimeout(() => { console.log(`[reconnect] linha ${lineId}...`); startLine(lineId).catch(e => console.error(e.message)); }, 3000);
     }
@@ -379,7 +416,7 @@ async function handleIncomingMessage(msg, lineId) {
   }
   const isViewOnce = !msgContent || !!(msgContent.viewOnceMessage || msgContent.viewOnceMessageV2 || msgContent.viewOnceMessageV2Extension);
   const content = msgContent
-    ? (msgContent.ephemeralMessage?.message || msgContent.viewOnceMessage?.message || msgContent.viewOnceMessageV2?.message || msgContent.viewOnceMessageV2Extension?.message || msgContent)
+    ? (msgContent.ephemeralMessage?.message || msgContent.viewOnceMessage?.message || msgContent.viewOnceMessageV2?.message || msgContent.viewOnceMessageV2Extension?.message || msgContent.documentWithCaptionMessage?.message || msgContent)
     : {};
 
   let body = content.conversation || content.extendedTextMessage?.text || content.imageMessage?.caption || content.videoMessage?.caption || content.documentMessage?.caption || '';
@@ -388,7 +425,14 @@ async function handleIncomingMessage(msg, lineId) {
     body = content.contactMessage?.vcard || content.contactsArrayMessage?.contacts?.map(c => c.vcard).join('\n') || '';
   }
   const hasMedia = !!(content.imageMessage || content.videoMessage || content.ptvMessage || content.audioMessage || content.documentMessage || content.stickerMessage);
-  if (!hasMedia && !isVcard && !body.trim() && !isViewOnce) return;
+  if (!hasMedia && !isVcard && !body.trim() && !isViewOnce) {
+    // Se nao ha msgContent (mensagem de protocolo/timing) e e de contacto, guardar placeholder
+    if (!msgContent && !fromMe) {
+      body = '📩 Mensagem recebida';
+    } else {
+      return;
+    }
+  }
 
   const pushName = msg.pushName || '';
 
@@ -428,12 +472,12 @@ async function handleIncomingMessage(msg, lineId) {
     }
   }
 
-  function shouldSendBotReply() {
-    const enabled = db.prepare(`SELECT value FROM settings WHERE key = 'bot_enabled'`).get()?.value;
-    if (enabled !== '1') return false;
+  function shouldSendBotReply(lineId) {
+    const row = db.prepare('SELECT * FROM line_bot_settings WHERE line_id = ?').get(lineId);
+    if (!row || !row.enabled) return false;
     const now = new Date();
     const dayKey = `hours_${now.getDay()}`;
-    const dayHours = db.prepare(`SELECT value FROM settings WHERE key = ?`).get(dayKey)?.value;
+    const dayHours = row[dayKey];
     if (!dayHours || dayHours === 'closed') return true;
     const [start, end] = dayHours.split('-');
     const currentTime = `${String(now.getHours()).padStart(2,'0')}:${String(now.getMinutes()).padStart(2,'0')}`;
@@ -472,15 +516,25 @@ async function handleIncomingMessage(msg, lineId) {
             const inWaId = msg.key.id || null;
             if (inWaId) {
               const dup = db.prepare('SELECT id FROM messages WHERE wa_message_id = ?').get(inWaId);
-              if (!dup) {
-                db.prepare('INSERT INTO messages (conversation_id, from_me, body, wa_message_id) VALUES (?, 0, ?, ?)').run(ratingConv.id, sanitizeZalgo(body), inWaId);
-              }
+              if (!dup) db.prepare('INSERT INTO messages (conversation_id, from_me, body, wa_message_id) VALUES (?, 0, ?, ?)').run(ratingConv.id, sanitizeZalgo(body), inWaId);
             }
             if (io) io.emit('message:new', {
               message: db.prepare('SELECT * FROM messages WHERE conversation_id = ? ORDER BY id DESC LIMIT 1').get(ratingConv.id),
               conversation: getConversationWithContact(ratingConv.id),
             });
           } catch (err) { console.error('[rating]', err.message); }
+          return;
+        } else {
+          // Resposta nao numerica — guardar msg e fechar awaiting_rating sem reabrir
+          try {
+            const inWaId2 = msg.key.id || null;
+            if (inWaId2) {
+              const dup2 = db.prepare('SELECT id FROM messages WHERE wa_message_id = ?').get(inWaId2);
+              if (!dup2) db.prepare('INSERT INTO messages (conversation_id, from_me, body, wa_message_id) VALUES (?, 0, ?, ?)').run(ratingConv.id, sanitizeZalgo(body), inWaId2);
+            }
+            db.prepare('UPDATE conversations SET awaiting_rating = 0, updated_at = CURRENT_TIMESTAMP WHERE id = ?').run(ratingConv.id);
+            if (io) io.emit('message:new', { message: db.prepare('SELECT * FROM messages WHERE conversation_id = ? ORDER BY id DESC LIMIT 1').get(ratingConv.id), conversation: getConversationWithContact(ratingConv.id) });
+          } catch (err) { console.error('[rating-fallback]', err.message); }
           return;
         }
       }
@@ -575,8 +629,8 @@ async function handleIncomingMessage(msg, lineId) {
   // Bot de triagem
   if (!fromMe) {
     const existingMsgs = db.prepare('SELECT COUNT(*) as c FROM messages WHERE conversation_id = ?').get(conversation.id).c;
-    if (existingMsgs === 0 && shouldSendBotReply()) {
-      const botMsg = db.prepare(`SELECT value FROM settings WHERE key = 'bot_message'`).get()?.value;
+    if (existingMsgs === 0 && shouldSendBotReply(lineId)) {
+      const botMsg = db.prepare('SELECT message FROM line_bot_settings WHERE line_id = ?').get(lineId)?.message;
       if (botMsg) {
         try { await sendMessage(lineId, waId, botMsg); } catch (_) {}
         db.prepare('INSERT INTO messages (conversation_id, from_me, body) VALUES (?, 1, ?)').run(conversation.id, botMsg);

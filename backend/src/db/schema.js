@@ -224,3 +224,36 @@ const insertSetting = db.prepare(`INSERT OR IGNORE INTO settings (key, value) VA
 for (const [key, value] of settingsDefaults) insertSetting.run(key, value);
 
 module.exports = db;
+
+// Migracao: bot de triagem por linha
+try {
+  db.exec(`CREATE TABLE IF NOT EXISTS line_bot_settings (
+    line_id INTEGER PRIMARY KEY REFERENCES lines(id) ON DELETE CASCADE,
+    enabled INTEGER NOT NULL DEFAULT 0,
+    message TEXT NOT NULL DEFAULT '',
+    hours_0 TEXT DEFAULT 'closed',
+    hours_1 TEXT DEFAULT '07:00-18:00',
+    hours_2 TEXT DEFAULT '07:00-18:00',
+    hours_3 TEXT DEFAULT '07:00-18:00',
+    hours_4 TEXT DEFAULT '07:00-18:00',
+    hours_5 TEXT DEFAULT '07:00-18:00',
+    hours_6 TEXT DEFAULT '07:00-12:00'
+  )`);
+  // Migrar config global existente para a linha 1 (Help Desk)
+  const existingBot = db.prepare("SELECT id FROM line_bot_settings WHERE line_id = 1").get();
+  if (!existingBot) {
+    const enabled = db.prepare("SELECT value FROM settings WHERE key = 'bot_enabled'").get()?.value || '0';
+    const message = db.prepare("SELECT value FROM settings WHERE key = 'bot_message'").get()?.value || '';
+    const getH = (k) => db.prepare("SELECT value FROM settings WHERE key = ?").get(k)?.value || 'closed';
+    db.prepare(`INSERT OR IGNORE INTO line_bot_settings
+      (line_id, enabled, message, hours_0, hours_1, hours_2, hours_3, hours_4, hours_5, hours_6)
+      VALUES (1, ?, ?, ?, ?, ?, ?, ?, ?, ?)`).run(
+        enabled === '1' ? 1 : 0, message,
+        getH('hours_0'), getH('hours_1'), getH('hours_2'), getH('hours_3'),
+        getH('hours_4'), getH('hours_5'), getH('hours_6')
+      );
+  }
+} catch (_) {}
+
+// Migração: etiquetas por departamento
+try { db.exec(`ALTER TABLE tags ADD COLUMN department_id INTEGER REFERENCES departments(id) ON DELETE CASCADE`); } catch (_) {}

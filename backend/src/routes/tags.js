@@ -17,17 +17,50 @@ function emitTagsUpdated(convId) {
 }
 
 router.get('/', authMiddleware, (req, res) => {
-  res.json(db.prepare('SELECT * FROM tags ORDER BY name ASC').all());
+  if (req.user.role === 'owner') {
+    // Owner vê todas as tags — filtro opcional por dept
+    const deptFilter = req.query.dept ? parseInt(req.query.dept, 10) : null;
+    if (deptFilter) {
+      return res.json(db.prepare('SELECT * FROM tags WHERE department_id IS NULL OR department_id = ? ORDER BY name ASC').all(deptFilter));
+    }
+    return res.json(db.prepare('SELECT * FROM tags ORDER BY name ASC').all());
+  }
+  // Não-owner: globais + etiquetas dos departamentos do utilizador
+  const userDepts = db.prepare('SELECT department_id FROM user_departments WHERE user_id = ?').all(req.user.id).map(r => r.department_id);
+  if (userDepts.length === 0) {
+    return res.json(db.prepare('SELECT * FROM tags WHERE department_id IS NULL ORDER BY name ASC').all());
+  }
+  const placeholders = userDepts.map(() => '?').join(',');
+  res.json(db.prepare(`SELECT * FROM tags WHERE department_id IS NULL OR department_id IN (${placeholders}) ORDER BY name ASC`).all(...userDepts));
 });
 
-router.post('/', authMiddleware, ownerOnly, (req, res) => {
-  const { name, color } = req.body;
+router.post('/', authMiddleware, (req, res) => {
+  const { name, color, department_id } = req.body;
   if (!name) return res.status(400).json({ error: 'name obrigatório' });
-  const result = db.prepare('INSERT INTO tags (name, color) VALUES (?, ?)').run(name, color || '#6b7280');
+  // Owner pode criar global ou para qualquer dept; supervisor só para o seu dept
+  let deptId = null;
+  if (department_id) {
+    deptId = parseInt(department_id, 10);
+    if (req.user.role !== 'owner') {
+      // Verificar se o supervisor pertence ao departamento
+      const belongs = db.prepare('SELECT 1 FROM user_departments WHERE user_id = ? AND department_id = ?').get(req.user.id, deptId);
+      if (!belongs) return res.status(403).json({ error: 'Não pertences a este departamento' });
+    }
+  } else if (req.user.role !== 'owner') {
+    return res.status(403).json({ error: 'Indica o departamento da etiqueta' });
+  }
+  const result = db.prepare('INSERT INTO tags (name, color, department_id) VALUES (?, ?, ?)').run(name, color || '#6b7280', deptId);
   res.json(db.prepare('SELECT * FROM tags WHERE id = ?').get(result.lastInsertRowid));
 });
 
-router.delete('/:id', authMiddleware, ownerOnly, (req, res) => {
+router.delete('/:id', authMiddleware, (req, res) => {
+  const tag = db.prepare('SELECT * FROM tags WHERE id = ?').get(req.params.id);
+  if (!tag) return res.status(404).json({ error: 'Etiqueta não encontrada' });
+  if (req.user.role !== 'owner') {
+    if (!tag.department_id) return res.status(403).json({ error: 'Sem permissão' });
+    const belongs = db.prepare('SELECT 1 FROM user_departments WHERE user_id = ? AND department_id = ?').get(req.user.id, tag.department_id);
+    if (!belongs) return res.status(403).json({ error: 'Sem permissão' });
+  }
   db.prepare('DELETE FROM tags WHERE id = ?').run(req.params.id);
   res.json({ ok: true });
 });

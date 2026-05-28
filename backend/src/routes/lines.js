@@ -9,16 +9,38 @@ const router = express.Router();
 
 // GET / — lista de linhas activas com contagens + estado WhatsApp ao vivo
 router.get('/', authMiddleware, (req, res) => {
-  const lines = db.prepare(`
-    SELECT lines.id, lines.name, lines.color, lines.is_default, lines.active, lines.created_at, lines.session_path,
-      lines.department_id, d.name AS department_name, d.color AS department_color,
-      (SELECT COUNT(*) FROM conversations c WHERE c.line_id = lines.id AND c.status != 'closed') AS active_conversations,
-      (SELECT COUNT(*) FROM conversations c WHERE c.line_id = lines.id) AS total_conversations
-    FROM lines
-    LEFT JOIN departments d ON d.id = lines.department_id
-    WHERE lines.active = 1
-    ORDER BY lines.is_default DESC, lines.id ASC
-  `).all();
+  let lines;
+  if (req.user.role === 'owner' || req.user.role === 'supervisor') {
+    // owner/supervisor veem todas as linhas
+    lines = db.prepare(`
+      SELECT lines.id, lines.name, lines.color, lines.is_default, lines.active, lines.created_at, lines.session_path,
+        lines.department_id, d.name AS department_name, d.color AS department_color,
+        (SELECT COUNT(*) FROM conversations c WHERE c.line_id = lines.id AND c.status != 'closed') AS active_conversations,
+        (SELECT COUNT(*) FROM conversations c WHERE c.line_id = lines.id) AS total_conversations
+      FROM lines
+      LEFT JOIN departments d ON d.id = lines.department_id
+      WHERE lines.active = 1
+      ORDER BY lines.is_default DESC, lines.id ASC
+    `).all();
+  } else {
+    // attendant: apenas linhas do(s) seu(s) departamento(s), ou linhas sem departamento
+    lines = db.prepare(`
+      SELECT lines.id, lines.name, lines.color, lines.is_default, lines.active, lines.created_at, lines.session_path,
+        lines.department_id, d.name AS department_name, d.color AS department_color,
+        (SELECT COUNT(*) FROM conversations c WHERE c.line_id = lines.id AND c.status != 'closed') AS active_conversations,
+        (SELECT COUNT(*) FROM conversations c WHERE c.line_id = lines.id) AS total_conversations
+      FROM lines
+      LEFT JOIN departments d ON d.id = lines.department_id
+      WHERE lines.active = 1
+        AND (
+          lines.department_id IS NULL
+          OR lines.department_id IN (
+            SELECT department_id FROM user_departments WHERE user_id = ?
+          )
+        )
+      ORDER BY lines.is_default DESC, lines.id ASC
+    `).all(req.user.id);
+  }
   // Enriquecer com estado WhatsApp em memória (ready/qr)
   const enriched = lines.map(l => {
     const s = wa.getStatus(l.id);
@@ -137,6 +159,41 @@ router.post('/:id/disconnect', authMiddleware, ownerOnly, async (req, res) => {
   const id = parseInt(req.params.id, 10);
   try { await wa.stopLine(id); res.json({ ok: true }); }
   catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+
+// GET /lines/:id/bot — bot settings for a specific line
+router.get('/:id/bot', authMiddleware, ownerOnly, (req, res) => {
+  const lineId = parseInt(req.params.id, 10);
+  let row = db.prepare('SELECT * FROM line_bot_settings WHERE line_id = ?').get(lineId);
+  if (!row) {
+    // Return defaults if not configured yet
+    row = {
+      line_id: lineId, enabled: 0, message: '',
+      hours_0: 'closed', hours_1: '07:00-18:00', hours_2: '07:00-18:00',
+      hours_3: '07:00-18:00', hours_4: '07:00-18:00', hours_5: '07:00-18:00',
+      hours_6: '07:00-12:00'
+    };
+  }
+  res.json(row);
+});
+
+// POST /lines/:id/bot — save bot settings for a specific line
+router.post('/:id/bot', authMiddleware, ownerOnly, (req, res) => {
+  const lineId = parseInt(req.params.id, 10);
+  const { enabled, message, hours_0, hours_1, hours_2, hours_3, hours_4, hours_5, hours_6 } = req.body;
+  db.prepare(`INSERT INTO line_bot_settings
+    (line_id, enabled, message, hours_0, hours_1, hours_2, hours_3, hours_4, hours_5, hours_6)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    ON CONFLICT(line_id) DO UPDATE SET
+      enabled=excluded.enabled, message=excluded.message,
+      hours_0=excluded.hours_0, hours_1=excluded.hours_1, hours_2=excluded.hours_2,
+      hours_3=excluded.hours_3, hours_4=excluded.hours_4, hours_5=excluded.hours_5,
+      hours_6=excluded.hours_6
+  `).run(lineId, enabled ? 1 : 0, message || '',
+    hours_0 || 'closed', hours_1 || 'closed', hours_2 || 'closed',
+    hours_3 || 'closed', hours_4 || 'closed', hours_5 || 'closed', hours_6 || 'closed');
+  res.json({ ok: true });
 });
 
 module.exports = router;
