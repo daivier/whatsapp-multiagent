@@ -823,29 +823,25 @@ const AVATAR_TTL_MS = 6 * 60 * 60 * 1000;
 async function getProfilePictureUrl(lineId, phoneOrJid) {
   const state = lineStates.get(resolveLineId(lineId));
   if (!state?.isReady || !state.sock) return null;
-  const jid = normalizeJid(state, phoneOrJid);
+  // NÃO normalizar — passar o jid como está. Se for @lid, Baileys lida.
+  // Se for phone simples, transformar para @s.whatsapp.net.
+  const jid = phoneOrJid.includes('@') ? phoneOrJid : `${phoneOrJid}@s.whatsapp.net`;
   const key = `${state.lineId}:${jid}`;
   const cached = avatarCache.get(key);
   if (cached && (Date.now() - cached.ts) < AVATAR_TTL_MS) return cached.url;
-  // Tentar várias variantes de JID — em alguns casos LID dá resposta correcta
-  const candidates = [jid];
-  // Se temos `<numero>@s.whatsapp.net`, tentar também a forma alternativa @c.us (legacy)
-  if (jid.endsWith('@s.whatsapp.net')) candidates.push(jid.replace('@s.whatsapp.net', '@c.us'));
   // 'preview' é o thumbnail pequeno (geralmente visível mesmo sem ser
   // contacto guardado). 'image' é a HD que pode estar restrita.
-  for (const candidate of candidates) {
-    for (const type of ['preview', 'image']) {
-      try {
-        const url = await state.sock.profilePictureUrl(candidate, type);
-        if (url) {
-          avatarCache.set(key, { url, ts: Date.now() });
-          return url;
-        }
-      } catch (err) {
-        const code = err?.output?.statusCode;
-        if (code && code !== 401 && code !== 404) {
-          console.error(`[avatar] linha ${state.lineId} jid ${candidate} type ${type}: ${err.message} (status ${code})`);
-        }
+  for (const type of ['preview', 'image']) {
+    try {
+      const url = await state.sock.profilePictureUrl(jid, type, 8000);
+      if (url) {
+        avatarCache.set(key, { url, ts: Date.now() });
+        return url;
+      }
+    } catch (err) {
+      const code = err?.output?.statusCode;
+      if (code && code !== 401 && code !== 404) {
+        console.error(`[avatar] linha ${state.lineId} jid ${jid} type ${type}: ${err.message} (status ${code})`);
       }
     }
   }

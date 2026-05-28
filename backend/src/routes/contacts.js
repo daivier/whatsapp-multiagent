@@ -160,10 +160,16 @@ router.get('/:id/avatar', async (req, res) => {
   `).get(req.params.id);
   const lineId = lineRow?.line_id || getDefaultLineId();
   if (!lineId) return res.json({ url: null });
-  // Usar phone (número real) — wa_id pode ser '...@lid' (WhatsApp Business)
-  // que aponta para um identificador anónimo, não para o telefone real.
-  // profilePictureUrl precisa do JID em '...@s.whatsapp.net' com o número real.
-  const url = await getProfilePictureUrl(lineId, contact.phone);
+  // Tenta wa_id primeiro (LID pode ser necessário para WhatsApp Business),
+  // depois phone real. Privacy tokens do WhatsApp podem rejeitar uma forma
+  // e aceitar a outra dependendo do tipo de conta do contacto.
+  let url = null;
+  if (contact.wa_id && contact.wa_id !== contact.phone) {
+    url = await getProfilePictureUrl(lineId, contact.wa_id);
+  }
+  if (!url) {
+    url = await getProfilePictureUrl(lineId, contact.phone);
+  }
   res.json({ url });
 });
 
