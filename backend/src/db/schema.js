@@ -351,3 +351,7 @@ try { db.exec(`ALTER TABLE messages ADD COLUMN reactions TEXT`); } catch (_) {}
 // Migração: contactos têm autor (quem os criou) para audit/LGPD.
 // Pode ser NULL para contactos criados antes desta migração ou via inbound.
 try { db.exec(`ALTER TABLE contacts ADD COLUMN created_by INTEGER REFERENCES users(id) ON DELETE SET NULL`); } catch (_) {}
+
+// Migração: sentiment analysis. anger_score acumula msgs negativas seguidas
+// do cliente. >= 2 mostra flag visual "😡 Irritado" na ConversationList.
+try { db.exec(`ALTER TABLE conversations ADD COLUMN anger_score INTEGER NOT NULL DEFAULT 0`); } catch (_) {}

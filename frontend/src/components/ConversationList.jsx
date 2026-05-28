@@ -618,6 +618,11 @@ export default function ConversationList({ socket, selected, onSelect }) {
                             ⏰ SLA
                           </span>
                         )}
+                        {(conv.anger_score || 0) >= 2 && conv.status !== 'closed' && (
+                          <span title="Cliente parece irritado (sentiment analysis)" style={{ fontSize: '0.68rem', fontWeight: 700, background: 'var(--danger-l)', color: 'var(--danger)', borderRadius: '4px', padding: '0 4px' }}>
+                            😡 Irritado
+                          </span>
+                        )}
                         {conv.snoozed_until && utc(conv.snoozed_until) > new Date() ? (
                           <span style={{ fontSize: '0.68rem', fontWeight: 600, background: '#e0e7ff', color: '#4338ca', borderRadius: '4px', padding: '0 4px' }}>
                             💤 {utc(conv.snoozed_until).toLocaleTimeString('pt-PT', { hour: '2-digit', minute: '2-digit' })}

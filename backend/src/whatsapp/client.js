@@ -20,6 +20,7 @@ const qrcode = require('qrcode');
 const db = require('../db/schema');
 const { computeTargetDepartment, pickLeastBusyAttendant } = require('./routing');
 const { transcribeAudio } = require('./transcribe');
+const { analyzeSentiment } = require('../utils/sentiment');
 const push = require('../push');
 const fs = require('fs');
 const path = require('path');
@@ -729,6 +730,18 @@ async function handleIncomingMessage(msg, lineId) {
     const filename = mediaUrl.split('/').pop();
     const absPath = path.join(UPLOADS_DIR, filename);
     transcribeAudio(absPath, insRes.lastInsertRowid).catch(err => console.error('[transcribe]', err.message));
+  }
+
+  // Sentiment do cliente (só para mensagens inbound com texto)
+  if (!fromMe && safeBody && safeBody.trim()) {
+    try {
+      const sentiment = analyzeSentiment(safeBody);
+      if (sentiment === 'negative') {
+        db.prepare('UPDATE conversations SET anger_score = anger_score + 1 WHERE id = ?').run(conversation.id);
+      } else if (sentiment === 'positive') {
+        db.prepare('UPDATE conversations SET anger_score = 0 WHERE id = ?').run(conversation.id);
+      }
+    } catch (err) { console.error('[sentiment]', err.message); }
   }
 
   const message = db.prepare('SELECT * FROM messages WHERE conversation_id = ? ORDER BY id DESC LIMIT 1').get(conversation.id);
