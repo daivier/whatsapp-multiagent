@@ -311,6 +311,17 @@ async function startLine(lineId) {
     for (const { key, update } of updates) {
       if (update.status >= 2 && state.pendingQueue.has(key.id)) state.pendingQueue.delete(key.id);
       if (update.message === null && key.id) handleMessageDeleted(key.id);
+      // ACK status: 2=server_ack, 3=delivered, 4=read, 5=played.
+      // Só sobe (nunca baixa) — evita corrida com ACKs fora de ordem.
+      if (typeof update.status === 'number' && update.status >= 2 && key.id) {
+        try {
+          const row = db.prepare('SELECT id, conversation_id, wa_status FROM messages WHERE wa_message_id = ?').get(key.id);
+          if (row && update.status > (row.wa_status || 0)) {
+            db.prepare('UPDATE messages SET wa_status = ? WHERE id = ?').run(update.status, row.id);
+            if (io) io.emit('message:status', { id: row.id, conversation_id: row.conversation_id, wa_status: update.status });
+          }
+        } catch (err) { console.error('[wa-status]', err.message); }
+      }
     }
   });
 

@@ -337,3 +337,8 @@ try {
     finished_at DATETIME
   )`);
 } catch (_) {}
+
+// Migração: status da mensagem outbound no WhatsApp.
+// Valores: 0=pending, 2=server_ack, 3=delivered, 4=read, 5=played
+// Reflete ACKs vindos via Baileys messages.update — só interessa para from_me=1.
+try { db.exec(`ALTER TABLE messages ADD COLUMN wa_status INTEGER NOT NULL DEFAULT 0`); } catch (_) {}

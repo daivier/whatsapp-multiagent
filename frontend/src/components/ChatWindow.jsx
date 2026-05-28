@@ -279,6 +279,10 @@ export default function ChatWindow({ conversation: convProp, socket, onClose, on
       if (conversation_id !== conversation.id) return;
       setMessages(prev => prev.map(m => m.id === id ? { ...m, deleted: 1 } : m));
     }
+    function onStatus({ id, conversation_id, wa_status }) {
+      if (conversation_id !== conversation.id) return;
+      setMessages(prev => prev.map(m => m.id === id ? { ...m, wa_status } : m));
+    }
     function onTagsUpdated({ conversation_id, tags }) {
       if (Number(conversation_id) !== conversation.id) return;
       setConvTags(tags);
@@ -297,6 +301,7 @@ export default function ChatWindow({ conversation: convProp, socket, onClose, on
     socket.on('message:updated', onUpdated);
     socket.on('message:failed', onFailed);
     socket.on('message:deleted', onDeleted);
+    socket.on('message:status', onStatus);
     socket.on('conversation:tags_updated', onTagsUpdated);
     socket.on('conversation:updated', onConversationUpdated);
     socket.on('contact:updated', onContactUpdated);
@@ -307,6 +312,7 @@ export default function ChatWindow({ conversation: convProp, socket, onClose, on
       socket.off('message:updated', onUpdated);
       socket.off('message:failed', onFailed);
       socket.off('message:deleted', onDeleted);
+      socket.off('message:status', onStatus);
       socket.off('conversation:tags_updated', onTagsUpdated);
       socket.off('conversation:updated', onConversationUpdated);
       socket.off('contact:updated', onContactUpdated);
@@ -1099,6 +1105,13 @@ export default function ChatWindow({ conversation: convProp, socket, onClose, on
               <span style={S.time}>
                 {msg.edited_at && <span style={{ fontSize: '0.65rem', opacity: 0.7 }}>editada · </span>}
                 {utc(msg.timestamp).toLocaleTimeString('pt-PT', { hour: '2-digit', minute: '2-digit' })}
+                {!!msg.from_me && !msg.is_internal && !msg.deleted && (
+                  <span title={
+                    msg.wa_status >= 4 ? 'Lida' : msg.wa_status >= 3 ? 'Entregue' : msg.wa_status >= 2 ? 'Enviada ao servidor' : 'A enviar'
+                  } style={{ marginLeft: '4px', fontSize: '0.78rem', color: msg.wa_status >= 4 ? '#34b7f1' : 'var(--muted)', opacity: msg.wa_status >= 2 ? 1 : 0.55 }}>
+                    {msg.wa_status >= 3 ? '✓✓' : '✓'}
+                  </span>
+                )}
               </span>
               {/* Botão reply — sempre presente (visível no hover) */}
               <button className="reply-btn" onClick={() => !msg.is_internal && setReplyTo({ id: msg.id, body: msg.body, from_me: msg.from_me, sender_name: msg.sender_name, quoted_media_type: msg.media_type })}
