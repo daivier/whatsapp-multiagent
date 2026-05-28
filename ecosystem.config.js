@@ -14,6 +14,12 @@
 
 const BASE = '/home/daivier/whatsapp-multiagent/backend';
 
+// Variáveis partilhadas por todos os tenants (whisper.cpp instalado em /opt).
+const COMMON_ENV = {
+  WHISPER_MODEL: '/opt/whisper.cpp/models/ggml-base.bin',
+  WHISPER_LANG: 'pt',
+};
+
 module.exports = {
   apps: [
     // ─── Cliente 1: Supermercados Fortaleza ───────────────────────────────────
@@ -24,6 +30,7 @@ module.exports = {
       listen_timeout: 15000,
       kill_timeout: 8000,
       env: {
+        ...COMMON_ENV,
         NODE_ENV: 'production',
         PORT: 3002,
         JWT_SECRET: 'muda_esta_chave_secreta_aqui',
@@ -44,6 +51,7 @@ module.exports = {
       listen_timeout: 15000,
       kill_timeout: 8000,
       env: {
+        ...COMMON_ENV,
         NODE_ENV: 'production',
         PORT: 3005,
         JWT_SECRET: 'sucataodejeova_secret_2024',
@@ -64,6 +72,7 @@ module.exports = {
       listen_timeout: 15000,
       kill_timeout: 8000,
       env: {
+        ...COMMON_ENV,
         NODE_ENV: 'production',
         PORT: 3006,
         JWT_SECRET: 'diaristou_secret_2024',
@@ -84,6 +93,7 @@ module.exports = {
       listen_timeout: 15000,
       kill_timeout: 8000,
       env: {
+        ...COMMON_ENV,
         NODE_ENV: 'production',
         PORT: 3007,
         JWT_SECRET: 'sac_supermercados_secret_2024',
