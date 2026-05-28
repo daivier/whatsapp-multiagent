@@ -1,5 +1,4 @@
 import { useState, useEffect, useLayoutEffect, useRef } from 'react';
-import AudioPlayer from './AudioPlayer';
 import api from '../api';
 import { useAuth } from '../context/AuthContext';
 import ContactHistory from './ContactHistory';
@@ -123,7 +122,7 @@ function MessageContent({ msg, onMediaLoad }) {
   if (msg.media_url && msg.media_type?.startsWith('audio/')) {
     return (
       <>
-        <AudioPlayer src={`${API}${msg.media_url}`} />
+        <audio controls src={`${API}${msg.media_url}`} style={{ maxWidth: '280px' }} />
         {msg.body && (
           <p title="Transcrição automática" style={{ margin: '0.35rem 0 0', fontSize: '0.85rem', fontStyle: 'italic', color: 'var(--muted)', borderLeft: '2px solid var(--border-m)', paddingLeft: '0.5rem', whiteSpace: 'pre-wrap', overflowWrap: 'break-word' }}>
             🎤 {msg.body}
