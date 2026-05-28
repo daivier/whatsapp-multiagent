@@ -153,7 +153,8 @@ router.put('/:id/members', authMiddleware, ownerOnly, (req, res) => {
     db.prepare("DELETE FROM user_departments WHERE department_id = ?").run(req.params.id);
     const ins = db.prepare("INSERT INTO user_departments (user_id, department_id) VALUES (?, ?)");
     for (const uid of user_ids) {
-      const u = db.prepare("SELECT id FROM users WHERE id = ? AND active = 1 AND role = 'attendant'").get(uid);
+      // Permite atendentes e supervisores (supervisor restrito aos depts dele)
+      const u = db.prepare("SELECT id FROM users WHERE id = ? AND active = 1 AND role IN ('attendant', 'supervisor')").get(uid);
       if (u) ins.run(uid, req.params.id);
     }
   })();

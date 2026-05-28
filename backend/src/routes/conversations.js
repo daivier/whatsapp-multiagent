@@ -46,10 +46,15 @@ router.get('/', authMiddleware, (req, res) => {
   if (req.user.role === 'attendant') {
     conditions.push('conv.assigned_to = ?');
     params.push(req.user.id);
-  } else if (req.user.role === 'supervisor' && attendant_id) {
-    // Supervisor a filtrar por atendente específico
-    conditions.push('conv.assigned_to = ?');
-    params.push(parseInt(attendant_id));
+  } else if (req.user.role === 'supervisor') {
+    // Supervisor é restrito aos departamentos a que pertence.
+    // Se não pertence a nenhum, IN (empty) → 0 resultados (esperado).
+    conditions.push('conv.department_id IN (SELECT department_id FROM user_departments WHERE user_id = ?)');
+    params.push(req.user.id);
+    if (attendant_id) {
+      conditions.push('conv.assigned_to = ?');
+      params.push(parseInt(attendant_id));
+    }
   } else if (attendant_id) {
     // Owner a filtrar por atendente específico
     conditions.push('conv.assigned_to = ?');
@@ -703,8 +708,35 @@ router.delete('/:id', authMiddleware, ownerOnly, (req, res) => {
 });
 
 // GET /conversations/dashboard — dados ao vivo para o dashboard principal
+// Supervisor: vê apenas dados dos departamentos a que pertence.
+// Owner: vê tudo.
 router.get('/dashboard', authMiddleware, supervisorOrOwner, (req, res) => {
   const slaMinutes = parseInt(db.prepare("SELECT value FROM settings WHERE key = 'sla_minutes'").get()?.value || '30', 10);
+
+  // Filtro condicional por departamento (só para supervisor). Helpers para
+  // injectar a clause certa dependendo do nome da tabela na query.
+  const isSupervisor = req.user.role === 'supervisor';
+  const userDeptIds = isSupervisor
+    ? db.prepare('SELECT department_id FROM user_departments WHERE user_id = ?').all(req.user.id).map(r => r.department_id)
+    : [];
+  // Se supervisor sem departamentos, devolve dashboard vazio para evitar
+  // SQL `IN ()` que é erro de sintaxe.
+  if (isSupervisor && userDeptIds.length === 0) {
+    return res.json({
+      live: { waiting: 0, open: 0, total_today: 0, closed_today: 0, sla_breached: 0 },
+      tmaToday: null, firstResponseToday: null, hourly: [], attendants: [],
+      atRisk: [], slaMinutes, totals: { total: 0, waiting: 0, open: 0, closed: 0 },
+      byDepartment: [],
+      _supervisor_without_depts: true,
+    });
+  }
+  const deptPlaceholders = userDeptIds.map(() => '?').join(',');
+  // Para queries com FROM conversations (sem alias)
+  const fDept = isSupervisor ? `AND department_id IN (${deptPlaceholders})` : '';
+  // Para queries com FROM conversations conv ou alias c.
+  const cDept = (alias) => isSupervisor ? `AND ${alias}.department_id IN (${deptPlaceholders})` : '';
+  // Helper para concatenar params dinâmicos
+  const dp = isSupervisor ? userDeptIds : [];
 
   // Contagens ao vivo
   const live = db.prepare(`
@@ -714,8 +746,8 @@ router.get('/dashboard', authMiddleware, supervisorOrOwner, (req, res) => {
       COUNT(CASE WHEN date(created_at,'localtime') = date('now','localtime') THEN 1 END) as total_today,
       COUNT(CASE WHEN status = 'closed' AND date(updated_at,'localtime') = date('now','localtime') THEN 1 END) as closed_today
     FROM conversations
-    WHERE snoozed_until IS NULL OR snoozed_until <= CURRENT_TIMESTAMP
-  `).get();
+    WHERE (snoozed_until IS NULL OR snoozed_until <= CURRENT_TIMESTAMP) ${fDept}
+  `).get(...dp);
 
   // SLA: conversas abertas/em espera há mais de X minutos sem resposta do atendente
   const slaBreached = db.prepare(`
@@ -724,14 +756,15 @@ router.get('/dashboard', authMiddleware, supervisorOrOwner, (req, res) => {
     AND (snoozed_until IS NULL OR snoozed_until <= CURRENT_TIMESTAMP)
     AND sla_alerted_at IS NULL
     AND (julianday('now') - julianday(created_at)) * 24 * 60 > ?
-  `).get(slaMinutes)?.c || 0;
+    ${fDept}
+  `).get(slaMinutes, ...dp)?.c || 0;
 
   // TMA médio hoje
   const tmaToday = db.prepare(`
     SELECT ROUND(AVG((julianday(updated_at)-julianday(created_at))*24*60),1) as avg
     FROM conversations
-    WHERE status='closed' AND date(updated_at,'localtime')=date('now','localtime')
-  `).get()?.avg || null;
+    WHERE status='closed' AND date(updated_at,'localtime')=date('now','localtime') ${fDept}
+  `).get(...dp)?.avg || null;
 
   // Tempo médio 1ª resposta hoje
   const firstResponseToday = db.prepare(`
@@ -739,27 +772,31 @@ router.get('/dashboard', authMiddleware, supervisorOrOwner, (req, res) => {
       SELECT (strftime('%s', MIN(CASE WHEN m.from_me=1 THEN m.timestamp END))
              -strftime('%s', MIN(CASE WHEN m.from_me=0 THEN m.timestamp END))) as response_seconds
       FROM conversations c JOIN messages m ON m.conversation_id=c.id
-      WHERE date(c.created_at,'localtime')=date('now','localtime')
+      WHERE date(c.created_at,'localtime')=date('now','localtime') ${cDept('c')}
       GROUP BY c.id HAVING response_seconds>0 AND response_seconds<86400
     )
-  `).get()?.avg || null;
+  `).get(...dp)?.avg || null;
 
   // Volume por hora hoje
   const hourly = db.prepare(`
     SELECT strftime('%H',created_at,'localtime') as hour, COUNT(*) as total
-    FROM conversations WHERE date(created_at,'localtime')=date('now','localtime')
+    FROM conversations WHERE date(created_at,'localtime')=date('now','localtime') ${fDept}
     GROUP BY hour ORDER BY hour ASC
-  `).all();
+  `).all(...dp);
 
   // Atendentes com contagem de conversas abertas
+  // Para supervisor: só atendentes dos seus departamentos
+  const supDeptJoinAtt = isSupervisor
+    ? `AND u.id IN (SELECT user_id FROM user_departments WHERE department_id IN (${deptPlaceholders}))`
+    : '';
   const attendants = db.prepare(`
     SELECT u.id, u.name, u.status, u.on_shift,
-      COUNT(CASE WHEN c.status IN ('open','waiting') THEN 1 END) as active_count
+      COUNT(CASE WHEN c.status IN ('open','waiting') ${cDept('c')} THEN 1 END) as active_count
     FROM users u
     LEFT JOIN conversations c ON c.assigned_to=u.id AND c.status IN ('open','waiting')
-    WHERE u.role='attendant' AND u.active=1
+    WHERE u.role='attendant' AND u.active=1 ${supDeptJoinAtt}
     GROUP BY u.id ORDER BY u.status='online' DESC, active_count DESC
-  `).all();
+  `).all(...dp, ...dp);
 
   // Últimas 5 conversas abertas/espera mais antigas (SLA risk)
   const atRisk = db.prepare(`
@@ -772,8 +809,9 @@ router.get('/dashboard', authMiddleware, supervisorOrOwner, (req, res) => {
     LEFT JOIN users u ON u.id=conv.assigned_to
     WHERE conv.status IN ('open','waiting')
     AND (conv.snoozed_until IS NULL OR conv.snoozed_until<=CURRENT_TIMESTAMP)
+    ${cDept('conv')}
     ORDER BY conv.created_at ASC LIMIT 5
-  `).all();
+  `).all(...dp);
 
   // Totais históricos (todos os tempos)
   const totals = db.prepare(`
@@ -782,7 +820,8 @@ router.get('/dashboard', authMiddleware, supervisorOrOwner, (req, res) => {
       COUNT(CASE WHEN status='open'    THEN 1 END) as open,
       COUNT(CASE WHEN status='closed'  THEN 1 END) as closed
     FROM conversations
-  `).get();
+    ${isSupervisor ? `WHERE department_id IN (${deptPlaceholders})` : ''}
+  `).get(...dp);
 
   // Breakdown por departamento — apenas conversas activas (open/waiting, não snoozed).
   // sla_breached usa o flag sla_alerted_at (preenchido pelo cron quando excedeu o
@@ -796,10 +835,10 @@ router.get('/dashboard', authMiddleware, supervisorOrOwner, (req, res) => {
     FROM departments d
     LEFT JOIN conversations c ON c.department_id = d.id
       AND (c.snoozed_until IS NULL OR c.snoozed_until <= CURRENT_TIMESTAMP)
-    WHERE d.active = 1
+    WHERE d.active = 1 ${isSupervisor ? `AND d.id IN (${deptPlaceholders})` : ''}
     GROUP BY d.id
     ORDER BY d.is_default DESC, d.name ASC
-  `).all(slaMinutes);
+  `).all(slaMinutes, ...dp);
 
   res.json({ live: { ...live, sla_breached: slaBreached }, tmaToday, firstResponseToday, hourly, attendants, atRisk, slaMinutes, totals, byDepartment });
 });

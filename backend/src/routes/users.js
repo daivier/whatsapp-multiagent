@@ -182,18 +182,40 @@ router.patch('/:id/shift', authMiddleware, ownerOnly, (req, res) => {
 });
 
 // GET /users/supervisor — dados em tempo real para painel supervisor (owner + supervisor)
+// Supervisor: restrito aos atendentes dos departamentos a que ele pertence.
+// Owner: vê todos os atendentes.
 router.get('/supervisor', authMiddleware, supervisorOrOwner, (req, res) => {
-  const attendants = db.prepare(`
+  const isSupervisor = req.user.role === 'supervisor';
+
+  // Lista de atendentes — supervisor só vê os do(s) seu(s) departamento(s)
+  let attQuery = `
     SELECT u.id, u.name, u.status, u.on_shift,
       COUNT(CASE WHEN c.status = 'open'    THEN 1 END) as open_count,
       COUNT(CASE WHEN c.status = 'waiting' THEN 1 END) as waiting_count
     FROM users u
     LEFT JOIN conversations c ON c.assigned_to = u.id AND c.status IN ('open','waiting')
     WHERE u.role = 'attendant' AND u.active = 1
-    GROUP BY u.id ORDER BY u.name ASC
-  `).all();
+  `;
+  const attParams = [];
+  if (isSupervisor) {
+    attQuery += `
+      AND u.id IN (
+        SELECT user_id FROM user_departments
+        WHERE department_id IN (SELECT department_id FROM user_departments WHERE user_id = ?)
+      )
+    `;
+    attParams.push(req.user.id);
+  }
+  attQuery += ` GROUP BY u.id ORDER BY u.name ASC`;
+  const attendants = db.prepare(attQuery).all(...attParams);
+
+  // Conversas de cada atendente — supervisor só vê as dos seus departamentos
+  const convFilterSql = isSupervisor
+    ? `AND conv.department_id IN (SELECT department_id FROM user_departments WHERE user_id = ?)`
+    : '';
 
   const result = attendants.map(a => {
+    const convParams = isSupervisor ? [a.id, req.user.id] : [a.id];
     const conversations = db.prepare(`
       SELECT conv.id, con.name as contact_name, con.phone,
         conv.status, conv.created_at, conv.updated_at, conv.priority,
@@ -202,9 +224,10 @@ router.get('/supervisor', authMiddleware, supervisorOrOwner, (req, res) => {
       FROM conversations conv
       JOIN contacts con ON con.id = conv.contact_id
       WHERE conv.assigned_to = ? AND conv.status IN ('open','waiting')
+        ${convFilterSql}
       ORDER BY conv.updated_at DESC
       LIMIT 10
-    `).all(a.id);
+    `).all(...convParams);
     return { ...a, conversations };
   });
 
