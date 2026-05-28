@@ -121,6 +121,19 @@ function initSocket(io) {
       io.emit('user:status', { userId: user.id, status });
     });
 
+    // ─── Internal Chat socket events ──────────────────────────────────────────
+    // internal:typing — broadcast a outros membros do thread quando user está a escrever
+    socket.on('internal:typing', ({ thread_id }) => {
+      try {
+        const members = db.prepare('SELECT user_id FROM internal_thread_members WHERE thread_id = ?').all(thread_id);
+        for (const m of members) {
+          if (m.user_id !== user.id) {
+            io.to('user:' + m.user_id).emit('internal:typing', { thread_id, user_id: user.id, user_name: user.name });
+          }
+        }
+      } catch (_) {}
+    });
+
     socket.on('disconnect', () => {
       db.prepare('UPDATE users SET status = ? WHERE id = ?').run('offline', user.id);
       io.emit('user:status', { userId: user.id, status: 'offline' });

@@ -258,6 +258,68 @@ try {
 // Migração: etiquetas por departamento
 try { db.exec(`ALTER TABLE tags ADD COLUMN department_id INTEGER REFERENCES departments(id) ON DELETE CASCADE`); } catch (_) {}
 
+// Migração: tabelas do chat interno (threads, members, messages, reactions)
+try {
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS internal_threads (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      type TEXT NOT NULL DEFAULT 'channel',
+      name TEXT,
+      department_id INTEGER REFERENCES departments(id) ON DELETE SET NULL,
+      created_by INTEGER REFERENCES users(id),
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    );
+    CREATE TABLE IF NOT EXISTS internal_thread_members (
+      thread_id INTEGER NOT NULL REFERENCES internal_threads(id) ON DELETE CASCADE,
+      user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      muted INTEGER NOT NULL DEFAULT 0,
+      last_read_message_id INTEGER,
+      joined_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      PRIMARY KEY (thread_id, user_id)
+    );
+    CREATE TABLE IF NOT EXISTS internal_messages (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      thread_id INTEGER NOT NULL REFERENCES internal_threads(id) ON DELETE CASCADE,
+      from_user_id INTEGER NOT NULL REFERENCES users(id),
+      body TEXT NOT NULL DEFAULT '',
+      media_url TEXT,
+      media_type TEXT,
+      media_filename TEXT,
+      reply_to_id INTEGER REFERENCES internal_messages(id),
+      edited INTEGER NOT NULL DEFAULT 0,
+      deleted INTEGER NOT NULL DEFAULT 0,
+      pinned INTEGER NOT NULL DEFAULT 0,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    );
+    CREATE TABLE IF NOT EXISTS internal_reactions (
+      message_id INTEGER NOT NULL REFERENCES internal_messages(id) ON DELETE CASCADE,
+      user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      emoji TEXT NOT NULL,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      PRIMARY KEY (message_id, user_id, emoji)
+    );
+    CREATE INDEX IF NOT EXISTS idx_internal_messages_thread ON internal_messages(thread_id);
+    CREATE INDEX IF NOT EXISTS idx_internal_thread_members_user ON internal_thread_members(user_id);
+    CREATE INDEX IF NOT EXISTS idx_internal_reactions_msg ON internal_reactions(message_id);
+  `);
+} catch (_) {}
+
+// Seed do canal "Geral" com todos os utilizadores activos
+try {
+  const generalExists = db.prepare("SELECT id FROM internal_threads WHERE type = 'channel' AND name = 'Geral'").get();
+  if (!generalExists) {
+    const ownerRow = db.prepare("SELECT id FROM users WHERE role = 'owner' LIMIT 1").get();
+    if (ownerRow) {
+      const r = db.prepare("INSERT INTO internal_threads (type, name, created_by) VALUES ('channel', 'Geral', ?)").run(ownerRow.id);
+      const threadId = r.lastInsertRowid;
+      const allUsers = db.prepare("SELECT id FROM users WHERE active = 1").all();
+      const addMember = db.prepare("INSERT OR IGNORE INTO internal_thread_members (thread_id, user_id) VALUES (?, ?)");
+      for (const u of allUsers) addMember.run(threadId, u.id);
+    }
+  }
+} catch (_) {}
+
 // Migração: histórico de disparos em massa (broadcast logs)
 try {
   db.exec(`CREATE TABLE IF NOT EXISTS broadcast_logs (
