@@ -342,3 +342,8 @@ try {
 // Valores: 0=pending, 2=server_ack, 3=delivered, 4=read, 5=played
 // Reflete ACKs vindos via Baileys messages.update — só interessa para from_me=1.
 try { db.exec(`ALTER TABLE messages ADD COLUMN wa_status INTEGER NOT NULL DEFAULT 0`); } catch (_) {}
+
+// Migração: reacções em mensagens WhatsApp (JSON serializado).
+// Formato: [{ emoji: '👍', users: [{id:1,name:'Sávio'}|{id:null,name:'Cliente'}], count: 2 }]
+// id:null representa o contacto externo (cliente WhatsApp).
+try { db.exec(`ALTER TABLE messages ADD COLUMN reactions TEXT`); } catch (_) {}

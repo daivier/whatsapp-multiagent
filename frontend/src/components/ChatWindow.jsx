@@ -5,6 +5,14 @@ import ContactHistory from './ContactHistory';
 
 const API = import.meta.env.VITE_API_URL || '';
 
+const COMMON_EMOJIS = ['👍', '❤️', '😂', '😮', '😢', '🙏', '🎉', '✅'];
+
+function parseReactions(raw) {
+  if (!raw) return [];
+  if (Array.isArray(raw)) return raw;
+  try { const p = JSON.parse(raw); return Array.isArray(p) ? p : []; } catch { return []; }
+}
+
 // SQLite guarda UTC sem 'Z' — forçar interpretação correta
 function utc(str) {
   if (!str) return new Date(str);
@@ -283,6 +291,10 @@ export default function ChatWindow({ conversation: convProp, socket, onClose, on
       if (conversation_id !== conversation.id) return;
       setMessages(prev => prev.map(m => m.id === id ? { ...m, wa_status } : m));
     }
+    function onReactions({ id, conversation_id, reactions }) {
+      if (conversation_id !== conversation.id) return;
+      setMessages(prev => prev.map(m => m.id === id ? { ...m, reactions: JSON.stringify(reactions) } : m));
+    }
     function onTagsUpdated({ conversation_id, tags }) {
       if (Number(conversation_id) !== conversation.id) return;
       setConvTags(tags);
@@ -302,6 +314,7 @@ export default function ChatWindow({ conversation: convProp, socket, onClose, on
     socket.on('message:failed', onFailed);
     socket.on('message:deleted', onDeleted);
     socket.on('message:status', onStatus);
+    socket.on('message:reactions', onReactions);
     socket.on('conversation:tags_updated', onTagsUpdated);
     socket.on('conversation:updated', onConversationUpdated);
     socket.on('contact:updated', onContactUpdated);
@@ -313,6 +326,7 @@ export default function ChatWindow({ conversation: convProp, socket, onClose, on
       socket.off('message:failed', onFailed);
       socket.off('message:deleted', onDeleted);
       socket.off('message:status', onStatus);
+      socket.off('message:reactions', onReactions);
       socket.off('conversation:tags_updated', onTagsUpdated);
       socket.off('conversation:updated', onConversationUpdated);
       socket.off('contact:updated', onContactUpdated);
@@ -1036,11 +1050,17 @@ export default function ChatWindow({ conversation: convProp, socket, onClose, on
                 e.currentTarget.querySelector('.reply-btn').style.opacity = '1';
                 if (canEdit) e.currentTarget.querySelector('.edit-btn')?.style && (e.currentTarget.querySelector('.edit-btn').style.opacity = '1');
                 const del = e.currentTarget.querySelector('.delete-btn'); if (del) del.style.opacity = '1';
+                const rb = e.currentTarget.querySelector('.react-btn'); if (rb) rb.style.opacity = '1';
               }}
               onMouseLeave={e => {
                 e.currentTarget.querySelector('.reply-btn').style.opacity = '0';
                 e.currentTarget.querySelector('.edit-btn')?.style && (e.currentTarget.querySelector('.edit-btn').style.opacity = '0');
                 const del = e.currentTarget.querySelector('.delete-btn'); if (del) del.style.opacity = '0';
+                const rb = e.currentTarget.querySelector('.react-btn');
+                if (rb) {
+                  rb.style.opacity = '0';
+                  const picker = rb.querySelector('div'); if (picker) picker.style.display = 'none';
+                }
               }}>
               {!!msg.from_me && msg.sender_name && (
                 <span style={S.senderName}>{msg.sender_name}{msg.is_internal ? ' · nota interna' : ''}</span>
@@ -1073,6 +1093,28 @@ export default function ChatWindow({ conversation: convProp, socket, onClose, on
               ) : (
                 <>
                   <MessageContent msg={msg} onMediaLoad={scrollToBottom} />
+                  {(() => {
+                    const reactions = parseReactions(msg.reactions);
+                    if (reactions.length === 0) return null;
+                    return (
+                      <div style={{ display: 'flex', flexWrap: 'wrap', gap: '3px', marginTop: '4px' }}>
+                        {reactions.map(r => {
+                          const isMine = (r.users || []).some(u => u.id === user.id);
+                          return (
+                            <button key={r.emoji}
+                              onClick={async () => {
+                                try { await api.post(`/messages/${msg.id}/react`, { emoji: isMine ? '' : r.emoji }); }
+                                catch (err) { setWarning(err.response?.data?.error || 'Erro ao reagir'); }
+                              }}
+                              title={(r.users || []).map(u => u.name).join(', ')}
+                              style={{ background: isMine ? 'var(--accent-l)' : 'rgba(0,0,0,0.06)', border: `1px solid ${isMine ? 'var(--accent)' : 'transparent'}`, borderRadius: '999px', cursor: 'pointer', padding: '0 6px', fontSize: '0.78rem', display: 'inline-flex', alignItems: 'center', gap: '2px', lineHeight: 1.6 }}>
+                              {r.emoji}<span style={{ fontSize: '0.7rem', color: isMine ? 'var(--accent)' : 'var(--muted)', fontWeight: 600 }}>{r.count}</span>
+                            </button>
+                          );
+                        })}
+                      </div>
+                    );
+                  })()}
                   {msg.failed ? (
                     <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', marginTop: '0.25rem', flexWrap: 'wrap' }}>
                       <span style={{ color: 'var(--danger)', fontSize: '0.75rem' }}>⚠️ Não entregue</span>
@@ -1123,6 +1165,33 @@ export default function ChatWindow({ conversation: convProp, socket, onClose, on
                   style={{ opacity: 0, transition: 'opacity .15s', position: 'absolute', top: '4px', left: msg.from_me ? '-28px' : 'auto', right: msg.from_me ? 'auto' : '-28px', background: 'var(--card)', border: '1px solid var(--border-m)', borderRadius: '50%', width: 22, height: 22, cursor: 'pointer', fontSize: '0.7rem', display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: 'var(--sh)' }}>
                   ✏️
                 </button>
+              )}
+              {!msg.is_internal && !msg.deleted && (
+                <div className="react-btn" style={{ opacity: 0, transition: 'opacity .15s', position: 'absolute', top: '4px', left: msg.from_me ? '-100px' : 'auto', right: msg.from_me ? 'auto' : '-100px' }}>
+                  <button title="Reagir"
+                    onClick={e => {
+                      e.stopPropagation();
+                      const picker = e.currentTarget.nextSibling;
+                      if (picker) picker.style.display = picker.style.display === 'flex' ? 'none' : 'flex';
+                    }}
+                    style={{ background: 'var(--card)', border: '1px solid var(--border-m)', borderRadius: '50%', width: 22, height: 22, cursor: 'pointer', fontSize: '0.7rem', display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: 'var(--sh)' }}>😊</button>
+                  <div style={{ display: 'none', position: 'absolute', top: '26px', left: 0, background: 'var(--card)', border: '1px solid var(--border)', borderRadius: '10px', padding: '4px', gap: '2px', boxShadow: '0 4px 12px rgba(0,0,0,0.15)', zIndex: 10 }}>
+                    {COMMON_EMOJIS.map(em => (
+                      <button key={em}
+                        onClick={async (e) => {
+                          e.stopPropagation();
+                          e.currentTarget.parentElement.style.display = 'none';
+                          try { await api.post(`/messages/${msg.id}/react`, { emoji: em }); }
+                          catch (err) { setWarning(err.response?.data?.error || 'Erro ao reagir'); }
+                        }}
+                        style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: '1.1rem', padding: '2px 4px', borderRadius: '4px' }}
+                        onMouseEnter={e => e.currentTarget.style.background = 'var(--bg)'}
+                        onMouseLeave={e => e.currentTarget.style.background = 'none'}>
+                        {em}
+                      </button>
+                    ))}
+                  </div>
+                </div>
               )}
               {!!msg.from_me && !msg.is_internal && !msg.deleted && (
                 <button className="delete-btn" title="Apagar para todos"

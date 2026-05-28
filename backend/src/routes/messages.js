@@ -1,7 +1,7 @@
 const express = require('express');
 const db = require('../db/schema');
 const { authMiddleware } = require('../middleware/auth');
-const { sendMessage, editMessage, deleteMessageForAll } = require('../whatsapp/client');
+const { sendMessage, editMessage, deleteMessageForAll, reactToMessage, applyReactionToList } = require('../whatsapp/client');
 
 const router = express.Router();
 
@@ -119,6 +119,39 @@ router.delete('/:id', authMiddleware, async (req, res) => {
   ioInstance?.emit('message:deleted', { id: msg.id, conversation_id: msg.conversation_id });
 
   res.json(updated);
+});
+
+// POST /messages/:id/react — adicionar/trocar/remover reacção do user actual.
+// body.emoji: string com emoji (ex: '👍') ou '' para remover.
+// Atualiza messages.reactions localmente E envia ao WhatsApp via Baileys.
+// Atendente só pode reagir nas próprias conversas; owner/supervisor em qualquer.
+router.post('/:id/react', authMiddleware, async (req, res) => {
+  const { emoji } = req.body;
+  if (emoji !== '' && (typeof emoji !== 'string' || emoji.length > 32)) {
+    return res.status(400).json({ error: 'emoji inválido' });
+  }
+
+  const msg = db.prepare(`SELECT m.*, conv.assigned_to, conv.line_id FROM messages m JOIN conversations conv ON conv.id = m.conversation_id WHERE m.id = ?`).get(req.params.id);
+  if (!msg) return res.status(404).json({ error: 'Mensagem não encontrada' });
+  if (msg.is_internal) return res.status(400).json({ error: 'Reacções em notas internas usam o chat interno' });
+  if (req.user.role === 'attendant' && msg.assigned_to !== req.user.id) return res.status(403).json({ error: 'Sem permissão' });
+
+  // Aplica localmente primeiro (UI rápida)
+  const senderUser = { id: req.user.id, name: req.user.name };
+  const list = applyReactionToList(msg.reactions, senderUser, emoji || '');
+  db.prepare('UPDATE messages SET reactions = ? WHERE id = ?').run(JSON.stringify(list), msg.id);
+
+  const ioInstance = require('../io-instance').get();
+  ioInstance?.emit('message:reactions', { id: msg.id, conversation_id: msg.conversation_id, reactions: list });
+
+  // Envia ao WhatsApp em paralelo (não bloqueia resposta)
+  if (msg.wa_message_id) {
+    reactToMessage(msg.line_id, msg.wa_message_id, emoji || '').catch(err => {
+      console.error('[react] WhatsApp:', err.message);
+    });
+  }
+
+  res.json({ ok: true, reactions: list });
 });
 
 module.exports = router;

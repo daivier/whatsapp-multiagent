@@ -376,6 +376,26 @@ async function handleIncomingMessage(msg, lineId) {
   if (remoteJid === 'status@broadcast') return;
   if (remoteJid.endsWith('@g.us')) return;
   if (remoteJid.endsWith('@newsletter')) return;
+
+  // Reacção do cliente a uma mensagem nossa (ou a outra dele). Captada cedo
+  // — não é uma mensagem normal, só actualiza messages.reactions.
+  const reactionMsg = msg.message?.reactionMessage;
+  if (reactionMsg?.key?.id) {
+    try {
+      const target = db.prepare('SELECT id, conversation_id, reactions FROM messages WHERE wa_message_id = ?').get(reactionMsg.key.id);
+      if (target) {
+        const conv = db.prepare('SELECT con.name as contact_name, con.phone FROM conversations conv JOIN contacts con ON con.id=conv.contact_id WHERE conv.id=?').get(target.conversation_id);
+        const senderUser = msg.key.fromMe
+          ? { id: 0, name: 'Atendente (externo)' } // reacção do nosso lado via outro dispositivo
+          : { id: null, name: conv?.contact_name || conv?.phone || 'Cliente' };
+        const list = applyReactionToList(target.reactions, senderUser, reactionMsg.text || '');
+        db.prepare('UPDATE messages SET reactions = ? WHERE id = ?').run(JSON.stringify(list), target.id);
+        if (io) io.emit('message:reactions', { id: target.id, conversation_id: target.conversation_id, reactions: list });
+      }
+    } catch (err) { console.error('[reaction-inbound]', err.message); }
+    return; // Não processa como mensagem normal
+  }
+
   if (msg.key.fromMe) {
     const existing = db.prepare('SELECT id FROM messages WHERE wa_message_id = ?').get(msg.key.id);
     if (existing) return;
@@ -756,6 +776,38 @@ async function editMessage(lineId, waMessageId, newBody) {
   await state.sock.sendMessage(jid, { text: newBody, edit: { id: waMessageId, fromMe: true, remoteJid: jid } });
 }
 
+// Helper: aplica reacção ao JSON em messages.reactions e devolve o novo array.
+// `senderUser` = {id, name} (id=null para cliente externo). emoji='' remove.
+function applyReactionToList(currentJson, senderUser, emoji) {
+  let list;
+  try { list = currentJson ? JSON.parse(currentJson) : []; } catch (_) { list = []; }
+  // Remove qualquer reacção anterior deste user (só 1 emoji por user, WhatsApp behavior)
+  for (const r of list) {
+    r.users = (r.users || []).filter(u => !(u.id === senderUser.id && (u.id !== null || u.name === senderUser.name)));
+    r.count = r.users.length;
+  }
+  // Filtra entries vazias
+  list = list.filter(r => r.count > 0);
+  // Se emoji vazio, era só remover
+  if (!emoji) return list;
+  // Adiciona ao grupo do emoji
+  let group = list.find(r => r.emoji === emoji);
+  if (!group) { group = { emoji, users: [], count: 0 }; list.push(group); }
+  group.users.push({ id: senderUser.id, name: senderUser.name });
+  group.count = group.users.length;
+  return list;
+}
+
+// Envia reacção via Baileys (nossa, atendente). emoji='' remove a anterior.
+async function reactToMessage(lineId, waMessageId, emoji) {
+  const state = lineStates.get(resolveLineId(lineId));
+  if (!state?.isReady || !state.sock) throw new Error('WhatsApp não está conectado nesta linha');
+  const msgInDb = db.prepare(`SELECT m.wa_message_id, m.from_me, con.wa_id, con.phone FROM messages m JOIN conversations conv ON conv.id = m.conversation_id JOIN contacts con ON con.id = conv.contact_id WHERE m.wa_message_id = ?`).get(waMessageId);
+  if (!msgInDb) throw new Error('Mensagem não encontrada');
+  const jid = normalizeJid(state, msgInDb.wa_id || msgInDb.phone);
+  await state.sock.sendMessage(jid, { react: { text: emoji || '', key: { id: waMessageId, fromMe: !!msgInDb.from_me, remoteJid: jid } } });
+}
+
 // Apagar mensagem ("Apagar para todos" no WhatsApp). Substitui no telemóvel
 // do destinatário por "Esta mensagem foi apagada".
 async function deleteMessageForAll(lineId, waMessageId) {
@@ -865,6 +917,8 @@ module.exports = {
   sendMedia,
   editMessage,
   deleteMessageForAll,
+  reactToMessage,
+  applyReactionToList,
   getStatus,
   getAllStatuses,
   disconnectWhatsApp,
