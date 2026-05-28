@@ -1056,10 +1056,13 @@ export default function ChatWindow({ conversation: convProp, socket, onClose, on
                 e.currentTarget.querySelector('.reply-btn').style.opacity = '0';
                 e.currentTarget.querySelector('.edit-btn')?.style && (e.currentTarget.querySelector('.edit-btn').style.opacity = '0');
                 const del = e.currentTarget.querySelector('.delete-btn'); if (del) del.style.opacity = '0';
+                // O picker tem o seu próprio onMouseLeave (mantém aberto enquanto
+                // o cursor está sobre ele ou sobre o botão 😊). Não fechamos aqui.
                 const rb = e.currentTarget.querySelector('.react-btn');
                 if (rb) {
-                  rb.style.opacity = '0';
-                  const picker = rb.querySelector('div'); if (picker) picker.style.display = 'none';
+                  const picker = rb.querySelector('.emoji-picker');
+                  const pickerOpen = picker && picker.style.display === 'flex';
+                  if (!pickerOpen) rb.style.opacity = '0';
                 }
               }}>
               {!!msg.from_me && msg.sender_name && (
@@ -1171,16 +1174,26 @@ export default function ChatWindow({ conversation: convProp, socket, onClose, on
                   <button title="Reagir"
                     onClick={e => {
                       e.stopPropagation();
-                      const picker = e.currentTarget.nextSibling;
+                      const picker = e.currentTarget.parentElement.querySelector('.emoji-picker');
                       if (picker) picker.style.display = picker.style.display === 'flex' ? 'none' : 'flex';
                     }}
                     style={{ background: 'var(--card)', border: '1px solid var(--border-m)', borderRadius: '50%', width: 22, height: 22, cursor: 'pointer', fontSize: '0.7rem', display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: 'var(--sh)' }}>😊</button>
-                  <div style={{ display: 'none', position: 'absolute', top: '26px', left: 0, background: 'var(--card)', border: '1px solid var(--border)', borderRadius: '10px', padding: '4px', gap: '2px', boxShadow: '0 4px 12px rgba(0,0,0,0.15)', zIndex: 10 }}>
+                  <div className="emoji-picker"
+                    onMouseLeave={e => {
+                      // Fecha quando o cursor sai realmente do picker (não da bolha)
+                      e.currentTarget.style.display = 'none';
+                      const rb = e.currentTarget.closest('.react-btn');
+                      if (rb) rb.style.opacity = '0';
+                    }}
+                    style={{ display: 'none', position: 'absolute', top: '22px', left: 0, background: 'var(--card)', border: '1px solid var(--border)', borderRadius: '10px', padding: '4px', gap: '2px', boxShadow: '0 4px 12px rgba(0,0,0,0.15)', zIndex: 10 }}>
                     {COMMON_EMOJIS.map(em => (
                       <button key={em}
                         onClick={async (e) => {
                           e.stopPropagation();
-                          e.currentTarget.parentElement.style.display = 'none';
+                          const picker = e.currentTarget.parentElement;
+                          picker.style.display = 'none';
+                          const rb = picker.closest('.react-btn');
+                          if (rb) rb.style.opacity = '0';
                           try { await api.post(`/messages/${msg.id}/react`, { emoji: em }); }
                           catch (err) { setWarning(err.response?.data?.error || 'Erro ao reagir'); }
                         }}
