@@ -160,7 +160,10 @@ router.get('/:id/avatar', async (req, res) => {
   `).get(req.params.id);
   const lineId = lineRow?.line_id || getDefaultLineId();
   if (!lineId) return res.json({ url: null });
-  const url = await getProfilePictureUrl(lineId, contact.wa_id || contact.phone);
+  // Usar phone (número real) — wa_id pode ser '...@lid' (WhatsApp Business)
+  // que aponta para um identificador anónimo, não para o telefone real.
+  // profilePictureUrl precisa do JID em '...@s.whatsapp.net' com o número real.
+  const url = await getProfilePictureUrl(lineId, contact.phone);
   res.json({ url });
 });
 
