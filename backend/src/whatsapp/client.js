@@ -294,35 +294,8 @@ async function startLine(lineId) {
           for (const f of sessionFiles) {
             if (!f.startsWith('lid-mapping-')) fs.unlinkSync(path.join(line.session_path, f));
           }
-      if (isLoggedOut && line.session_path) {
-        try {
-          const sessionFiles = fs.readdirSync(line.session_path);
-          for (const sf of sessionFiles) {
-            if (!sf.startsWith('lid-mapping-')) fs.unlinkSync(path.join(line.session_path, sf));
-          }
-          console.log(`[logout] sessao linha ${lineId} limpa, a gerar novo QR`);
-        } catch (e) { console.error('[logout] erro:', e.message); }
-      }
           console.log(`[logout] sessao da linha ${lineId} limpa — aguardar novo QR`);
         } catch (e) { console.error('[logout] erro ao limpar sessao:', e.message); }
-      }
-      if (isLoggedOut && line.session_path) {
-        try {
-          const sessionFiles = fs.readdirSync(line.session_path);
-          for (const sf of sessionFiles) {
-            if (!sf.startsWith('lid-mapping-')) fs.unlinkSync(path.join(line.session_path, sf));
-          }
-          console.log(`[logout] sessao linha ${lineId} limpa — aguardar novo QR`);
-        } catch (e) { console.error('[logout] erro ao limpar sessao:', e.message); }
-      }
-      if (isLoggedOut && line.session_path) {
-        try {
-          const sessionFiles = fs.readdirSync(line.session_path);
-          for (const sf of sessionFiles) {
-            if (!sf.startsWith('lid-mapping-')) fs.unlinkSync(path.join(line.session_path, sf));
-          }
-          console.log(`[logout] sessao linha ${lineId} limpa, a gerar novo QR`);
-        } catch (e) { console.error('[logout] erro:', e.message); }
       }
       if (io) io.emit('whatsapp:disconnected', { line_id: lineId });
       setTimeout(() => { console.log(`[reconnect] linha ${lineId}...`); startLine(lineId).catch(e => console.error(e.message)); }, 3000);
