@@ -370,8 +370,8 @@ router.post('/:id/transfer', authMiddleware, async (req, res) => {
   const { attendant_id, notify = true } = req.body;
   if (!attendant_id) return res.status(400).json({ error: 'attendant_id obrigatório' });
 
-  const attendant = db.prepare('SELECT id, name FROM users WHERE id = ? AND role = ? AND active = 1').get(attendant_id, 'attendant');
-  if (!attendant) return res.status(404).json({ error: 'Atendente não encontrado' });
+  const attendant = db.prepare("SELECT id, name, role FROM users WHERE id = ? AND role IN ('attendant', 'supervisor') AND active = 1").get(attendant_id);
+  if (!attendant) return res.status(404).json({ error: 'Utilizador não encontrado' });
 
   // Inferir departamento e linha do novo atendente para actualizar a conversa
   const attendantDept = db.prepare(`
@@ -436,8 +436,8 @@ router.patch('/:id/assign', authMiddleware, ownerOnly, (req, res) => {
   const conv = db.prepare('SELECT * FROM conversations WHERE id = ?').get(req.params.id);
   if (!conv) return res.status(404).json({ error: 'Conversa não encontrada' });
 
-  const attendant = db.prepare("SELECT id, name FROM users WHERE id = ? AND role = 'attendant' AND active = 1").get(attendant_id);
-  if (!attendant) return res.status(404).json({ error: 'Atendente não encontrado' });
+  const attendant = db.prepare("SELECT id, name FROM users WHERE id = ? AND role IN ('attendant', 'supervisor') AND active = 1").get(attendant_id);
+  if (!attendant) return res.status(404).json({ error: 'Utilizador não encontrado' });
 
   db.prepare("UPDATE conversations SET assigned_to = ?, status = 'open', updated_at = CURRENT_TIMESTAMP WHERE id = ?")
     .run(attendant_id, req.params.id);
@@ -605,8 +605,8 @@ router.post('/bulk/close', authMiddleware, (req, res) => {
 router.post('/bulk/transfer', authMiddleware, (req, res) => {
   const { ids: rawIds, attendant_id } = req.body;
   if (!attendant_id) return res.status(400).json({ error: 'attendant_id obrigatório' });
-  const attendant = db.prepare("SELECT id, name FROM users WHERE id = ? AND role = 'attendant' AND active = 1").get(attendant_id);
-  if (!attendant) return res.status(404).json({ error: 'Atendente não encontrado' });
+  const attendant = db.prepare("SELECT id, name FROM users WHERE id = ? AND role IN ('attendant', 'supervisor') AND active = 1").get(attendant_id);
+  if (!attendant) return res.status(404).json({ error: 'Utilizador não encontrado' });
 
   const { ids, denied } = filterAllowedIds(rawIds, req.user);
   if (ids.length === 0) return res.status(400).json({ error: 'Nenhuma conversa permitida', denied });
