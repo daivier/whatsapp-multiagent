@@ -834,16 +834,14 @@ async function getProfilePictureUrl(lineId, phoneOrJid) {
   for (const candidate of candidates) {
     try {
       const url = await state.sock.profilePictureUrl(candidate, 'image');
+      console.log(`[avatar] linha ${state.lineId} jid ${candidate}: url=${url || '(empty)'}`);
       if (url) {
         avatarCache.set(key, { url, ts: Date.now() });
         return url;
       }
     } catch (err) {
-      // 401/404 normais; logar apenas erros inesperados
       const code = err?.output?.statusCode;
-      if (code && code !== 401 && code !== 404) {
-        console.error(`[avatar] linha ${state.lineId} jid ${candidate}: ${err.message} (status ${code})`);
-      }
+      console.error(`[avatar] linha ${state.lineId} jid ${candidate}: ${err.message} (status ${code || '?'})`);
     }
   }
   avatarCache.set(key, { url: null, ts: Date.now() });
