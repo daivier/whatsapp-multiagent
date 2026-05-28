@@ -1,20 +1,21 @@
 const express = require('express');
 const router = express.Router();
 const db = require('../db/schema');
-const { authMiddleware } = require('../middleware/auth');
+const { authMiddleware, ownerOnly, supervisorOrOwner } = require('../middleware/auth');
 const { runLidMerge, getProfilePictureUrl, getDefaultLineId } = require('../whatsapp/client');
 const ioInstance = require('../io-instance');
 
 router.use(authMiddleware);
 
-// Criar contacto individual
+// Criar contacto individual — aberto a atendentes (autonomia).
+// Audit: regista created_by para saber quem trouxe o lead.
 router.post('/', (req, res) => {
   const { phone, name } = req.body;
   if (!phone?.trim()) return res.status(400).json({ error: 'Número obrigatório' });
   const cleanPhone = phone.trim().replace(/[\s\-().]/g, '');
   const existing = db.prepare('SELECT id FROM contacts WHERE phone = ?').get(cleanPhone);
   if (existing) return res.status(409).json({ error: 'Contacto já existe', id: existing.id });
-  db.prepare('INSERT INTO contacts (phone, name) VALUES (?, ?)').run(cleanPhone, name?.trim() || cleanPhone);
+  db.prepare('INSERT INTO contacts (phone, name, created_by) VALUES (?, ?, ?)').run(cleanPhone, name?.trim() || cleanPhone, req.user.id);
   const contact = db.prepare('SELECT * FROM contacts WHERE phone = ?').get(cleanPhone);
   // Verificar se há LID pendente para este número e fundir imediatamente
   setTimeout(runLidMerge, 200);
@@ -39,8 +40,9 @@ router.get('/', (req, res) => {
   res.json(rows);
 });
 
-// Eliminar contacto (e todas as suas conversas e mensagens)
-router.delete('/:id', (req, res) => {
+// Eliminar contacto (e todas as suas conversas e mensagens). Owner only —
+// é destrutivo e arrasta histórico inteiro. Atendente nao mexe.
+router.delete('/:id', ownerOnly, (req, res) => {
   const id = req.params.id;
   // Apagar mensagens de todas as conversas deste contacto
   db.prepare(`
@@ -65,8 +67,9 @@ router.delete('/:id', (req, res) => {
   res.json({ ok: true });
 });
 
-// Limpar contactos inválidos (grupos, broadcast, newsletter) sem conversas
-router.delete('/cleanup/invalid', (req, res) => {
+// Limpar contactos inválidos (grupos, broadcast, newsletter) sem conversas.
+// Owner only — operação em massa.
+router.delete('/cleanup/invalid', ownerOnly, (req, res) => {
   const result = db.prepare(`
     DELETE FROM contacts
     WHERE (

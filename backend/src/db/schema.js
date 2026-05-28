@@ -347,3 +347,7 @@ try { db.exec(`ALTER TABLE messages ADD COLUMN wa_status INTEGER NOT NULL DEFAUL
 // Formato: [{ emoji: '👍', users: [{id:1,name:'Sávio'}|{id:null,name:'Cliente'}], count: 2 }]
 // id:null representa o contacto externo (cliente WhatsApp).
 try { db.exec(`ALTER TABLE messages ADD COLUMN reactions TEXT`); } catch (_) {}
+
+// Migração: contactos têm autor (quem os criou) para audit/LGPD.
+// Pode ser NULL para contactos criados antes desta migração ou via inbound.
+try { db.exec(`ALTER TABLE contacts ADD COLUMN created_by INTEGER REFERENCES users(id) ON DELETE SET NULL`); } catch (_) {}
