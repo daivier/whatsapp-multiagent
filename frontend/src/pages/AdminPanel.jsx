@@ -75,6 +75,10 @@ export default function AdminPanel({ socket }) {
 
   const [quickReplies, setQuickReplies] = useState([]);
   const [newQR, setNewQR] = useState({ shortcut: '', body: '', category: '', is_personal: false });
+  const [editingQR, setEditingQR] = useState(null); // o quick-reply a editar (objecto inteiro)
+  const [editQRForm, setEditQRForm] = useState({ shortcut: '', body: '', category: '' });
+  const [editQRSaving, setEditQRSaving] = useState(false);
+  const [editQRError, setEditQRError] = useState('');
 
   const [tags, setTags] = useState([]);
   const [newTag, setNewTag] = useState({ name: '', color: '#25D366' });
@@ -400,6 +404,26 @@ export default function AdminPanel({ socket }) {
   }
   async function deleteQuickReply(id) {
     await api.delete(`/quick-replies/${id}`); loadQuickReplies();
+  }
+  async function saveEditQuickReply() {
+    if (!editingQR) return;
+    if (!editQRForm.shortcut.trim() || !editQRForm.body.trim()) {
+      setEditQRError('Atalho e texto são obrigatórios');
+      return;
+    }
+    setEditQRSaving(true); setEditQRError('');
+    try {
+      await api.patch(`/quick-replies/${editingQR.id}`, {
+        shortcut: editQRForm.shortcut.trim(),
+        body: editQRForm.body,
+        category: editQRForm.category.trim() || null,
+      });
+      setEditingQR(null);
+      loadQuickReplies();
+    } catch (err) {
+      setEditQRError(err.response?.data?.error || 'Erro ao guardar');
+    }
+    setEditQRSaving(false);
   }
   async function addTag(e) {
     e.preventDefault();
@@ -794,6 +818,50 @@ export default function AdminPanel({ socket }) {
                 ))}
               </tbody>
             </table>
+          </div>
+        )}
+
+        {/* MODAL EDITAR RESPOSTA RÁPIDA */}
+        {editingQR && (
+          <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.45)', zIndex: 600, display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+            onClick={() => setEditingQR(null)}>
+            <div onClick={e => e.stopPropagation()} style={{ background: 'var(--card)', borderRadius: 'var(--r-md)', boxShadow: 'var(--sh-md)', width: '100%', maxWidth: '560px', padding: '1.5rem', display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <strong style={{ fontSize: '1rem' }}>✏️ Editar resposta rápida</strong>
+                <button onClick={() => setEditingQR(null)} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: '1rem', color: 'var(--muted)' }}>✕</button>
+              </div>
+              <div>
+                <label style={{ fontSize: '0.82rem', fontWeight: 600, color: 'var(--muted)', display: 'block', marginBottom: '0.3rem' }}>Atalho</label>
+                <input style={S.input} value={editQRForm.shortcut} onChange={e => setEditQRForm(p => ({ ...p, shortcut: e.target.value }))} placeholder="/atalho" />
+              </div>
+              <div>
+                <label style={{ fontSize: '0.82rem', fontWeight: 600, color: 'var(--muted)', display: 'block', marginBottom: '0.3rem' }}>Texto da resposta</label>
+                <textarea
+                  style={{ ...S.input, width: '100%', minHeight: '180px', resize: 'vertical', fontFamily: 'inherit', lineHeight: 1.4 }}
+                  value={editQRForm.body}
+                  onChange={e => setEditQRForm(p => ({ ...p, body: e.target.value }))}
+                  placeholder="Texto da resposta (suporta múltiplas linhas)" />
+                <p style={{ margin: '0.25rem 0 0', fontSize: '0.72rem', color: 'var(--hint)' }}>
+                  Podes usar variáveis: <code>{`{{primeiro_nome}}`}</code>, <code>{`{{atendente}}`}</code>, <code>{`{{saudacao}}`}</code>, etc.
+                </p>
+              </div>
+              <div>
+                <label style={{ fontSize: '0.82rem', fontWeight: 600, color: 'var(--muted)', display: 'block', marginBottom: '0.3rem' }}>Categoria <span style={{ fontWeight: 400, color: 'var(--hint)' }}>(opcional)</span></label>
+                <input style={S.input} value={editQRForm.category} onChange={e => setEditQRForm(p => ({ ...p, category: e.target.value }))} placeholder="Ex: Atendimento, E-commerce" />
+              </div>
+              {editingQR.owner_user_id !== null && (
+                <p style={{ margin: 0, fontSize: '0.78rem', color: 'var(--hint)' }}>
+                  👤 Pessoal de <strong>{editingQR.owner_name || '?'}</strong> — visibilidade não pode ser alterada aqui.
+                </p>
+              )}
+              {editQRError && <p style={{ margin: 0, color: 'var(--danger)', fontSize: '0.83rem', background: 'var(--danger-l)', padding: '0.4rem 0.6rem', borderRadius: 'var(--r-sm)' }}>{editQRError}</p>}
+              <div style={{ display: 'flex', gap: '0.5rem', justifyContent: 'flex-end', marginTop: '0.25rem' }}>
+                <button onClick={() => setEditingQR(null)} style={{ padding: '0.4rem 1rem', border: '1px solid var(--border-m)', background: 'none', borderRadius: 'var(--r-sm)', cursor: 'pointer', fontSize: '0.85rem' }}>Cancelar</button>
+                <button onClick={saveEditQuickReply} disabled={editQRSaving} style={{ padding: '0.4rem 1.2rem', background: 'var(--accent)', color: '#fff', border: 'none', borderRadius: 'var(--r-sm)', cursor: 'pointer', fontWeight: 600, fontSize: '0.85rem', opacity: editQRSaving ? 0.7 : 1 }}>
+                  {editQRSaving ? 'A guardar...' : 'Guardar'}
+                </button>
+              </div>
+            </div>
           </div>
         )}
 
@@ -1364,19 +1432,25 @@ export default function AdminPanel({ socket }) {
               </p>
             </details>
 
-            <form onSubmit={addQuickReply} style={{ ...S.form, flexWrap: 'wrap' }}>
-              <input style={{ ...S.input, width: '110px' }} placeholder="/atalho" value={newQR.shortcut}
-                onChange={e => setNewQR(p => ({ ...p, shortcut: e.target.value }))} required />
-              <input style={{ ...S.input, flex: 1, minWidth: '180px' }} placeholder="Texto da resposta" value={newQR.body}
-                onChange={e => setNewQR(p => ({ ...p, body: e.target.value }))} required />
-              <input style={{ ...S.input, width: '120px' }} placeholder="Categoria (opcional)" value={newQR.category}
-                onChange={e => setNewQR(p => ({ ...p, category: e.target.value }))} />
-              <label title="Marca para criar apenas para ti; desmarcado = global (toda a equipa usa)"
-                style={{ display: 'inline-flex', alignItems: 'center', gap: '0.3rem', fontSize: '0.78rem', color: 'var(--muted)', cursor: 'pointer', padding: '0 0.5rem' }}>
-                <input type="checkbox" checked={newQR.is_personal} onChange={e => setNewQR(p => ({ ...p, is_personal: e.target.checked }))} />
-                Pessoal
-              </label>
-              <button style={S.addBtn} type="submit">Adicionar</button>
+            <form onSubmit={addQuickReply} style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', marginBottom: '1rem' }}>
+              <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap', alignItems: 'flex-start' }}>
+                <input style={{ ...S.input, width: '140px' }} placeholder="/atalho" value={newQR.shortcut}
+                  onChange={e => setNewQR(p => ({ ...p, shortcut: e.target.value }))} required />
+                <input style={{ ...S.input, width: '160px' }} placeholder="Categoria (opcional)" value={newQR.category}
+                  onChange={e => setNewQR(p => ({ ...p, category: e.target.value }))} />
+                <label title="Marca para criar apenas para ti; desmarcado = global (toda a equipa usa)"
+                  style={{ display: 'inline-flex', alignItems: 'center', gap: '0.3rem', fontSize: '0.78rem', color: 'var(--muted)', cursor: 'pointer', padding: '0 0.5rem', height: '34px' }}>
+                  <input type="checkbox" checked={newQR.is_personal} onChange={e => setNewQR(p => ({ ...p, is_personal: e.target.checked }))} />
+                  Pessoal
+                </label>
+                <button style={S.addBtn} type="submit">Adicionar</button>
+              </div>
+              <textarea
+                style={{ ...S.input, width: '100%', minHeight: '90px', resize: 'vertical', fontFamily: 'inherit', lineHeight: 1.4 }}
+                placeholder="Texto da resposta (suporta múltiplas linhas — usa Shift+Enter ou simplesmente quebra de linha)"
+                value={newQR.body}
+                onChange={e => setNewQR(p => ({ ...p, body: e.target.value }))}
+                required />
             </form>
             <table style={S.table}>
               <thead><tr><th>Atalho</th><th>Mensagem</th><th>Visibilidade</th><th>Categoria</th><th></th></tr></thead>
@@ -1384,7 +1458,7 @@ export default function AdminPanel({ socket }) {
                 {quickReplies.map(qr => (
                   <tr key={qr.id}>
                     <td><strong style={{ color: 'var(--accent)' }}>/{qr.shortcut}</strong></td>
-                    <td style={{ maxWidth: '300px', wordBreak: 'break-word', color: 'var(--muted)' }}>{qr.body}</td>
+                    <td style={{ maxWidth: '320px', wordBreak: 'break-word', color: 'var(--muted)', whiteSpace: 'pre-wrap', fontSize: '0.85rem' }}>{qr.body}</td>
                     <td>
                       {qr.owner_user_id === null ? (
                         <span style={{ background: 'var(--success-l)', color: 'var(--success)', padding: '1px 8px', borderRadius: '999px', fontSize: '0.72rem', fontWeight: 600 }}>🌐 Global</span>
@@ -1399,7 +1473,13 @@ export default function AdminPanel({ socket }) {
                         ? <span style={{ background: 'var(--accent-l)', color: 'var(--accent)', padding: '1px 8px', borderRadius: '999px', fontSize: '0.75rem', fontWeight: 600 }}>{qr.category}</span>
                         : <span style={{ color: 'var(--hint)', fontSize: '0.78rem' }}>—</span>}
                     </td>
-                    <td><button style={{ ...S.outlineBtn, color: 'var(--danger)', borderColor: 'var(--danger)' }} onClick={() => deleteQuickReply(qr.id)}>Eliminar</button></td>
+                    <td style={{ display: 'flex', gap: '0.35rem' }}>
+                      <button style={{ ...S.outlineBtn, borderColor: 'var(--accent)', color: 'var(--accent)' }}
+                        onClick={() => { setEditingQR(qr); setEditQRForm({ shortcut: qr.shortcut, body: qr.body, category: qr.category || '' }); setEditQRError(''); }}>
+                        Editar
+                      </button>
+                      <button style={{ ...S.outlineBtn, color: 'var(--danger)', borderColor: 'var(--danger)' }} onClick={() => deleteQuickReply(qr.id)}>Eliminar</button>
+                    </td>
                   </tr>
                 ))}
               </tbody>
