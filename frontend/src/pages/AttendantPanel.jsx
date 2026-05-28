@@ -3,6 +3,7 @@ import ConversationList from '../components/ConversationList';
 import ChatWindow from '../components/ChatWindow';
 import ScheduledMessagesPage from './ScheduledMessagesPage';
 import MyQuickRepliesPage from './MyQuickRepliesPage';
+import InternalChatPage from './InternalChatPage';
 import { useAuth } from '../context/AuthContext';
 import { useNotifications } from '../hooks/useNotifications';
 import PushNotificationsButton from '../components/PushNotificationsButton';
@@ -52,7 +53,8 @@ export default function AttendantPanel({ socket }) {
     return (s && s !== 'offline') ? s : 'online';
   });
   const [onShift, setOnShift] = useState(!!(user.on_shift));
-  const [view, setView] = useState('conversations'); // 'conversations' | 'scheduled' | 'snippets'
+  const [view, setView] = useState('conversations'); // 'conversations' | 'scheduled' | 'snippets' | 'chat'
+  const [internalUnread, setInternalUnread] = useState(0);
   const [isMobile, setIsMobile] = useState(window.innerWidth < 640);
 
   // Re-sincroniza o turno ao montar (garante que está actualizado após re-login)
@@ -153,6 +155,12 @@ export default function AttendantPanel({ socket }) {
         <button style={{ ...S.navBtn, ...(view === 'snippets' ? S.navBtnActive : {}) }} onClick={() => setView('snippets')}>
           ⚡ Meus atalhos
         </button>
+        <button style={{ ...S.navBtn, ...(view === 'chat' ? S.navBtnActive : {}), position: 'relative' }} onClick={() => setView('chat')}>
+          💬 Chat Interno
+          {internalUnread > 0 && (
+            <span style={{ position: 'absolute', top: '2px', right: '4px', background: view === 'chat' ? '#fff' : 'var(--accent)', color: view === 'chat' ? 'var(--accent)' : '#fff', borderRadius: '999px', fontSize: '0.62rem', fontWeight: 700, padding: '0px 4px', minWidth: '14px', textAlign: 'center', lineHeight: '14px' }}>{internalUnread > 99 ? '99+' : internalUnread}</span>
+          )}
+        </button>
       </div>
 
       <div style={S.body}>
@@ -160,6 +168,10 @@ export default function AttendantPanel({ socket }) {
           <ScheduledMessagesPage socket={socket} />
         ) : view === 'snippets' ? (
           <MyQuickRepliesPage />
+        ) : view === 'chat' ? (
+          <div style={{ flex: 1, display: 'flex', minHeight: 0, overflow: 'hidden' }}>
+            <InternalChatPage socket={socket} onUnreadChange={setInternalUnread} />
+          </div>
         ) : (
           <>
             {showList && (

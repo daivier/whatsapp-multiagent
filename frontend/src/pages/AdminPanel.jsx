@@ -8,6 +8,7 @@ import PushNotificationsButton from '../components/PushNotificationsButton';
 import { useTheme } from '../hooks/useTheme';
 import ReportsPage from './ReportsPage';
 import DashboardPage from './DashboardPage';
+import InternalChatPage from './InternalChatPage';
 
 const COLORS = ['#ef4444','#f97316','#eab308','#22c55e','#3b82f6','#8b5cf6','#ec4899','#6b7280'];
 
@@ -29,6 +30,7 @@ export default function AdminPanel({ socket }) {
   const { user, logout } = useAuth();
   const { dark, toggle: toggleTheme } = useTheme();
   const [tab, setTab] = useState('dashboard');
+  const [internalUnread, setInternalUnread] = useState(0);
   const [selectedConv, setSelectedConv] = useState(null);
   const [takenNotice, setTakenNotice] = useState(null);
   useNotifications(socket, selectedConv, user);
@@ -638,7 +640,7 @@ export default function AdminPanel({ socket }) {
     ['transfers','Transferências'],['quickreplies','Respostas Rápidas'],
     ['tags','Etiquetas'],['automation','🤖 Automação'],['bot','Bot'],
     ['signature','🔔 Assinatura'],['rating','⭐ Avaliação'],
-    ['blacklist','🚫 Blacklist'],['broadcast','📣 Envio em Massa'],['whatsapp','WhatsApp'],
+    ['blacklist','🚫 Blacklist'],['broadcast','📣 Envio em Massa'],['whatsapp','WhatsApp'],['chat','💬 Chat Interno'],
   ];
 
   function selectTab(key) {
@@ -673,7 +675,12 @@ export default function AdminPanel({ socket }) {
           </div>
           <nav style={S.nav}>
             {TABS.map(([key, label]) => (
-              <button key={key} style={{ ...S.navBtn, ...(tab === key ? S.navActive : {}) }} onClick={() => selectTab(key)}>{label}</button>
+              <button key={key} style={{ ...S.navBtn, ...(tab === key ? S.navActive : {}), position: 'relative' }} onClick={() => selectTab(key)}>
+                {label}
+                {key === 'chat' && internalUnread > 0 && (
+                  <span style={{ position: 'absolute', top: '4px', right: '8px', background: 'var(--accent)', color: '#fff', borderRadius: '999px', fontSize: '0.65rem', fontWeight: 700, padding: '1px 5px', minWidth: '16px', textAlign: 'center' }}>{internalUnread > 99 ? '99+' : internalUnread}</span>
+                )}
+              </button>
             ))}
           </nav>
         </div>
@@ -2074,6 +2081,13 @@ export default function AdminPanel({ socket }) {
               </div>
             )}
             {!whatsappReady && !qrCode && <p style={{ color: 'var(--hint)' }}>A aguardar QR Code...</p>}
+          </div>
+        )}
+
+        {/* CHAT INTERNO */}
+        {tab === 'chat' && (
+          <div style={{ flex: 1, display: 'flex', minHeight: 0, overflow: 'hidden' }}>
+            <InternalChatPage socket={socket} onUnreadChange={setInternalUnread} />
           </div>
         )}
       </main>
