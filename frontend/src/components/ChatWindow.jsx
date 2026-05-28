@@ -1,4 +1,5 @@
 import { useState, useEffect, useLayoutEffect, useRef } from 'react';
+import AudioPlayer from './AudioPlayer';
 import api from '../api';
 import { useAuth } from '../context/AuthContext';
 import ContactHistory from './ContactHistory';
@@ -122,7 +123,7 @@ function MessageContent({ msg, onMediaLoad }) {
   if (msg.media_url && msg.media_type?.startsWith('audio/')) {
     return (
       <>
-        <audio controls src={`${API}${msg.media_url}`} style={{ maxWidth: '100%', display: 'block' }} />
+        <AudioPlayer src={`${API}${msg.media_url}`} />
         {msg.body && (
           <p title="Transcrição automática" style={{ margin: '0.35rem 0 0', fontSize: '0.85rem', fontStyle: 'italic', color: 'var(--muted)', borderLeft: '2px solid var(--border-m)', paddingLeft: '0.5rem', whiteSpace: 'pre-wrap', overflowWrap: 'break-word' }}>
             🎤 {msg.body}
@@ -175,6 +176,9 @@ export default function ChatWindow({ conversation: convProp, socket, onClose, on
   const [scheduleAt, setScheduleAt] = useState('');
   const [scheduleSaving, setScheduleSaving] = useState(false);
   const [uploadingFile, setUploadingFile] = useState(false);
+  const [pendingFile, setPendingFile] = useState(null);    // file waiting for caption
+  const [pendingCaption, setPendingCaption] = useState('');
+  const [pendingPreviewUrl, setPendingPreviewUrl] = useState(null);
   // Reply to message
   const [replyTo, setReplyTo] = useState(null); // { id, body, from_me, sender_name }
   // Edit message
@@ -195,6 +199,7 @@ export default function ChatWindow({ conversation: convProp, socket, onClose, on
   const [transferring, setTransferring] = useState(false);
   // Export
   const [showExport, setShowExport] = useState(false);
+  const [showOverflow, setShowOverflow] = useState(false);
   // @mention autocomplete
   const [teamUsers, setTeamUsers] = useState([]);
   const [mentionActive, setMentionActive] = useState(false);
@@ -205,6 +210,14 @@ export default function ChatWindow({ conversation: convProp, socket, onClose, on
   const bottomRef = useRef(null);
   // Rastreia IDs já adicionados ao estado — evita duplicatas por re-render de effect ou eventos duplos
   const seenMsgIds = useRef(new Set());
+
+  // Audio recording
+  const [recording, setRecording] = useState(false);
+  const [recordSeconds, setRecordSeconds] = useState(0);
+  const [audioFile, setAudioFile] = useState(null);
+  const mediaRecorderRef = useRef(null);
+  const audioChunksRef = useRef([]);
+  const recordTimerRef = useRef(null);
 
   // Sync conversation prop → state (close/reopen updates it); reset panels on conversation change
   useEffect(() => {
@@ -432,16 +445,79 @@ export default function ChatWindow({ conversation: convProp, socket, onClose, on
     });
   }
 
-  async function sendFile(file) {
+  function formatRecordSecs(s) {
+    const m = Math.floor(s / 60);
+    return `${String(m).padStart(2,'0')}:${String(s % 60).padStart(2,'0')}`;
+  }
+
+  async function startRecording() {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const mimeType = MediaRecorder.isTypeSupported('audio/webm;codecs=opus')
+        ? 'audio/webm;codecs=opus'
+        : MediaRecorder.isTypeSupported('audio/webm') ? 'audio/webm' : 'audio/mp4';
+      const mr = new MediaRecorder(stream, { mimeType });
+      audioChunksRef.current = [];
+      mr.ondataavailable = e => { if (e.data.size > 0) audioChunksRef.current.push(e.data); };
+      mr.onstop = () => {
+        stream.getTracks().forEach(t => t.stop());
+        const blob = new Blob(audioChunksRef.current, { type: mimeType });
+        const ext = mimeType.includes('mp4') ? 'm4a' : 'webm';
+        const af = new File([blob], `audio_${Date.now()}.${ext}`, { type: mimeType });
+        setAudioFile(af);
+        setRecording(false);
+        clearInterval(recordTimerRef.current);
+      };
+      mr.start(200);
+      mediaRecorderRef.current = mr;
+      setRecording(true);
+      setRecordSeconds(0);
+      recordTimerRef.current = setInterval(() => setRecordSeconds(s => s + 1), 1000);
+    } catch (err) {
+      alert('Sem permissão para usar o microfone: ' + err.message);
+    }
+  }
+
+  function stopRecording() {
+    if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
+      mediaRecorderRef.current.stop();
+    }
+  }
+
+  function cancelRecording() {
+    if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
+      mediaRecorderRef.current.ondataavailable = null;
+      mediaRecorderRef.current.onstop = () => {
+        mediaRecorderRef.current.stream?.getTracks().forEach(t => t.stop());
+      };
+      mediaRecorderRef.current.stop();
+    }
+    setRecording(false);
+    setRecordSeconds(0);
+    clearInterval(recordTimerRef.current);
+    audioChunksRef.current = [];
+    setAudioFile(null);
+  }
+
+  async function sendAudio() {
+    if (!audioFile) return;
+    const f = audioFile;
+    setAudioFile(null);
+    setRecordSeconds(0);
+    await sendFile(f);
+  }
+
+  async function sendFile(file, caption = '') {
     if (!file) return;
     setUploadingFile(true);
     setWarning('');
     const tempId = `temp-media-${Date.now()}`;
-    // Mostrar placeholder enquanto faz upload
-    setMessages(prev => [...prev, { id: tempId, from_me: 1, body: `📎 ${file.name}`, conversation_id: conversation.id, timestamp: new Date().toISOString(), sender_name: user.name }]);
+    const tempBody = caption ? `📎 ${caption}` : `📎 ${file.name}`;
+    setMessages(prev => [...prev, { id: tempId, from_me: 1, body: tempBody, conversation_id: conversation.id, timestamp: new Date().toISOString(), sender_name: user.name }]);
     try {
       const formData = new FormData();
       formData.append('file', file);
+      if (caption) formData.append('caption', caption);
       const { data: message } = await api.post(`/conversations/${conversation.id}/send-media`, formData, {
         headers: { 'Content-Type': 'multipart/form-data' },
       });
@@ -752,12 +828,7 @@ export default function ChatWindow({ conversation: convProp, socket, onClose, on
             <span style={S.attendantBadge}>{conversation.attendant_name || 'Sem atendente'}</span>
           )}
 
-          {/* Histórico 360 do contacto */}
-          <button style={S.iconBtn} onClick={() => setShowContact360(v => !v)} title="Histórico do contacto">
-            📊
-          </button>
-
-          {/* Prioridade */}
+          {/* Prioridade — sempre visível */}
           <div style={{ position: 'relative' }}>
             <button style={{ ...S.iconBtn, color: currentPriority.color, borderColor: currentPriority.color + '66' }}
               onClick={() => setShowPriorityPicker(v => !v)} title="Prioridade">
@@ -776,75 +847,127 @@ export default function ChatWindow({ conversation: convProp, socket, onClose, on
             )}
           </div>
 
-          {/* Etiquetas */}
+          {/* Menu ⋯ — ações secundárias */}
           <div style={{ position: 'relative' }}>
-            <button style={S.iconBtn} onClick={() => setShowTagPicker(v => !v)} title="Etiquetas">🏷️</button>
-            {showTagPicker && (
-              <div style={S.tagPicker}>
-                {allTags.length === 0 && <p style={{ margin: 0, color: 'var(--hint)', fontSize: '0.8rem' }}>Sem etiquetas criadas</p>}
-                {allTags.map(t => {
-                  const active = convTags.some(ct => ct.id === t.id);
-                  return (
-                    <div key={t.id} onClick={() => toggleTag(t)} style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', padding: '0.35rem 0.5rem', cursor: 'pointer', borderRadius: 'var(--r-sm)', background: active ? t.color + '15' : 'none' }}>
-                      <span style={{ width: 9, height: 9, borderRadius: '50%', background: t.color, flexShrink: 0 }} />
-                      <span style={{ fontSize: '0.85rem', flex: 1, color: 'var(--text)' }}>{t.name}</span>
-                      {active && <span style={{ color: t.color, fontWeight: 700, fontSize: '0.85rem' }}>✓</span>}
-                    </div>
-                  );
-                })}
-              </div>
-            )}
-          </div>
-
-          {/* Exportar */}
-          <div style={{ position: 'relative' }}>
-            <button style={S.iconBtn} onClick={() => setShowExport(v => !v)} title="Exportar histórico">📥</button>
-            {showExport && (
-              <div style={{ ...S.tagPicker, right: 0, minWidth: '150px' }}>
-                <div onClick={() => { exportCSV(); setShowExport(false); }}
-                  style={{ padding: '0.4rem 0.65rem', cursor: 'pointer', fontSize: '0.83rem', borderRadius: 'var(--r-sm)', display: 'flex', alignItems: 'center', gap: '0.4rem' }}
-                  onMouseEnter={e => e.currentTarget.style.background = 'var(--bg)'}
-                  onMouseLeave={e => e.currentTarget.style.background = 'none'}>
-                  📊 Exportar CSV
-                </div>
-                <div onClick={() => { exportPDF(); setShowExport(false); }}
-                  style={{ padding: '0.4rem 0.65rem', cursor: 'pointer', fontSize: '0.83rem', borderRadius: 'var(--r-sm)', display: 'flex', alignItems: 'center', gap: '0.4rem' }}
-                  onMouseEnter={e => e.currentTarget.style.background = 'var(--bg)'}
-                  onMouseLeave={e => e.currentTarget.style.background = 'none'}>
-                  🖨️ Imprimir / PDF
-                </div>
-              </div>
-            )}
-          </div>
-
-          <button style={S.iconBtn} onClick={loadHistory} title="Histórico">🕐</button>
-          {user.role === 'owner' && (
-            <button style={{ ...S.iconBtn, color: 'var(--danger)', borderColor: 'var(--danger)' }}
-              title="Bloquear contacto"
-              onClick={async () => {
-                const phone = conversation.phone;
-                if (!confirm(`Bloquear ${conversation.contact_name || phone}?\nAs mensagens futuras deste número serão silenciosamente ignoradas.`)) return;
-                try {
-                  await api.post('/blacklist', { phone, reason: 'Bloqueado via chat' });
-                  alert(`${phone} adicionado à blacklist.`);
-                } catch (err) {
-                  const msg = err.response?.data?.error;
-                  if (msg === 'Número já está na blacklist') alert('Este número já está bloqueado.');
-                  else alert('Erro: ' + (msg || err.message));
-                }
-              }}>
-              🚫
+            <button style={{ ...S.iconBtn, fontWeight: 700, fontSize: '1.1rem', letterSpacing: '-1px', color: showOverflow ? 'var(--accent)' : 'var(--muted)', borderColor: showOverflow ? 'var(--accent)' : 'var(--border-m)' }}
+              onClick={() => setShowOverflow(v => !v)} title="Mais ações">
+              ⋯
             </button>
+            {showOverflow && (
+              <div style={{ ...S.tagPicker, right: 0, minWidth: '185px', zIndex: 200 }}>
+
+                <div onClick={() => { setShowContact360(v => !v); setShowOverflow(false); }}
+                  style={{ padding: '0.4rem 0.65rem', cursor: 'pointer', fontSize: '0.83rem', borderRadius: 'var(--r-sm)', display: 'flex', alignItems: 'center', gap: '0.5rem' }}
+                  onMouseEnter={e => e.currentTarget.style.background = 'var(--bg)'}
+                  onMouseLeave={e => e.currentTarget.style.background = 'none'}>
+                  📊 Histórico contacto
+                </div>
+
+                <div onClick={() => { setShowTagPicker(v => !v); setShowOverflow(false); }}
+                  style={{ padding: '0.4rem 0.65rem', cursor: 'pointer', fontSize: '0.83rem', borderRadius: 'var(--r-sm)', display: 'flex', alignItems: 'center', gap: '0.5rem' }}
+                  onMouseEnter={e => e.currentTarget.style.background = 'var(--bg)'}
+                  onMouseLeave={e => e.currentTarget.style.background = 'none'}>
+                  🏷️ Etiquetas {convTags.length > 0 && <span style={{ background: 'var(--accent)', color: '#fff', borderRadius: '999px', fontSize: '0.65rem', padding: '0 5px', fontWeight: 700, marginLeft: '2px' }}>{convTags.length}</span>}
+                </div>
+
+                <div onClick={() => { setShowExport(v => !v); setShowOverflow(false); }}
+                  style={{ padding: '0.4rem 0.65rem', cursor: 'pointer', fontSize: '0.83rem', borderRadius: 'var(--r-sm)', display: 'flex', alignItems: 'center', gap: '0.5rem' }}
+                  onMouseEnter={e => e.currentTarget.style.background = 'var(--bg)'}
+                  onMouseLeave={e => e.currentTarget.style.background = 'none'}>
+                  📥 Exportar histórico
+                </div>
+
+                <div onClick={() => { loadHistory(); setShowOverflow(false); }}
+                  style={{ padding: '0.4rem 0.65rem', cursor: 'pointer', fontSize: '0.83rem', borderRadius: 'var(--r-sm)', display: 'flex', alignItems: 'center', gap: '0.5rem' }}
+                  onMouseEnter={e => e.currentTarget.style.background = 'var(--bg)'}
+                  onMouseLeave={e => e.currentTarget.style.background = 'none'}>
+                  🕐 Histórico mensagens
+                </div>
+
+                {!isClosed && (
+                  <div onClick={() => { openTransfer(); setShowOverflow(false); }}
+                    style={{ padding: '0.4rem 0.65rem', cursor: 'pointer', fontSize: '0.83rem', borderRadius: 'var(--r-sm)', display: 'flex', alignItems: 'center', gap: '0.5rem', color: 'var(--accent)' }}
+                    onMouseEnter={e => e.currentTarget.style.background = 'var(--bg)'}
+                    onMouseLeave={e => e.currentTarget.style.background = 'none'}>
+                    🔄 Transferir conversa
+                  </div>
+                )}
+
+                {user.role === 'owner' && (
+                  <div onClick={async () => {
+                      setShowOverflow(false);
+                      const phone = conversation.phone;
+                      if (!confirm('Bloquear ' + (conversation.contact_name || phone) + '?')) return;
+                      try {
+                        await api.post('/blacklist', { phone, reason: 'Bloqueado via chat' });
+                        alert(phone + ' adicionado à blacklist.');
+                      } catch (err) {
+                        const msg = err.response?.data?.error;
+                        if (msg === 'Número já está na blacklist') alert('Este número já está bloqueado.');
+                        else alert('Erro: ' + (msg || err.message));
+                      }
+                    }}
+                    style={{ padding: '0.4rem 0.65rem', cursor: 'pointer', fontSize: '0.83rem', borderRadius: 'var(--r-sm)', display: 'flex', alignItems: 'center', gap: '0.5rem', color: 'var(--danger)' }}
+                    onMouseEnter={e => e.currentTarget.style.background = 'var(--bg)'}
+                    onMouseLeave={e => e.currentTarget.style.background = 'none'}>
+                    🚫 Bloquear contacto
+                  </div>
+                )}
+
+                {onDelete && (
+                  <div onClick={() => { setShowOverflow(false); onDelete(); }}
+                    style={{ padding: '0.4rem 0.65rem', cursor: 'pointer', fontSize: '0.83rem', borderRadius: 'var(--r-sm)', display: 'flex', alignItems: 'center', gap: '0.5rem', color: 'var(--danger)' }}
+                    onMouseEnter={e => e.currentTarget.style.background = 'var(--bg)'}
+                    onMouseLeave={e => e.currentTarget.style.background = 'none'}>
+                    🗑️ Eliminar conversa
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+
+          {/* Tags picker (posição fixa para não cortar em ecrãs pequenos) */}
+          {showTagPicker && (
+            <div style={{ position: 'fixed', right: '1rem', top: '60px', background: 'var(--card)', border: '1px solid var(--border)', borderRadius: 'var(--r-md)', boxShadow: 'var(--sh-md)', padding: '0.4rem', minWidth: '170px', zIndex: 300 }}>
+              {allTags.length === 0 && <p style={{ margin: 0, color: 'var(--hint)', fontSize: '0.8rem' }}>Sem etiquetas criadas</p>}
+              {allTags.map(t => {
+                const active = convTags.some(ct => ct.id === t.id);
+                return (
+                  <div key={t.id} onClick={() => toggleTag(t)} style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', padding: '0.35rem 0.5rem', cursor: 'pointer', borderRadius: 'var(--r-sm)', background: active ? t.color + '15' : 'none' }}>
+                    <span style={{ width: 9, height: 9, borderRadius: '50%', background: t.color, flexShrink: 0 }} />
+                    <span style={{ fontSize: '0.85rem', flex: 1, color: 'var(--text)' }}>{t.name}</span>
+                    {active && <span style={{ color: t.color, fontWeight: 700, fontSize: '0.85rem' }}>✓</span>}
+                  </div>
+                );
+              })}
+              <div onClick={() => setShowTagPicker(false)} style={{ padding: '0.3rem 0.65rem', cursor: 'pointer', fontSize: '0.75rem', color: 'var(--muted)', textAlign: 'center', borderTop: '1px solid var(--border)', marginTop: '0.3rem' }}>Fechar</div>
+            </div>
           )}
-          {!isClosed && user.role === 'attendant' && (
-            <button style={{ ...S.iconBtn, color: 'var(--accent)', borderColor: 'var(--accent)' }} onClick={openTransfer} title="Transferir conversa">🔄</button>
+
+          {/* Export picker (posição fixa) */}
+          {showExport && (
+            <div style={{ position: 'fixed', right: '1rem', top: '60px', background: 'var(--card)', border: '1px solid var(--border)', borderRadius: 'var(--r-md)', boxShadow: 'var(--sh-md)', padding: '0.4rem', minWidth: '150px', zIndex: 300 }}>
+              <div onClick={() => { exportCSV(); setShowExport(false); }}
+                style={{ padding: '0.4rem 0.65rem', cursor: 'pointer', fontSize: '0.83rem', borderRadius: 'var(--r-sm)', display: 'flex', alignItems: 'center', gap: '0.4rem' }}
+                onMouseEnter={e => e.currentTarget.style.background = 'var(--bg)'}
+                onMouseLeave={e => e.currentTarget.style.background = 'none'}>
+                📊 Exportar CSV
+              </div>
+              <div onClick={() => { exportPDF(); setShowExport(false); }}
+                style={{ padding: '0.4rem 0.65rem', cursor: 'pointer', fontSize: '0.83rem', borderRadius: 'var(--r-sm)', display: 'flex', alignItems: 'center', gap: '0.4rem' }}
+                onMouseEnter={e => e.currentTarget.style.background = 'var(--bg)'}
+                onMouseLeave={e => e.currentTarget.style.background = 'none'}>
+                🖨️ Imprimir / PDF
+              </div>
+              <div onClick={() => setShowExport(false)} style={{ padding: '0.3rem 0.65rem', cursor: 'pointer', fontSize: '0.75rem', color: 'var(--muted)', textAlign: 'center', borderTop: '1px solid var(--border)', marginTop: '0.3rem' }}>Fechar</div>
+            </div>
           )}
+
           {isClosed ? (
             <button style={{ ...S.iconBtn, color: 'var(--success)', borderColor: 'var(--success)' }} onClick={reopenConversation} title="Reabrir conversa">🔓</button>
           ) : (
             <button style={{ ...S.iconBtn, color: 'var(--warn)', borderColor: 'var(--warn)' }} onClick={closeConversation} title="Fechar conversa">🔒</button>
           )}
-          {onDelete && <button style={{ ...S.iconBtn, color: 'var(--danger)', borderColor: 'var(--danger)' }} onClick={onDelete} title="Eliminar conversa">🗑️</button>}
           <button style={S.closeBtn} onClick={onClose} title="Minimizar">✕</button>
         </div>
       </div>
@@ -1131,31 +1254,128 @@ export default function ChatWindow({ conversation: convProp, socket, onClose, on
           {/* Hidden file input */}
           <input ref={fileInputRef} type="file" style={{ display: 'none' }}
             accept="image/*,video/*,audio/*,.pdf,.doc,.docx,.xls,.xlsx,.zip"
-            onChange={e => { sendFile(e.target.files?.[0]); e.target.value = ''; }} />
+            onChange={e => {
+              const file = e.target.files?.[0];
+              e.target.value = '';
+              if (!file) return;
+              if (file.type.startsWith('image/')) {
+                setPendingFile(file);
+                setPendingCaption('');
+                setPendingPreviewUrl(URL.createObjectURL(file));
+              } else {
+                sendFile(file);
+              }
+            }} />
 
           <div style={{ display: 'flex', flexDirection: 'column', flex: 1, gap: '0.3rem' }}>
-            <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
-              <button style={{ ...S.modeBtn, ...(isInternal ? S.modeBtnInternal : {}) }} onClick={() => setIsInternal(v => !v)}>
-                {isInternal ? '🔒 Nota' : '💬 Mensagem'}
-              </button>
-              <span style={{ fontSize: '0.72rem', color: 'var(--hint)' }}>{isInternal ? '@ para mencionar atendente' : '/ para respostas rápidas'}</span>
-            </div>
-            <textarea
-              style={{ ...S.textarea, ...(isInternal ? S.textareaInternal : {}) }}
-              value={text}
-              onChange={handleTyping}
-              onKeyDown={handleKey}
-              placeholder={isInternal ? 'Nota interna (só a equipa vê)...' : 'Escreve uma mensagem...'}
-              rows={2}
-            />
+            {/* Recording bar */}
+            {recording && (
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', padding: '0.45rem 0.75rem', background: '#fee2e2', borderRadius: '8px' }}>
+                <span style={{ width: 9, height: 9, borderRadius: '50%', background: '#ef4444', flexShrink: 0 }} />
+                <span style={{ color: '#ef4444', fontWeight: 700, fontSize: '0.9rem', fontVariantNumeric: 'tabular-nums' }}>{formatRecordSecs(recordSeconds)}</span>
+                <span style={{ color: '#991b1b', fontSize: '0.8rem', flex: 1 }}>A gravar...</span>
+              </div>
+            )}
+            {/* Audio preview after recording */}
+            {audioFile && !recording && (
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', padding: '0.35rem 0.65rem', background: 'var(--accent-l)', borderRadius: '8px' }}>
+                <span style={{ fontSize: '0.8rem', color: 'var(--accent)', fontWeight: 600, flexShrink: 0 }}>🎙️</span>
+                <audio src={URL.createObjectURL(audioFile)} controls style={{ height: 28, flex: 1, minWidth: 0 }} />
+              </div>
+            )}
+            {/* Normal input (hidden while recording/previewing audio) */}
+            {!recording && !audioFile && (
+              <>
+                <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
+                  <button style={{ ...S.modeBtn, ...(isInternal ? S.modeBtnInternal : {}) }} onClick={() => setIsInternal(v => !v)}>
+                    {isInternal ? '🔒 Nota' : '💬 Mensagem'}
+                  </button>
+                  <span style={{ fontSize: '0.72rem', color: 'var(--hint)' }}>{isInternal ? '@ para mencionar atendente' : '/ para respostas rápidas'}</span>
+                </div>
+                <textarea
+                  style={{ ...S.textarea, ...(isInternal ? S.textareaInternal : {}) }}
+                  value={text}
+                  onChange={handleTyping}
+                  onKeyDown={handleKey}
+                  placeholder={isInternal ? 'Nota interna (só a equipa vê)...' : 'Escreve uma mensagem...'}
+                  rows={2}
+                />
+              </>
+            )}
           </div>
           <div style={{ display: 'flex', flexDirection: 'column', gap: '0.3rem' }}>
-            <button style={S.schedIconBtn} onClick={() => fileInputRef.current?.click()} title="Enviar ficheiro" disabled={uploadingFile}>
-              {uploadingFile ? '⏳' : '📎'}
-            </button>
-            <button style={S.schedIconBtn} onClick={() => setShowSchedule(v => !v)} title="Agendar mensagem">📅</button>
-            <button style={{ ...S.schedIconBtn, ...(isSnoozed ? { background: '#e0e7ff', borderColor: '#4338ca' } : {}) }} onClick={() => setShowSnooze(v => !v)} title="Adiar conversa">💤</button>
-            <button style={S.sendBtn} onClick={send} disabled={sending || !text.trim()}>▶</button>
+            {!recording && !audioFile && (
+              <>
+                <button style={S.schedIconBtn} onClick={() => fileInputRef.current?.click()} title="Enviar ficheiro" disabled={uploadingFile}>
+                  {uploadingFile ? '⏳' : '📎'}
+                </button>
+                <button style={S.schedIconBtn} onClick={startRecording} title="Gravar áudio">🎙️</button>
+                <button style={S.schedIconBtn} onClick={() => setShowSchedule(v => !v)} title="Agendar mensagem">📅</button>
+                <button style={{ ...S.schedIconBtn, ...(isSnoozed ? { background: '#e0e7ff', borderColor: '#4338ca' } : {}) }} onClick={() => setShowSnooze(v => !v)} title="Adiar conversa">💤</button>
+                <button style={S.sendBtn} onClick={send} disabled={sending || !text.trim()}>▶</button>
+              </>
+            )}
+            {(recording || audioFile) && (
+              <>
+                <button style={{ ...S.schedIconBtn, color: 'var(--danger)', borderColor: 'var(--danger)' }} onClick={cancelRecording} title="Cancelar">✕</button>
+                {recording
+                  ? <button style={{ ...S.sendBtn, background: '#ef4444' }} onClick={stopRecording} title="Parar gravação">⏹</button>
+                  : <button style={S.sendBtn} onClick={sendAudio} disabled={sending}>▶</button>
+                }
+              </>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* File preview modal — caption for images */}
+      {pendingFile && pendingPreviewUrl && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.7)', zIndex: 500, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '1rem' }}>
+          <div style={{ background: 'var(--card)', borderRadius: 'var(--r-md)', boxShadow: 'var(--sh-md)', width: '100%', maxWidth: '420px', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+            {/* Header */}
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0.75rem 1rem', borderBottom: '1px solid var(--border)' }}>
+              <span style={{ fontWeight: 600, fontSize: '0.95rem', color: 'var(--text)' }}>Enviar imagem</span>
+              <button onClick={() => { setPendingFile(null); setPendingCaption(''); setPendingPreviewUrl(null); }} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: '1.1rem', color: 'var(--muted)' }}>✕</button>
+            </div>
+            {/* Image preview */}
+            <div style={{ background: '#000', maxHeight: '50vh', display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden' }}>
+              <img src={pendingPreviewUrl} alt="preview" style={{ maxWidth: '100%', maxHeight: '50vh', objectFit: 'contain', display: 'block' }} />
+            </div>
+            {/* Caption input */}
+            <div style={{ padding: '0.75rem 1rem', borderTop: '1px solid var(--border)' }}>
+              <input
+                autoFocus
+                style={{ width: '100%', boxSizing: 'border-box', padding: '0.5rem 0.75rem', border: '1px solid var(--border-m)', borderRadius: 'var(--r-sm)', fontSize: '0.9rem', background: 'var(--bg)', color: 'var(--text)', outline: 'none' }}
+                placeholder="Adicionar legenda (opcional)..."
+                value={pendingCaption}
+                onChange={e => setPendingCaption(e.target.value)}
+                onKeyDown={e => {
+                  if (e.key === 'Enter' && !e.shiftKey) {
+                    e.preventDefault();
+                    const f = pendingFile; const cap = pendingCaption;
+                    setPendingFile(null); setPendingCaption(''); setPendingPreviewUrl(null);
+                    sendFile(f, cap);
+                  }
+                  if (e.key === 'Escape') { setPendingFile(null); setPendingCaption(''); setPendingPreviewUrl(null); }
+                }}
+              />
+            </div>
+            {/* Actions */}
+            <div style={{ display: 'flex', gap: '0.5rem', justifyContent: 'flex-end', padding: '0 1rem 1rem' }}>
+              <button onClick={() => { setPendingFile(null); setPendingCaption(''); setPendingPreviewUrl(null); }}
+                style={{ padding: '0.45rem 1rem', background: 'none', border: '1px solid var(--border-m)', borderRadius: 'var(--r-sm)', cursor: 'pointer', fontSize: '0.85rem', color: 'var(--muted)' }}>
+                Cancelar
+              </button>
+              <button onClick={() => {
+                  const f = pendingFile; const cap = pendingCaption;
+                  setPendingFile(null); setPendingCaption(''); setPendingPreviewUrl(null);
+                  sendFile(f, cap);
+                }}
+                style={{ padding: '0.45rem 1.25rem', background: 'var(--accent)', color: '#fff', border: 'none', borderRadius: 'var(--r-sm)', cursor: 'pointer', fontSize: '0.85rem', fontWeight: 600 }}
+                disabled={uploadingFile}>
+                ▶ Enviar
+              </button>
+            </div>
           </div>
         </div>
       )}

@@ -164,8 +164,80 @@ function stars(score) {
   return '⭐'.repeat(Math.round(score || 0));
 }
 
+function ConvPreviewModal({ convId, onClose }) {
+  const [messages, setMessages] = useState([]);
+  const [conv, setConv] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const API = import.meta.env.VITE_API_URL || '';
+
+  useEffect(() => {
+    if (!convId) return;
+    setLoading(true);
+    Promise.all([
+      api.get(`/conversations/${convId}/messages`),
+      api.get(`/conversations`),
+    ]).then(([msgRes]) => {
+      setMessages(Array.isArray(msgRes.data) ? msgRes.data : []);
+      setLoading(false);
+    }).catch(() => setLoading(false));
+  }, [convId]);
+
+  const scoreColors = { 5: '#22c55e', 4: '#84cc16', 3: '#eab308', 2: '#f97316', 1: '#ef4444' };
+
+  function renderBody(msg) {
+    if (msg.media_url && msg.media_type?.startsWith('image/')) {
+      return (
+        <div>
+          <img src={`${API}${msg.media_url}`} alt="" style={{ maxWidth: '100%', maxHeight: 200, borderRadius: 6, display: 'block' }} />
+          {msg.body && <p style={{ margin: '4px 0 0', fontSize: '0.83rem' }}>{msg.body}</p>}
+        </div>
+      );
+    }
+    if (msg.media_url && msg.media_type?.startsWith('audio/')) {
+      return <audio controls src={`${API}${msg.media_url}`} style={{ maxWidth: '100%', height: 32 }} />;
+    }
+    if (msg.media_url) {
+      const fname = msg.media_filename || msg.media_url.split('/').pop();
+      return <span style={{ fontSize: '0.83rem' }}>📎 {fname}{msg.body ? ` — ${msg.body}` : ''}</span>;
+    }
+    return <span style={{ fontSize: '0.83rem', whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>{msg.body}</span>;
+  }
+
+  return (
+    <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.55)', zIndex: 800, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '1rem' }}
+      onClick={e => e.target === e.currentTarget && onClose()}>
+      <div style={{ background: 'var(--card)', borderRadius: 'var(--r-md)', boxShadow: 'var(--sh-md)', width: '100%', maxWidth: 520, maxHeight: '85vh', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+        {/* Header */}
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0.75rem 1rem', borderBottom: '1px solid var(--border)', flexShrink: 0 }}>
+          <span style={{ fontWeight: 600, fontSize: '0.95rem', color: 'var(--text)' }}>💬 Conversa #{convId}</span>
+          <button onClick={onClose} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: '1.1rem', color: 'var(--muted)' }}>✕</button>
+        </div>
+        {/* Messages */}
+        <div style={{ flex: 1, overflowY: 'auto', padding: '1rem', display: 'flex', flexDirection: 'column', gap: '0.5rem', background: 'var(--bg)' }}>
+          {loading && <p style={{ color: 'var(--hint)', textAlign: 'center', fontSize: '0.85rem' }}>A carregar...</p>}
+          {!loading && messages.length === 0 && <p style={{ color: 'var(--hint)', textAlign: 'center', fontSize: '0.85rem' }}>Sem mensagens</p>}
+          {messages.map(msg => (
+            <div key={msg.id} style={{ display: 'flex', flexDirection: 'column', alignItems: msg.from_me ? 'flex-end' : 'flex-start' }}>
+              {msg.sender_name && msg.from_me && (
+                <span style={{ fontSize: '0.68rem', color: 'var(--muted)', marginBottom: 2 }}>{msg.sender_name}</span>
+              )}
+              <div style={{ maxWidth: '78%', padding: '0.45rem 0.65rem', borderRadius: msg.from_me ? '12px 12px 2px 12px' : '12px 12px 12px 2px', background: msg.from_me ? 'var(--wa-bubble, #005c4b)' : 'var(--card)', color: msg.from_me ? '#fff' : 'var(--text)', boxShadow: '0 1px 2px rgba(0,0,0,0.15)' }}>
+                {renderBody(msg)}
+              </div>
+              <span style={{ fontSize: '0.63rem', color: 'var(--hint)', marginTop: 1 }}>
+                {new Date(msg.timestamp?.includes('T') ? msg.timestamp : (msg.timestamp||'').replace(' ','T')+'Z').toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
+              </span>
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function RatingsSection({ period }) {
   const [ratings, setRatings] = useState(null);
+  const [previewConvId, setPreviewConvId] = useState(null);
 
   useEffect(() => {
     api.get('/conversations/ratings', { params: { period } })
@@ -185,6 +257,7 @@ function RatingsSection({ period }) {
   const scoreColors = { 5: '#22c55e', 4: '#84cc16', 3: '#eab308', 2: '#f97316', 1: '#ef4444' };
 
   return (
+    <>
     <div style={{ display: 'flex', gap: '1.25rem', flexWrap: 'wrap' }}>
       {/* Resumo */}
       <div style={{ ...S.chartCard, flex: '1 1 280px' }}>
@@ -232,19 +305,28 @@ function RatingsSection({ period }) {
           <h3 style={S.chartTitle}>🕐 Avaliações Recentes</h3>
           <div style={{ marginTop: '0.75rem', display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
             {ratings.recent.map(r => (
-              <div key={r.id} style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', padding: '0.4rem 0', borderBottom: '1px solid var(--border)' }}>
+              <div key={r.id}
+                onClick={() => r.conversation_id && setPreviewConvId(r.conversation_id)}
+                style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', padding: '0.4rem 0.35rem', borderBottom: '1px solid var(--border)', borderRadius: 6, cursor: r.conversation_id ? 'pointer' : 'default', transition: 'background 0.15s' }}
+                onMouseEnter={e => { if (r.conversation_id) e.currentTarget.style.background = 'var(--accent-l)'; }}
+                onMouseLeave={e => { e.currentTarget.style.background = ''; }}>
                 <span style={{ fontSize: '1rem', minWidth: '20px', textAlign: 'center', color: scoreColors[r.score] }}>{'★'.repeat(r.score)}{'☆'.repeat(5 - r.score)}</span>
                 <div style={{ flex: 1, minWidth: 0 }}>
                   <p style={{ margin: 0, fontSize: '0.82rem', fontWeight: 600, color: 'var(--text)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{r.contact_name || r.phone}</p>
                   <p style={{ margin: 0, fontSize: '0.72rem', color: 'var(--hint)' }}>{r.attendant_name || '—'}</p>
                 </div>
-                <span style={{ fontSize: '0.7rem', color: 'var(--hint)', flexShrink: 0 }}>{new Date(r.created_at.includes('T') ? r.created_at : r.created_at.replace(' ','T')+'Z').toLocaleDateString('pt-BR')}</span>
+                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 2, flexShrink: 0 }}>
+                  <span style={{ fontSize: '0.7rem', color: 'var(--hint)' }}>{new Date(r.created_at.includes('T') ? r.created_at : r.created_at.replace(' ','T')+'Z').toLocaleDateString('pt-BR')}</span>
+                  {r.conversation_id && <span style={{ fontSize: '0.65rem', color: 'var(--accent)' }}>👁 ver conversa</span>}
+                </div>
               </div>
             ))}
           </div>
         </div>
       )}
     </div>
+      {previewConvId && <ConvPreviewModal convId={previewConvId} onClose={() => setPreviewConvId(null)} />}
+    </>
   );
 }
 

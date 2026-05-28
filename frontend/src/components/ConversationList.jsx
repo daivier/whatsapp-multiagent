@@ -583,6 +583,19 @@ export default function ConversationList({ socket, selected, onSelect }) {
                           <span style={{ fontSize: '0.68rem', fontWeight: 600, background: WAIT_BGS[wait.level], color: WAIT_COLORS[wait.level], borderRadius: '4px', padding: '0 4px' }}>
                             ⏱ {wait.label}
                           </span>
+                        ) : conv.status === 'closed' && conv.updated_at ? (
+                          <span style={{ fontSize: '0.68rem', color: 'var(--hint)' }}>
+                            {(() => {
+                              const d = utc(conv.updated_at);
+                              const today = new Date();
+                              if (d.toDateString() === today.toDateString()) {
+                                return d.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+                              }
+                              const yesterday = new Date(today); yesterday.setDate(today.getDate() - 1);
+                              if (d.toDateString() === yesterday.toDateString()) return 'Ontem';
+                              return d.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' });
+                            })()}
+                          </span>
                         ) : null}
                       </div>
                     </div>
