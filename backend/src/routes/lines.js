@@ -10,8 +10,8 @@ const router = express.Router();
 // GET / — lista de linhas activas com contagens + estado WhatsApp ao vivo
 router.get('/', authMiddleware, (req, res) => {
   let lines;
-  if (req.user.role === 'owner' || req.user.role === 'supervisor') {
-    // owner/supervisor veem todas as linhas
+  if (req.user.role === 'owner') {
+    // owner vê todas as linhas (administração)
     lines = db.prepare(`
       SELECT lines.id, lines.name, lines.color, lines.is_default, lines.active, lines.created_at, lines.session_path,
         lines.department_id, d.name AS department_name, d.color AS department_color,
@@ -23,7 +23,8 @@ router.get('/', authMiddleware, (req, res) => {
       ORDER BY lines.is_default DESC, lines.id ASC
     `).all();
   } else {
-    // attendant: apenas linhas do(s) seu(s) departamento(s), ou linhas sem departamento
+    // supervisor e attendant: apenas linhas do(s) seu(s) departamento(s),
+    // ou linhas sem departamento (administrativas/globais)
     lines = db.prepare(`
       SELECT lines.id, lines.name, lines.color, lines.is_default, lines.active, lines.created_at, lines.session_path,
         lines.department_id, d.name AS department_name, d.color AS department_color,

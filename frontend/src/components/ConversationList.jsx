@@ -94,9 +94,11 @@ export default function ConversationList({ socket, selected, onSelect }) {
       api.get('/users').then(({ data }) => setAttendants(Array.isArray(data) ? data.filter(u => u.role === 'attendant' && u.active) : [])).catch(() => {});
     }
     api.get('/departments').then(({ data }) => {
-      // Owner/supervisor vê todos os depts (com count); atendente só os seus.
+      // Owner vê todos os depts (administração). Supervisor e atendente só os
+      // seus (consistente com o filtro de conversas do backend — não faz
+      // sentido mostrar chip de dept que não traz conversas).
       const all = Array.isArray(data) ? data : [];
-      const list = (user.role === 'owner' || user.role === 'supervisor') ? all : all.filter(d => d.is_mine);
+      const list = user.role === 'owner' ? all : all.filter(d => d.is_mine);
       setMyDepartments(list);
       // Validar filtro persistido — se o dept guardado já não existe, limpar
       if (filterDept && !list.find(d => String(d.id) === String(filterDept))) setFilterDept('');
