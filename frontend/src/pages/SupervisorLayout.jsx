@@ -69,8 +69,8 @@ export default function SupervisorLayout({ socket }) {
     <div style={{ display: 'flex', flexDirection: 'column', height: '100vh', overflow: 'hidden', background: 'var(--bg)' }}>
 
       {/* Top bar */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', padding: '0 1rem', height: 52, background: 'var(--card)', borderBottom: '1px solid var(--border)', flexShrink: 0, flexWrap: 'wrap' }}>
-        <span style={{ fontWeight: 700, fontSize: '0.95rem', color: 'var(--accent)', marginRight: '0.5rem' }}>💬 WhatsApp Multi-Atendente</span>
+      <div style={{ display: 'flex', alignItems: 'center', gap: isMobile ? '0.4rem' : '0.75rem', padding: '0.4rem 0.75rem', minHeight: 52, background: 'var(--card)', borderBottom: '1px solid var(--border)', flexShrink: 0, flexWrap: 'wrap' }}>
+        <span style={{ fontWeight: 700, fontSize: isMobile ? '0.82rem' : '0.95rem', color: 'var(--accent)', marginRight: isMobile ? 0 : '0.5rem' }}>💬 {isMobile ? 'WA Multi' : 'WhatsApp Multi-Atendente'}</span>
 
         {/* Nav tabs */}
         <div style={{ display: 'flex', gap: '0.25rem', flex: 1, flexWrap: 'wrap' }}>
@@ -104,14 +104,14 @@ export default function SupervisorLayout({ socket }) {
         </div>
 
         <button onClick={toggleShift} title={onShift ? 'Sair do turno' : 'Entrar em turno'}
-          style={{ padding: '0.25rem 0.6rem', borderRadius: '6px', border: '1px solid', cursor: 'pointer', fontSize: '0.78rem', fontWeight: 600, background: onShift ? 'var(--success)' : 'none', color: onShift ? '#fff' : 'var(--muted)', borderColor: onShift ? 'var(--success)' : 'var(--border)', flexShrink: 0 }}>
-          {onShift ? '🟢 Turno' : '⚪ Turno'}
+          style={{ padding: '0.25rem 0.55rem', borderRadius: '6px', border: '1px solid', cursor: 'pointer', fontSize: '0.78rem', fontWeight: 600, background: onShift ? 'var(--success)' : 'none', color: onShift ? '#fff' : 'var(--muted)', borderColor: onShift ? 'var(--success)' : 'var(--border)', flexShrink: 0 }}>
+          {onShift ? '🟢' : '⚪'}{!isMobile && ' Turno'}
         </button>
-        <span style={{ fontSize: '0.78rem', color: 'var(--muted)', flexShrink: 0 }}>{user.name}</span>
-        <span style={{ fontSize: '0.68rem', background: '#7c3aed20', color: '#7c3aed', border: '1px solid #7c3aed40', borderRadius: '999px', padding: '1px 7px', fontWeight: 700, flexShrink: 0 }}>SUPERVISOR</span>
+        {!isMobile && <span style={{ fontSize: '0.78rem', color: 'var(--muted)', flexShrink: 0 }}>{user.name}</span>}
+        <span style={{ fontSize: '0.65rem', background: '#7c3aed20', color: '#7c3aed', border: '1px solid #7c3aed40', borderRadius: '999px', padding: '1px 6px', fontWeight: 700, flexShrink: 0 }}>{isMobile ? 'SUP' : 'SUPERVISOR'}</span>
         <button onClick={toggleTheme} title={dark ? 'Modo claro' : 'Modo escuro'} style={{ padding: '0.25rem 0.5rem', border: '1px solid var(--border)', borderRadius: '6px', background: 'none', cursor: 'pointer', fontSize: '1rem', flexShrink: 0 }}>{dark ? '☀️' : '🌙'}</button>
-        <PushNotificationsButton />
-        <button onClick={logout} style={{ padding: '0.25rem 0.75rem', border: '1px solid var(--border)', borderRadius: '6px', background: 'none', cursor: 'pointer', color: 'var(--muted)', fontSize: '0.8rem', flexShrink: 0 }}>Sair</button>
+        <PushNotificationsButton compact={isMobile} />
+        <button onClick={logout} title="Sair" style={{ padding: '0.25rem 0.6rem', border: '1px solid var(--border)', borderRadius: '6px', background: 'none', cursor: 'pointer', color: 'var(--muted)', fontSize: '0.8rem', flexShrink: 0 }}>{isMobile ? '🚪' : 'Sair'}</button>
       </div>
 
       {takenNotice && (
