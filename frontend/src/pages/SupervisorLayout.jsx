@@ -22,6 +22,7 @@ export default function SupervisorLayout({ socket }) {
   const [view, setView] = useState('monitor'); // 'monitor' | 'conversations' | 'reports' | 'chat'
   const [selectedConv, setSelectedConv] = useState(null);
   const [internalUnread, setInternalUnread] = useState(0);
+  const [convsUnread, setConvsUnread] = useState(0);
   const [status, setStatus] = useState(() => (user.status && user.status !== 'offline') ? user.status : 'online');
   const [onShift, setOnShift] = useState(!!user.on_shift);
   const [isMobile, setIsMobile] = useState(window.innerWidth < 640);
@@ -60,6 +61,32 @@ export default function SupervisorLayout({ socket }) {
     socket.on('internal:message', onMsg);
     socket.on('internal:read', onRead);
     return () => { socket.off('internal:message', onMsg); socket.off('internal:read', onRead); };
+  }, [socket, user?.id]);
+
+  // Conversas com mensagens não lidas — badge no botão "Conversas".
+  useEffect(() => {
+    if (!socket || !user?.id) return;
+    let timer = null;
+    const recalc = () => {
+      clearTimeout(timer);
+      timer = setTimeout(() => {
+        api.get('/conversations?status=open').then(r => {
+          const list = Array.isArray(r.data) ? r.data : [];
+          const total = list.reduce((s, c) => s + (c.is_muted ? 0 : (c.unread_count || 0)), 0);
+          setConvsUnread(total);
+        }).catch(() => {});
+      }, 500);
+    };
+    recalc();
+    const onNew = ({ message }) => { if (!message?.from_me) recalc(); };
+    const onUpdated = () => recalc();
+    socket.on('message:new', onNew);
+    socket.on('conversation:updated', onUpdated);
+    return () => {
+      clearTimeout(timer);
+      socket.off('message:new', onNew);
+      socket.off('conversation:updated', onUpdated);
+    };
   }, [socket, user?.id]);
 
   async function changeStatus(s) {
@@ -104,11 +131,11 @@ export default function SupervisorLayout({ socket }) {
                 position: 'relative',
               }}>
               {item.icon} {!isMobile && item.label}
-              {item.key === 'chat' && internalUnread > 0 && (
-                <span style={{ position: 'absolute', top: -4, right: -4, background: '#ef4444', color: '#fff', borderRadius: '999px', fontSize: '0.6rem', fontWeight: 700, padding: '1px 4px', lineHeight: 1.4 }}>
-                  {internalUnread}
-                </span>
-              )}
+              {(() => {
+                const badge = item.key === 'chat' ? internalUnread : item.key === 'conversations' ? convsUnread : 0;
+                if (badge <= 0) return null;
+                return <span style={{ position: 'absolute', top: -4, right: -4, background: '#ef4444', color: '#fff', borderRadius: '999px', fontSize: '0.6rem', fontWeight: 700, padding: '1px 4px', lineHeight: 1.4 }}>{badge > 99 ? '99+' : badge}</span>;
+              })()}
             </button>
           ))}
         </div>

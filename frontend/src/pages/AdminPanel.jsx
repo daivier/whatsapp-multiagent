@@ -31,6 +31,7 @@ export default function AdminPanel({ socket }) {
   const { dark, toggle: toggleTheme } = useTheme();
   const [tab, setTab] = useState('dashboard');
   const [internalUnread, setInternalUnread] = useState(0);
+  const [convsUnread, setConvsUnread] = useState(0);
   const [selectedConv, setSelectedConv] = useState(null);
   const [takenNotice, setTakenNotice] = useState(null);
   useNotifications(socket, selectedConv, user);
@@ -208,6 +209,33 @@ export default function AdminPanel({ socket }) {
     return () => {
       socket.off('internal:message', onInternalMsg);
       socket.off('internal:read', onInternalRead);
+    };
+  }, [socket, user?.id]);
+
+  // Conversas com mensagens não lidas — badge no menu "Conversas".
+  // Debounce de re-fetch para não martelar o backend em rajadas de msgs.
+  useEffect(() => {
+    if (!socket || !user?.id) return;
+    let timer = null;
+    const recalc = () => {
+      clearTimeout(timer);
+      timer = setTimeout(() => {
+        api.get('/conversations?status=open').then(r => {
+          const list = Array.isArray(r.data) ? r.data : [];
+          const total = list.reduce((s, c) => s + (c.is_muted ? 0 : (c.unread_count || 0)), 0);
+          setConvsUnread(total);
+        }).catch(() => {});
+      }, 500);
+    };
+    recalc();
+    const onNew = ({ message }) => { if (!message?.from_me) recalc(); };
+    const onUpdated = () => recalc();
+    socket.on('message:new', onNew);
+    socket.on('conversation:updated', onUpdated);
+    return () => {
+      clearTimeout(timer);
+      socket.off('message:new', onNew);
+      socket.off('conversation:updated', onUpdated);
     };
   }, [socket, user?.id]);
 
@@ -782,14 +810,17 @@ export default function AdminPanel({ socket }) {
             </div>
           </div>
           <nav style={S.nav}>
-            {TABS.map(([key, label]) => (
-              <button key={key} style={{ ...S.navBtn, ...(tab === key ? S.navActive : {}), position: 'relative' }} onClick={() => selectTab(key)}>
-                {label}
-                {key === 'chat' && internalUnread > 0 && (
-                  <span style={{ position: 'absolute', top: '4px', right: '8px', background: 'var(--accent)', color: '#fff', borderRadius: '999px', fontSize: '0.65rem', fontWeight: 700, padding: '1px 5px', minWidth: '16px', textAlign: 'center' }}>{internalUnread > 99 ? '99+' : internalUnread}</span>
-                )}
-              </button>
-            ))}
+            {TABS.map(([key, label]) => {
+              const badge = key === 'chat' ? internalUnread : key === 'conversations' ? convsUnread : 0;
+              return (
+                <button key={key} style={{ ...S.navBtn, ...(tab === key ? S.navActive : {}), position: 'relative' }} onClick={() => selectTab(key)}>
+                  {label}
+                  {badge > 0 && (
+                    <span style={{ position: 'absolute', top: '4px', right: '8px', background: 'var(--danger)', color: '#fff', borderRadius: '999px', fontSize: '0.65rem', fontWeight: 700, padding: '1px 5px', minWidth: '16px', textAlign: 'center' }}>{badge > 99 ? '99+' : badge}</span>
+                  )}
+                </button>
+              );
+            })}
           </nav>
         </div>
         <div style={{ margin: '0 1rem 0.5rem', display: 'flex', justifyContent: 'center' }}>

@@ -55,6 +55,7 @@ export default function AttendantPanel({ socket }) {
   const [onShift, setOnShift] = useState(!!(user.on_shift));
   const [view, setView] = useState('conversations'); // 'conversations' | 'scheduled' | 'snippets' | 'chat'
   const [internalUnread, setInternalUnread] = useState(0);
+  const [convsUnread, setConvsUnread] = useState(0);
   const [isMobile, setIsMobile] = useState(window.innerWidth < 640);
 
   // Re-sincroniza o turno ao montar (garante que está actualizado após re-login)
@@ -101,6 +102,32 @@ export default function AttendantPanel({ socket }) {
     socket.on('internal:message', onMsg);
     socket.on('internal:read', onRead);
     return () => { socket.off('internal:message', onMsg); socket.off('internal:read', onRead); };
+  }, [socket, user?.id]);
+
+  // Conversas com mensagens não lidas — badge no botão "Conversas".
+  useEffect(() => {
+    if (!socket || !user?.id) return;
+    let timer = null;
+    const recalc = () => {
+      clearTimeout(timer);
+      timer = setTimeout(() => {
+        api.get('/conversations?status=open').then(r => {
+          const list = Array.isArray(r.data) ? r.data : [];
+          const total = list.reduce((s, c) => s + (c.is_muted ? 0 : (c.unread_count || 0)), 0);
+          setConvsUnread(total);
+        }).catch(() => {});
+      }, 500);
+    };
+    recalc();
+    const onNew = ({ message }) => { if (!message?.from_me) recalc(); };
+    const onUpdated = () => recalc();
+    socket.on('message:new', onNew);
+    socket.on('conversation:updated', onUpdated);
+    return () => {
+      clearTimeout(timer);
+      socket.off('message:new', onNew);
+      socket.off('conversation:updated', onUpdated);
+    };
   }, [socket, user?.id]);
 
   async function changeStatus(newStatus) {
@@ -165,8 +192,11 @@ export default function AttendantPanel({ socket }) {
 
       {/* Navegação entre vistas */}
       <div style={S.navBar}>
-        <button style={{ ...S.navBtn, ...(view === 'conversations' ? S.navBtnActive : {}) }} onClick={() => setView('conversations')}>
+        <button style={{ ...S.navBtn, ...(view === 'conversations' ? S.navBtnActive : {}), position: 'relative' }} onClick={() => setView('conversations')}>
           💬 Conversas
+          {convsUnread > 0 && (
+            <span style={{ position: 'absolute', top: '2px', right: '4px', background: 'var(--danger)', color: '#fff', borderRadius: '999px', fontSize: '0.62rem', fontWeight: 700, padding: '0px 4px', minWidth: '14px', textAlign: 'center', lineHeight: '14px' }}>{convsUnread > 99 ? '99+' : convsUnread}</span>
+          )}
         </button>
         <button style={{ ...S.navBtn, ...(view === 'scheduled' ? S.navBtnActive : {}) }} onClick={() => setView('scheduled')}>
           📅 Agendamentos
