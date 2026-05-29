@@ -7,6 +7,7 @@ const { authMiddleware, ownerOnly, supervisorOrOwner } = require('../middleware/
 const { sendMessage, sendMedia } = require('../whatsapp/client');
 const ioInstance = require('../io-instance');
 const push = require('../push');
+const { logAction } = require('../utils/audit');
 
 const router = express.Router();
 
@@ -430,6 +431,7 @@ router.post('/:id/transfer', authMiddleware, async (req, res) => {
   // Log de transferência
   db.prepare('INSERT INTO transfer_logs (conversation_id, from_user_id, to_user_id, transferred_by) VALUES (?, ?, ?, ?)')
     .run(req.params.id, prevConv?.assigned_to || null, attendant_id, req.user.id);
+  logAction(req, 'conversation.transfer', { type: 'conversation', id: parseInt(req.params.id, 10), details: { from: prevConv?.assigned_to || null, to: attendant_id, notified_client: !!notify } });
 
   const conv = db.prepare(conversationQuery('WHERE conv.id = ?')).get(req.params.id);
 
@@ -771,6 +773,7 @@ router.delete('/bulk', authMiddleware, ownerOnly, (req, res) => {
 
   const io = ioInstance.get();
   if (io) for (const id of ids) io.emit('conversation:deleted', { id });
+  logAction(req, 'conversation.bulk_delete', { type: 'conversation', details: { count: ids.length, ids } });
   res.json({ ok: true, deleted: ids.length });
 });
 
@@ -787,6 +790,7 @@ router.delete('/:id', authMiddleware, ownerOnly, (req, res) => {
   });
   tx();
   ioInstance.get()?.emit('conversation:deleted', { id: parseInt(req.params.id, 10) });
+  logAction(req, 'conversation.delete', { type: 'conversation', id: parseInt(req.params.id, 10) });
   res.json({ ok: true });
 });
 

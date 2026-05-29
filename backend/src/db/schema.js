@@ -393,3 +393,25 @@ try {
   );
   CREATE INDEX IF NOT EXISTS idx_conv_mutes_user ON conversation_mutes(user_id);`);
 } catch (_) {}
+
+// Audit log — quem fez o quê em acções sensíveis (LGPD + queixas internas).
+// action: string curto ex 'conversation.delete', 'contact.delete', 'user.role_change'
+// target_type / target_id: identifica o recurso afectado
+// details: JSON livre com contexto extra (before/after, motivo, etc.)
+try {
+  db.exec(`CREATE TABLE IF NOT EXISTS audit_log (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id INTEGER REFERENCES users(id) ON DELETE SET NULL,
+    user_name TEXT,
+    action TEXT NOT NULL,
+    target_type TEXT,
+    target_id INTEGER,
+    details TEXT,
+    ip TEXT,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+  );
+  CREATE INDEX IF NOT EXISTS idx_audit_action ON audit_log(action);
+  CREATE INDEX IF NOT EXISTS idx_audit_user ON audit_log(user_id);
+  CREATE INDEX IF NOT EXISTS idx_audit_target ON audit_log(target_type, target_id);
+  CREATE INDEX IF NOT EXISTS idx_audit_created ON audit_log(created_at);`);
+} catch (_) {}

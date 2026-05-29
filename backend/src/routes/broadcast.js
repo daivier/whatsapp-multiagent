@@ -4,6 +4,7 @@ const db = require('../db/schema');
 const { authMiddleware, ownerOnly } = require('../middleware/auth');
 const { sendMessage } = require('../whatsapp/client');
 const ioInstance = require('../io-instance');
+const { logAction } = require('../utils/audit');
 
 // GET /broadcast/logs
 router.get('/logs', authMiddleware, ownerOnly, (req, res) => {
@@ -35,6 +36,7 @@ router.post('/', authMiddleware, ownerOnly, async (req, res) => {
   ).run(req.user.id, req.user.name || req.user.username || 'desconhecido', lineId, lineName, message.trim(), total, 'running').lastInsertRowid;
 
   console.log(`[broadcast] log#${logId} iniciado por user#${req.user.id} (${req.user.name || req.user.username}) linha=${lineName} total=${total}`);
+  logAction(req, 'broadcast.send', { type: 'broadcast', id: logId, details: { total, line_id: lineId, line_name: lineName, preview: message.trim().slice(0, 100) } });
 
   res.json({ ok: true, total, line_id: lineId, log_id: logId });
 

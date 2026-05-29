@@ -2,6 +2,7 @@ const express = require('express');
 const bcrypt = require('bcryptjs');
 const db = require('../db/schema');
 const { authMiddleware, ownerOnly, supervisorOrOwner } = require('../middleware/auth');
+const { logAction } = require('../utils/audit');
 const { assignWaitingConversations } = require('../whatsapp/routing');
 
 const router = express.Router();
@@ -146,6 +147,7 @@ router.patch('/:id', authMiddleware, ownerOnly, (req, res) => {
       }
     }
     db.prepare('UPDATE users SET role = ? WHERE id = ?').run(role, id);
+    logAction(req, 'user.role_change', { type: 'user', id: parseInt(id, 10), details: { from: target?.role || null, to: role } });
   }
   if (Array.isArray(department_ids)) replaceUserDepartments(parseInt(id, 10), department_ids);
 

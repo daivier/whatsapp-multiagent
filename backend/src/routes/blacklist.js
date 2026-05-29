@@ -2,6 +2,7 @@ const express = require('express');
 const router = express.Router();
 const db = require('../db/schema');
 const { authMiddleware, ownerOnly } = require('../middleware/auth');
+const { logAction } = require('../utils/audit');
 
 // GET /blacklist
 router.get('/', authMiddleware, ownerOnly, (req, res) => {
@@ -36,14 +37,16 @@ router.post('/', authMiddleware, ownerOnly, (req, res) => {
     SELECT b.*, u.name as created_by_name FROM blacklist b
     LEFT JOIN users u ON u.id = b.created_by WHERE b.phone = ?
   `).get(clean);
+  logAction(req, 'blacklist.add', { type: 'blacklist', id: entry.id, details: { phone: clean, reason: reason?.trim() || null } });
   res.status(201).json(entry);
 });
 
 // DELETE /blacklist/:id
 router.delete('/:id', authMiddleware, ownerOnly, (req, res) => {
-  const entry = db.prepare('SELECT id FROM blacklist WHERE id = ?').get(req.params.id);
+  const entry = db.prepare('SELECT id, phone FROM blacklist WHERE id = ?').get(req.params.id);
   if (!entry) return res.status(404).json({ error: 'Não encontrado' });
   db.prepare('DELETE FROM blacklist WHERE id = ?').run(req.params.id);
+  logAction(req, 'blacklist.remove', { type: 'blacklist', id: entry.id, details: { phone: entry.phone } });
   res.json({ ok: true });
 });
 

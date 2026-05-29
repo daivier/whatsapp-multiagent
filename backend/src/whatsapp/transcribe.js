@@ -29,6 +29,7 @@ const fs = require('fs');
 const os = require('os');
 const db = require('../db/schema');
 const ioInstance = require('../io-instance');
+const metrics = require('../metrics');
 
 const BIN = process.env.WHISPER_BIN || 'whisper-cli';
 const MODEL = process.env.WHISPER_MODEL || 'models/ggml-base.bin';
@@ -88,7 +89,7 @@ function logStatusOnce() {
  */
 async function transcribeAudio(filePath, messageId) {
   logStatusOnce();
-  if (!checkReady()) return;
+  if (!checkReady()) { try { metrics.transcribeTotal.inc({ outcome: 'disabled' }); } catch (_) {} return; }
   if (!filePath || !messageId) return;
 
   const tmpWav = path.join(os.tmpdir(), `wh-${process.pid}-${Date.now()}.wav`);
@@ -125,6 +126,7 @@ async function transcribeAudio(filePath, messageId) {
     const text = fs.readFileSync(outTxt, 'utf8').trim();
     if (!text) {
       console.log(`[transcribe] msg ${messageId}: vazio (provavelmente só silêncio)`);
+      metrics.transcribeTotal.inc({ outcome: 'empty' });
       return;
     }
 
@@ -132,8 +134,10 @@ async function transcribeAudio(filePath, messageId) {
     const updated = db.prepare('SELECT * FROM messages WHERE id = ?').get(messageId);
     ioInstance.get()?.emit('message:updated', { message: updated });
     console.log(`[transcribe] msg ${messageId}: "${text.slice(0, 60)}${text.length > 60 ? '...' : ''}"`);
+    metrics.transcribeTotal.inc({ outcome: 'ok' });
   } catch (err) {
     console.error(`[transcribe] msg ${messageId} falhou: ${err.message}`);
+    metrics.transcribeTotal.inc({ outcome: 'error' });
   } finally {
     // Cleanup — silencioso, ficheiros em /tmp não são críticos
     try { fs.unlinkSync(tmpWav); } catch (_) {}

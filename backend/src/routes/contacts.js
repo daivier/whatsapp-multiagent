@@ -2,6 +2,7 @@ const express = require('express');
 const router = express.Router();
 const db = require('../db/schema');
 const { authMiddleware, ownerOnly, supervisorOrOwner } = require('../middleware/auth');
+const { logAction } = require('../utils/audit');
 const { runLidMerge, getProfilePictureUrl, getDefaultLineId } = require('../whatsapp/client');
 const ioInstance = require('../io-instance');
 
@@ -64,6 +65,7 @@ router.delete('/:id', ownerOnly, (req, res) => {
   `).run(id);
   db.prepare('DELETE FROM conversations WHERE contact_id = ?').run(id);
   db.prepare('DELETE FROM contacts WHERE id = ?').run(id);
+  logAction(req, 'contact.delete', { type: 'contact', id: parseInt(id, 10) });
   res.json({ ok: true });
 });
 
@@ -81,6 +83,7 @@ router.delete('/cleanup/invalid', ownerOnly, (req, res) => {
       phone = 'status@broadcast'
     ) AND id NOT IN (SELECT contact_id FROM conversations)
   `).run();
+  logAction(req, 'contact.cleanup_invalid', { type: 'contact', details: { deleted: result.changes } });
   res.json({ deleted: result.changes });
 });
 

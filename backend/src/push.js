@@ -16,6 +16,7 @@
 
 const webpush = require('web-push');
 const db = require('./db/schema');
+const metrics = require('./metrics');
 
 const PUBLIC = process.env.VAPID_PUBLIC_KEY;
 const PRIVATE = process.env.VAPID_PRIVATE_KEY;
@@ -94,13 +95,16 @@ async function sendToUser(userId, payload) {
     };
     try {
       await webpush.sendNotification(subscription, json, { TTL: 60 });
+      metrics.pushSentTotal.inc({ outcome: 'ok' });
     } catch (err) {
       const code = err.statusCode;
       if (code === 410 || code === 404) {
         db.prepare('DELETE FROM push_subscriptions WHERE id = ?').run(sub.id);
         console.log(`[push] subscription ${sub.id} expirada (${code}) — removida`);
+        metrics.pushSentTotal.inc({ outcome: 'expired' });
       } else {
         console.error(`[push] envio falhou para sub ${sub.id}: ${err.message}`);
+        metrics.pushSentTotal.inc({ outcome: 'error' });
       }
     }
   }

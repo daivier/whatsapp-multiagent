@@ -29,7 +29,9 @@ const pushRoutes = require('./routes/push');
 const linesRoutes = require('./routes/lines');
 const internalChatRoutes = require('./routes/internal-chat');
 const faqRoutes = require('./routes/faq');
+const auditRoutes = require('./routes/audit');
 const { startScheduledMessagesCron } = require('./scheduled/cron');
+const metrics = require('./metrics');
 
 const app = express();
 const server = http.createServer(app);
@@ -39,7 +41,15 @@ const io = new Server(server, {
 
 app.use(cors({ origin: process.env.FRONTEND_URL || 'http://localhost:5173', credentials: true }));
 app.use(express.json());
+app.use(metrics.httpMetricsMiddleware);
 app.use('/uploads', express.static(require('path').join(__dirname, '../../uploads')));
+
+// /metrics — formato Prometheus, sem auth (firewall ao nível do nginx
+// ou IP allowlist se quiseres restringir). Scrape interval recomendado: 15s.
+app.get('/metrics', async (req, res) => {
+  res.set('Content-Type', metrics.register.contentType);
+  res.end(await metrics.register.metrics());
+});
 
 // Rate limiting — protege contra brute force no login e abuso no broadcast.
 // O nginx passa o IP real via X-Forwarded-For — confiamos no primeiro hop.
@@ -110,6 +120,7 @@ app.use('/push', pushRoutes);
 app.use('/lines', linesRoutes);
 app.use('/internal-chat', internalChatRoutes);
 app.use('/faq', faqRoutes);
+app.use('/audit', auditRoutes);
 
 // Health check — sem auth, designed para monitoring/uptime probes (UptimeRobot, etc).
 // Devolve 200 se DB responde; 503 se algo crítico está down. Nunca expõe dados sensíveis.

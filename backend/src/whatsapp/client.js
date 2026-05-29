@@ -22,6 +22,7 @@ const { computeTargetDepartment, pickLeastBusyAttendant } = require('./routing')
 const { transcribeAudio } = require('./transcribe');
 const { analyzeSentiment } = require('../utils/sentiment');
 const { matchFaq } = require('../utils/faq-matcher');
+const metrics = require('../metrics');
 const push = require('../push');
 const fs = require('fs');
 const path = require('path');
@@ -286,11 +287,13 @@ async function startLine(lineId) {
       state.qrCodeData = null;
       if (io) io.emit('whatsapp:ready', { line_id: lineId });
       console.log(`[wa] linha ${lineId} (${line.name}) conectada`);
+      metrics.lineConnected.set({ line_id: String(lineId), line_name: line.name }, 1);
       setTimeout(() => retryPendingMessages(state), 2000);
       setTimeout(() => runLidMerge(lineId), 3000);
     }
     if (connection === 'close') {
       state.isReady = false;
+      metrics.lineConnected.set({ line_id: String(lineId), line_name: line.name }, 0);
       const code = lastDisconnect?.error?.output?.statusCode;
       const isLoggedOut = code === DisconnectReason.loggedOut;
       console.log(`[wa] linha ${lineId} desconectada — ${isLoggedOut ? 'LOGOUT' : code || 'desconhecido'}`);
@@ -748,6 +751,13 @@ async function handleIncomingMessage(msg, lineId) {
   const message = db.prepare('SELECT * FROM messages WHERE conversation_id = ? ORDER BY id DESC LIMIT 1').get(conversation.id);
   const fullConversation = getConversationWithContact(conversation.id);
 
+  // Métrica: cada msg inserida contabiliza pelo direction. fromMe=true vem do
+  // eco do Baileys das nossas próprias mensagens (não há contagem extra
+  // porque o sendMessage já contou no direction=out).
+  if (!fromMe) {
+    metrics.messagesTotal.inc({ direction: 'in', line_id: String(lineId), has_media: mediaUrl ? 'true' : 'false' });
+  }
+
   if (io) {
     io.emit('message:new', { message, conversation: fullConversation });
     if (!fromMe && conversation.assigned_to) {
@@ -835,7 +845,11 @@ async function sendMessage(lineId, phone, body, { quotedWaId } = {}) {
     const quotedMsg = db.prepare('SELECT wa_message_id, from_me FROM messages WHERE wa_message_id = ?').get(quotedWaId);
     opts.quoted = { key: { id: quotedWaId, fromMe: !!(quotedMsg?.from_me), remoteJid: jid }, message: { conversation: '' } };
   }
+  const startNs = process.hrtime.bigint();
   const result = await state.sock.sendMessage(jid, { text: body }, opts);
+  const durSec = Number(process.hrtime.bigint() - startNs) / 1e9;
+  metrics.sendDuration.observe({ line_id: String(state.lineId) }, durSec);
+  metrics.messagesTotal.inc({ direction: 'out', line_id: String(state.lineId), has_media: 'false' });
   const msgId = result?.key?.id || null;
   if (msgId) state.pendingQueue.set(msgId, { jid, body, opts, sentAt: Date.now() });
   return msgId;
