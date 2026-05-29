@@ -32,6 +32,16 @@
     .grad-hero { background: radial-gradient(1200px 600px at 80% -10%, rgba(37,211,102,0.18), transparent 60%), linear-gradient(180deg, #0b141a 0%, #0e1b22 100%); }
     .card-hover { transition: transform .2s, box-shadow .2s; }
     .card-hover:hover { transform: translateY(-4px); box-shadow: 0 12px 30px rgba(0,0,0,0.12); }
+    /* animações */
+    @keyframes float { 0%,100% { transform: translateY(0); } 50% { transform: translateY(-12px); } }
+    @keyframes floatSlow { 0%,100% { transform: translateY(0); } 50% { transform: translateY(-7px); } }
+    @keyframes pop { 0% { transform: scale(.8); opacity: 0; } 100% { transform: scale(1); opacity: 1; } }
+    @keyframes fadeUp { 0% { transform: translateY(20px); opacity: 0; } 100% { transform: translateY(0); opacity: 1; } }
+    .anim-float { animation: float 4s ease-in-out infinite; }
+    .anim-float-slow { animation: floatSlow 5s ease-in-out infinite; }
+    .reveal { opacity: 0; }
+    .reveal.in { animation: fadeUp .6s ease forwards; }
+    .blob { filter: blur(40px); border-radius: 50%; position: absolute; }
   </style>
 </head>
 <body class="font-sans text-ink antialiased">
@@ -92,33 +102,51 @@
         </div>
         <p class="mt-4 text-sm text-slate-400">Sem cartão de crédito · Configuração em ~30 minutos · Suporte em português</p>
       </div>
-      <div class="relative">
-        <div class="bg-white/5 border border-white/10 rounded-2xl p-3 shadow-2xl">
-          <div class="bg-[#0e1b22] rounded-xl overflow-hidden">
-            <div class="flex items-center gap-1.5 px-3 py-2.5 border-b border-white/5">
-              <span class="w-2.5 h-2.5 rounded-full bg-red-400"></span>
-              <span class="w-2.5 h-2.5 rounded-full bg-yellow-400"></span>
-              <span class="w-2.5 h-2.5 rounded-full bg-green-400"></span>
-              <span class="ml-3 text-xs text-slate-400">atendimento.suaempresa.com.br</span>
+      <div class="relative h-[420px] md:h-[460px]">
+        <!-- blobs coloridos de fundo -->
+        <div class="blob w-56 h-56 bg-emerald-400/30 top-4 right-8"></div>
+        <div class="blob w-44 h-44 bg-indigo-400/25 bottom-0 left-4"></div>
+        <div class="blob w-40 h-40 bg-amber-300/25 top-28 left-24"></div>
+
+        <!-- avatares de atendentes (topo) -->
+        <div class="absolute top-0 left-1/2 -translate-x-1/2 flex -space-x-2 z-20">
+          <span class="w-11 h-11 rounded-full bg-gradient-to-br from-pink-400 to-rose-500 border-2 border-white shadow-lg flex items-center justify-center text-white font-bold anim-float-slow">M</span>
+          <span class="w-11 h-11 rounded-full bg-gradient-to-br from-sky-400 to-blue-500 border-2 border-white shadow-lg flex items-center justify-center text-white font-bold anim-float" style="animation-delay:.6s">J</span>
+          <span class="w-11 h-11 rounded-full bg-gradient-to-br from-amber-400 to-orange-500 border-2 border-white shadow-lg flex items-center justify-center text-white font-bold anim-float-slow" style="animation-delay:1.2s">A</span>
+          <span class="w-11 h-11 rounded-full bg-gradient-to-br from-violet-400 to-purple-500 border-2 border-white shadow-lg flex items-center justify-center text-white font-bold anim-float" style="animation-delay:.3s">R</span>
+        </div>
+
+        <!-- card de chat central -->
+        <div class="absolute top-16 left-1/2 -translate-x-1/2 w-[260px] max-w-[88%] bg-white rounded-2xl shadow-2xl p-4 z-10 anim-float-slow">
+          <div class="flex items-center gap-2 pb-3 border-b border-slate-100">
+            <span class="w-9 h-9 rounded-full bg-gradient-to-br from-emerald-400 to-teal-500 flex items-center justify-center text-white">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M12.04 2C6.58 2 2.13 6.45 2.13 11.91c0 1.75.46 3.45 1.32 4.95L2 22l5.25-1.38c1.45.79 3.08 1.21 4.79 1.21 5.46 0 9.91-4.45 9.91-9.91C21.95 6.45 17.5 2 12.04 2z"/></svg>
+            </span>
+            <div class="leading-tight">
+              <div class="text-sm font-bold text-ink">Maria Silva</div>
+              <div class="text-[10px] text-emerald-500 font-medium">a escrever…</div>
             </div>
-            <!-- mock do painel -->
-            <div class="p-4 grid grid-cols-3 gap-2 text-[10px]">
-              <div class="col-span-1 space-y-2">
-                <div class="bg-wa/20 rounded p-2 text-wa font-semibold">💬 Conversas</div>
-                <div class="bg-white/5 rounded p-2 text-slate-300">👁️ Monitorização</div>
-                <div class="bg-white/5 rounded p-2 text-slate-300">📊 Relatórios</div>
-                <div class="bg-white/5 rounded p-2 text-slate-300">👥 Chat Interno</div>
-              </div>
-              <div class="col-span-2 space-y-2">
-                <div class="bg-white/5 rounded p-2 flex justify-between"><span class="text-slate-200">Maria Silva</span><span class="text-wa">●</span></div>
-                <div class="bg-white/5 rounded p-2 flex justify-between"><span class="text-slate-200">João Costa</span><span class="text-yellow-400">⏱ SLA</span></div>
-                <div class="bg-white/5 rounded p-2 flex justify-between"><span class="text-slate-200">Ana Souza</span><span class="text-red-400">😡</span></div>
-                <div class="bg-wa/10 rounded p-3 text-slate-300 leading-relaxed mt-2">
-                  "Bom dia! Gostaria de saber..." <span class="block text-right text-wa mt-1">✓✓</span>
-                </div>
-              </div>
-            </div>
+            <span class="ml-auto text-[9px] bg-emerald-50 text-emerald-600 font-semibold px-2 py-0.5 rounded-full">Vendas</span>
           </div>
+          <div class="space-y-2 pt-3">
+            <div class="bg-slate-100 text-slate-700 text-xs rounded-2xl rounded-tl-sm px-3 py-2 max-w-[80%]">Bom dia! Vocês entregam aqui?</div>
+            <div class="bg-wa text-white text-xs rounded-2xl rounded-tr-sm px-3 py-2 max-w-[85%] ml-auto">Bom dia! 😊 Sim, entregamos em toda a cidade. <span class="block text-right text-[9px] opacity-80 mt-0.5">✓✓</span></div>
+            <div class="bg-slate-100 text-slate-700 text-xs rounded-2xl rounded-tl-sm px-3 py-2 max-w-[60%]">Perfeito! 👍</div>
+          </div>
+        </div>
+
+        <!-- badges flutuantes -->
+        <div class="absolute top-24 -left-2 md:left-0 bg-white rounded-xl shadow-xl px-3 py-2 flex items-center gap-2 z-20 anim-float" style="animation-delay:.4s">
+          <span class="w-8 h-8 rounded-lg bg-amber-100 text-amber-500 flex items-center justify-center"><svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><polygon points="12 2 15 9 22 9.3 16.5 14 18.5 21 12 17 5.5 21 7.5 14 2 9.3 9 9"/></svg></span>
+          <div class="leading-tight"><div class="text-sm font-bold text-ink">4.9</div><div class="text-[9px] text-slate-400">avaliação</div></div>
+        </div>
+        <div class="absolute bottom-10 -right-2 md:right-0 bg-white rounded-xl shadow-xl px-3 py-2 flex items-center gap-2 z-20 anim-float-slow" style="animation-delay:.9s">
+          <span class="w-8 h-8 rounded-lg bg-indigo-100 text-indigo-500 flex items-center justify-center"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="10" rx="2"/><circle cx="12" cy="5" r="2"/><path d="M12 7v4"/></svg></span>
+          <div class="leading-tight"><div class="text-sm font-bold text-ink">Bot ativo</div><div class="text-[9px] text-slate-400">responde sozinho</div></div>
+        </div>
+        <div class="absolute bottom-0 left-10 bg-white rounded-xl shadow-xl px-3 py-2 flex items-center gap-2 z-20 anim-float" style="animation-delay:1.4s">
+          <span class="w-8 h-8 rounded-lg bg-emerald-100 text-emerald-600 flex items-center justify-center"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg></span>
+          <div class="leading-tight"><div class="text-sm font-bold text-ink">+3 atendentes</div><div class="text-[9px] text-slate-400">online agora</div></div>
         </div>
       </div>
     </div>
