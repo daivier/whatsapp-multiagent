@@ -22,17 +22,21 @@ fi
 
 echo "=== Actualizar tenant: $SLUG ==="
 
-echo "[1/3] A fazer pull do repositório..."
+echo "[1/4] A fazer pull do repositório..."
 cd "$TENANT_DIR"
 git pull
 
-echo "[2/3] A recompilar frontend..."
+echo "[2/4] A instalar dependências do backend (se houver novas)..."
+cd "$TENANT_DIR/backend"
+npm install --silent
+
+echo "[3/4] A recompilar frontend..."
 cd "$TENANT_DIR/frontend"
 npm install --silent
 npm run build
 
-echo "[3/3] A reiniciar backend..."
-pm2 restart "wa-$SLUG"
+echo "[4/4] A reiniciar backend..."
+pm2 restart "wa-$SLUG" --update-env
 
 echo ""
 echo "Tenant '$SLUG' actualizado com sucesso."
