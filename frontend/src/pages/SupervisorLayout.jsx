@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { useTranslation } from 'react-i18next';
 import { useAuth } from '../context/AuthContext';
 import { useNotifications } from '../hooks/useNotifications';
 import SupervisorPanel from './SupervisorPanel';
@@ -7,6 +8,7 @@ import ChatWindow from '../components/ChatWindow';
 import DashboardPage from './DashboardPage';
 import InternalChatPage from './InternalChatPage';
 import PushNotificationsButton from '../components/PushNotificationsButton';
+import LanguageSwitcher from '../components/LanguageSwitcher';
 import { useTheme } from '../hooks/useTheme';
 import api from '../api';
 
@@ -19,6 +21,7 @@ const STATUS_OPTIONS = [
 export default function SupervisorLayout({ socket }) {
   const { user, logout } = useAuth();
   const { dark, toggle: toggleTheme } = useTheme();
+  const { t } = useTranslation();
   const [view, setView] = useState('monitor'); // 'monitor' | 'conversations' | 'reports' | 'chat'
   const [selectedConv, setSelectedConv] = useState(null);
   const [internalUnread, setInternalUnread] = useState(0);
@@ -105,10 +108,10 @@ export default function SupervisorLayout({ socket }) {
   const showChatWin  = view === 'conversations' && (!isMobile || !!selectedConv);
 
   const navItems = [
-    { key: 'monitor',       icon: '👁️',  label: 'Monitorização' },
-    { key: 'conversations', icon: '💬',  label: 'Conversas' },
-    { key: 'reports',       icon: '📊',  label: 'Relatórios' },
-    { key: 'chat',          icon: '👥',  label: 'Chat Interno' },
+    { key: 'monitor',       icon: '👁️',  label: t('nav.monitoring') },
+    { key: 'conversations', icon: '💬',  label: t('nav.conversations') },
+    { key: 'reports',       icon: '📊',  label: t('nav.reports') },
+    { key: 'chat',          icon: '👥',  label: t('nav.internalChat') },
   ];
 
   return (
@@ -157,6 +160,7 @@ export default function SupervisorLayout({ socket }) {
         <span style={{ fontSize: '0.65rem', background: '#7c3aed20', color: '#7c3aed', border: '1px solid #7c3aed40', borderRadius: '999px', padding: '1px 6px', fontWeight: 700, flexShrink: 0 }}>{isMobile ? 'SUP' : 'SUPERVISOR'}</span>
         <button onClick={toggleTheme} title={dark ? 'Modo claro' : 'Modo escuro'} style={{ padding: '0.25rem 0.5rem', border: '1px solid var(--border)', borderRadius: '6px', background: 'none', cursor: 'pointer', fontSize: '1rem', flexShrink: 0 }}>{dark ? '☀️' : '🌙'}</button>
         <PushNotificationsButton compact={isMobile} />
+        <LanguageSwitcher compact={isMobile} />
         <button onClick={logout} title="Sair" style={{ padding: '0.25rem 0.6rem', border: '1px solid var(--border)', borderRadius: '6px', background: 'none', cursor: 'pointer', color: 'var(--muted)', fontSize: '0.8rem', flexShrink: 0 }}>{isMobile ? '🚪' : 'Sair'}</button>
       </div>
 

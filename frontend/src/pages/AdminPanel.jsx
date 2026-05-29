@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import api from '../api';
 import ConversationList from '../components/ConversationList';
+import LanguageSwitcher from '../components/LanguageSwitcher';
 import ChatWindow from '../components/ChatWindow';
 import { useAuth } from '../context/AuthContext';
 import { useNotifications } from '../hooks/useNotifications';
@@ -823,8 +824,9 @@ export default function AdminPanel({ socket }) {
             })}
           </nav>
         </div>
-        <div style={{ margin: '0 1rem 0.5rem', display: 'flex', justifyContent: 'center' }}>
+        <div style={{ margin: '0 1rem 0.5rem', display: 'flex', justifyContent: 'center', gap: '0.5rem' }}>
           <PushNotificationsButton />
+          <LanguageSwitcher />
         </div>
         <button onClick={toggleTheme} title={dark ? 'Modo claro' : 'Modo escuro'} style={{ ...S.logoutBtn, marginBottom: '0.4rem', textAlign: 'center' }}>{dark ? '☀️ Modo claro' : '🌙 Modo escuro'}</button>
         <button style={{ ...S.logoutBtn, background: 'var(--accent-l)', color: 'var(--accent)', marginBottom: '0.4rem' }} onClick={async () => {

@@ -7,6 +7,7 @@ import InternalChatPage from './InternalChatPage';
 import { useAuth } from '../context/AuthContext';
 import { useNotifications } from '../hooks/useNotifications';
 import PushNotificationsButton from '../components/PushNotificationsButton';
+import LanguageSwitcher from '../components/LanguageSwitcher';
 import { useTheme } from '../hooks/useTheme';
 import api from '../api';
 
@@ -186,6 +187,7 @@ export default function AttendantPanel({ socket }) {
           </button>
           <button onClick={toggleTheme} title={dark ? 'Modo claro' : 'Modo escuro'} style={{ ...S.logoutBtn, fontSize: '1rem', padding: '0.3rem 0.5rem' }}>{dark ? '☀️' : '🌙'}</button>
           <PushNotificationsButton compact={isMobile} />
+          <LanguageSwitcher compact={isMobile} />
           <button style={S.logoutBtn} onClick={logout}>Sair</button>
         </div>
       </header>
