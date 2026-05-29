@@ -66,6 +66,9 @@ export default function AdminPanel({ socket }) {
   const [editError, setEditError] = useState('');
   const [showProfile, setShowProfile] = useState(false);
   const [profileForm, setProfileForm] = useState({ name: '', email: '', current_password: '', password: '', password2: '' });
+  const [quietHours, setQuietHours] = useState({ start: '', end: '' });
+  const [quietSaving, setQuietSaving] = useState(false);
+  const [quietMsg, setQuietMsg] = useState('');
   const [profileSaving, setProfileSaving] = useState(false);
   const [profileError, setProfileError] = useState('');
   const [profileSuccess, setProfileSuccess] = useState('');
@@ -357,6 +360,21 @@ export default function AdminPanel({ socket }) {
     } finally {
       setProfileSaving(false);
     }
+  }
+
+  async function saveQuietHours() {
+    setQuietMsg(''); setQuietSaving(true);
+    try {
+      const payload = quietHours.start && quietHours.end
+        ? { start: quietHours.start, end: quietHours.end }
+        : { start: null, end: null };
+      const { data } = await api.patch('/auth/quiet-hours', payload);
+      setQuietHours({ start: data.quiet_hours_start || '', end: data.quiet_hours_end || '' });
+      setQuietMsg(data.quiet_hours_start ? '✓ Quiet hours actualizadas' : '✓ Quiet hours desactivadas');
+    } catch (err) {
+      setQuietMsg(err.response?.data?.error || 'Erro ao guardar');
+    }
+    setQuietSaving(false);
   }
 
   async function saveEditUser() {
@@ -748,7 +766,15 @@ export default function AdminPanel({ socket }) {
           <PushNotificationsButton />
         </div>
         <button onClick={toggleTheme} title={dark ? 'Modo claro' : 'Modo escuro'} style={{ ...S.logoutBtn, marginBottom: '0.4rem', textAlign: 'center' }}>{dark ? '☀️ Modo claro' : '🌙 Modo escuro'}</button>
-        <button style={{ ...S.logoutBtn, background: 'var(--accent-l)', color: 'var(--accent)', marginBottom: '0.4rem' }} onClick={() => { setProfileForm({ name: user.name || '', email: user.email || '', current_password: '', password: '', password2: '' }); setProfileError(''); setProfileSuccess(''); setShowProfile(true); }}>👤 Perfil / Senha</button>
+        <button style={{ ...S.logoutBtn, background: 'var(--accent-l)', color: 'var(--accent)', marginBottom: '0.4rem' }} onClick={async () => {
+          setProfileForm({ name: user.name || '', email: user.email || '', current_password: '', password: '', password2: '' });
+          setProfileError(''); setProfileSuccess(''); setQuietMsg('');
+          try {
+            const { data } = await api.get('/auth/me');
+            setQuietHours({ start: data.user?.quiet_hours_start || '', end: data.user?.quiet_hours_end || '' });
+          } catch (_) {}
+          setShowProfile(true);
+        }}>👤 Perfil / Senha</button>
         <button style={S.logoutBtn} onClick={logout}>Sair</button>
       </aside>
 
@@ -2373,6 +2399,34 @@ export default function AdminPanel({ socket }) {
               <button style={S.addBtn} onClick={saveProfile} disabled={profileSaving}>
                 {profileSaving ? 'A guardar…' : 'Guardar'}
               </button>
+            </div>
+
+            {/* QUIET HOURS — silenciar pushes em janela horária */}
+            <hr style={{ border: 'none', borderTop: '1px solid var(--border)', margin: '0.5rem 0 0.25rem' }} />
+            <div>
+              <strong style={{ fontSize: '0.92rem', display: 'block', marginBottom: '0.3rem' }}>🌙 Não incomodar entre</strong>
+              <p style={{ margin: '0 0 0.6rem', fontSize: '0.78rem', color: 'var(--muted)' }}>
+                Não recebes notificações push neste intervalo. Menções continuam a tocar (urgentes). Deixa em branco para desativar.
+              </p>
+              <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
+                <input type="time" style={{ ...S.input, flex: 1, boxSizing: 'border-box' }}
+                  value={quietHours.start}
+                  onChange={e => setQuietHours(q => ({ ...q, start: e.target.value }))} />
+                <span style={{ color: 'var(--muted)', fontSize: '0.85rem' }}>até</span>
+                <input type="time" style={{ ...S.input, flex: 1, boxSizing: 'border-box' }}
+                  value={quietHours.end}
+                  onChange={e => setQuietHours(q => ({ ...q, end: e.target.value }))} />
+                <button style={S.outlineBtn} onClick={saveQuietHours} disabled={quietSaving}>
+                  {quietSaving ? '...' : 'Guardar'}
+                </button>
+              </div>
+              {(quietHours.start || quietHours.end) && (
+                <button style={{ ...S.outlineBtn, color: 'var(--danger)', borderColor: 'var(--danger)', marginTop: '0.5rem', fontSize: '0.75rem' }}
+                  onClick={() => { setQuietHours({ start: '', end: '' }); saveQuietHours(); }}>
+                  Desactivar
+                </button>
+              )}
+              {quietMsg && <p style={{ fontSize: '0.78rem', margin: '0.4rem 0 0', color: quietMsg.startsWith('✓') ? 'var(--success, #22c55e)' : 'var(--danger)' }}>{quietMsg}</p>}
             </div>
           </div>
         </div>
