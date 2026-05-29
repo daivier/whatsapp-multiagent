@@ -288,27 +288,25 @@ router.post('/threads/:id/messages', (req, res) => {
       io?.to(`user:${m.user_id}`).emit('internal:message', { message: enriched, thread_id: threadId, sender_name: enriched.sender?.name || '' });
     }
 
-    // Push notifications for non-muted members who are offline
+    // Push notifications para membros não-mutados, exceto o próprio sender.
+    // push.sendToUser já respeita quiet_hours; chat interno é considerado
+    // urgent (atendentes esperam saber logo) para furar quiet_hours.
     try {
       const push = require('../push');
-      if (push.isReady()) {
-        for (const m of members) {
-          if (m.user_id === userId) continue;
-          if (m.muted) continue;
-          const subs = db.prepare('SELECT * FROM push_subscriptions WHERE user_id = ?').all(m.user_id);
-          const senderName = enriched.sender?.name || 'Alguém';
-          const preview = enriched.deleted ? 'Mensagem apagada' : (enriched.body || (mediaUrl ? '📎 Ficheiro' : ''));
-          for (const sub of subs) {
-            push.sendNotification(sub, {
-              title: thread.type === 'dm' ? senderName : `${thread.name}: ${senderName}`,
-              body: preview.substring(0, 100),
-              icon: '/icon-192.png',
-              data: { type: 'internal', thread_id: threadId },
-            }).catch(() => {});
-          }
-        }
+      const senderName = enriched.sender?.name || 'Alguém';
+      const preview = enriched.deleted ? 'Mensagem apagada' : (enriched.body || (mediaUrl ? '📎 Ficheiro' : ''));
+      for (const m of members) {
+        if (m.user_id === userId) continue;
+        if (m.muted) continue;
+        push.sendToUser(m.user_id, {
+          title: thread.type === 'dm' ? senderName : `${thread.name}: ${senderName}`,
+          body: preview.substring(0, 100),
+          tag: `internal-${threadId}`,
+          url: `/?thread=${threadId}`,
+          urgent: true,
+        });
       }
-    } catch (_) {}
+    } catch (err) { console.error('[internal-push]', err.message); }
 
     res.status(201).json(enriched);
   });

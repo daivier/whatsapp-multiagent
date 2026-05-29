@@ -117,17 +117,40 @@ export function useNotifications(socket, selectedConv, user) {
       else mutedIds.current.delete(conversation_id);
     }
 
+    function onInternalMessage({ message, thread_id, sender_name }) {
+      // Skip se foi o próprio user que enviou
+      if (message?.from_user_id === user?.id) return;
+      // Skip se está actualmente na tab Chat Interno com este thread aberto
+      // (o componente do chat marca uma flag global window.__activeThreadId)
+      if (window.__activeThreadId === thread_id && !document.hidden) return;
+
+      playMentionSound(); // som distinto — mensagem entre colegas é importante
+
+      if (!document.hasFocus() && Notification.permission === 'granted') {
+        const senderShort = sender_name || 'Colega';
+        const body = message?.body || '📎 Ficheiro';
+        const n = new Notification(`💬 ${senderShort}`, {
+          body: body.length > 80 ? body.slice(0, 80) + '…' : body,
+          icon: '/favicon.ico',
+          tag: `internal-${thread_id}`,
+        });
+        n.onclick = () => { window.focus(); n.close(); };
+      }
+    }
+
     socket.on('message:new', onNewMessage);
     socket.on('message:incoming', onNewMessage);
     socket.on('mention:new', onMentionNew);
     socket.on('sla:alert', onSlaAlert);
     socket.on('conversation:mute_change', onMuteChange);
+    socket.on('internal:message', onInternalMessage);
     return () => {
       socket.off('message:new', onNewMessage);
       socket.off('message:incoming', onNewMessage);
       socket.off('mention:new', onMentionNew);
       socket.off('sla:alert', onSlaAlert);
       socket.off('conversation:mute_change', onMuteChange);
+      socket.off('internal:message', onInternalMessage);
     };
   }, [socket, selectedConv?.id]);
 }

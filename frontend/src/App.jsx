@@ -68,6 +68,16 @@ function App() {
       else mutedIds.current.delete(conversation_id);
     });
 
+    // Badge no separador para mensagens internas também (quando user está fora da janela)
+    s.on('internal:message', ({ message, thread_id }) => {
+      if (message?.from_user_id === user.id) return;
+      if (!document.hidden) return;
+      if (window.__activeThreadId === thread_id) return;
+      unreadRef.current += 1;
+      document.title = `(${unreadRef.current}) ${originalTitle.current}`;
+      playNotificationSound();
+    });
+
     const resetTitle = () => {
       if (!document.hidden) { unreadRef.current = 0; document.title = originalTitle.current; }
     };

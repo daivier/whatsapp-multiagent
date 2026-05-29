@@ -74,6 +74,13 @@ export default function ThreadView({ thread, socket, onClose, onThreadUpdated, o
     }
   }, [threadId]);
 
+  // Sinaliza ao useNotifications que este thread está aberto
+  // (para não tocar som quando msg chega na janela activa).
+  useEffect(() => {
+    window.__activeThreadId = threadId;
+    return () => { if (window.__activeThreadId === threadId) window.__activeThreadId = null; };
+  }, [threadId]);
+
   useEffect(() => {
     if (!threadId) return;
     setMessages([]);
