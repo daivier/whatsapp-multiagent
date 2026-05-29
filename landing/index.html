@@ -3,460 +3,88 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>WhatsApp Multi-Atendente — Vários atendentes, um só número</title>
-  <meta name="description" content="Plataforma de atendimento multi-atendente para WhatsApp. Vários atendentes no mesmo número, departamentos, relatórios e bot — sem pagar por mensagem." />
-
-  <!-- Open Graph / partilha -->
-  <meta property="og:title" content="WhatsApp Multi-Atendente" />
-  <meta property="og:description" content="Vários atendentes, um só número de WhatsApp. Sem pagar por mensagem." />
-  <meta property="og:type" content="website" />
-
-  <script src="https://cdn.tailwindcss.com"></script>
-  <script>
-    tailwind.config = {
-      theme: {
-        extend: {
-          colors: {
-            wa: { DEFAULT: '#25D366', dark: '#128C7E', deep: '#075E54' },
-            ink: '#0b141a',
-          },
-          fontFamily: { sans: ['Inter', 'system-ui', 'sans-serif'] },
-        },
-      },
-    };
-  </script>
-  <link rel="preconnect" href="https://fonts.googleapis.com" />
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet" />
+  <title>WhatsApp Multi-Atendente — Atendimento em equipe com um só número</title>
+  <meta name="description" content="Organize o atendimento da sua empresa no WhatsApp com múltiplos atendentes, departamentos, bot, relatórios e histórico centralizado." />
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
   <style>
-    html { scroll-behavior: smooth; }
-    .grad-hero { background: radial-gradient(1200px 600px at 80% -10%, rgba(37,211,102,0.18), transparent 60%), linear-gradient(180deg, #0b141a 0%, #0e1b22 100%); }
-    .card-hover { transition: transform .2s, box-shadow .2s; }
-    .card-hover:hover { transform: translateY(-4px); box-shadow: 0 12px 30px rgba(0,0,0,0.12); }
-    /* animações */
-    @keyframes float { 0%,100% { transform: translateY(0); } 50% { transform: translateY(-12px); } }
-    @keyframes floatSlow { 0%,100% { transform: translateY(0); } 50% { transform: translateY(-7px); } }
-    @keyframes pop { 0% { transform: scale(.8); opacity: 0; } 100% { transform: scale(1); opacity: 1; } }
-    @keyframes fadeUp { 0% { transform: translateY(20px); opacity: 0; } 100% { transform: translateY(0); opacity: 1; } }
-    .anim-float { animation: float 4s ease-in-out infinite; }
-    .anim-float-slow { animation: floatSlow 5s ease-in-out infinite; }
-    .reveal { opacity: 0; }
-    .reveal.in { animation: fadeUp .6s ease forwards; }
-    .blob { filter: blur(40px); border-radius: 50%; position: absolute; }
-    /* ícones de funcionalidades — cor diferente por posição */
-    #funcionalidades .ficon:nth-child(1) {} /* placeholder */
-    #funcionalidades .grid > div:nth-child(1) .ficon { background:#d1fae5; color:#059669; }
-    #funcionalidades .grid > div:nth-child(2) .ficon { background:#e0f2fe; color:#0284c7; }
-    #funcionalidades .grid > div:nth-child(3) .ficon { background:#ede9fe; color:#7c3aed; }
-    #funcionalidades .grid > div:nth-child(4) .ficon { background:#ffedd5; color:#ea580c; }
-    #funcionalidades .grid > div:nth-child(5) .ficon { background:#ffe4e6; color:#e11d48; }
-    #funcionalidades .grid > div:nth-child(6) .ficon { background:#fef9c3; color:#ca8a04; }
-    #funcionalidades .grid > div:nth-child(7) .ficon { background:#ccfbf1; color:#0d9488; }
-    #funcionalidades .grid > div:nth-child(8) .ficon { background:#fee2e2; color:#dc2626; }
-    #funcionalidades .grid > div:nth-child(9) .ficon { background:#e0e7ff; color:#4f46e5; }
+    :root{
+      --primary:#5b5cf6;
+      --primary-2:#7c3aed;
+      --accent:#22c55e;
+      --cyan:#06b6d4;
+      --orange:#f59e0b;
+      --pink:#ec4899;
+      --dark:#111827;
+      --muted:#64748b;
+      --line:#e8edf5;
+      --bg:#f7f9ff;
+      --card:#ffffff;
+      --shadow:0 24px 70px rgba(30,41,59,.12);
+      --shadow-soft:0 14px 35px rgba(30,41,59,.08);
+      --radius:28px;
+    }
+    *{box-sizing:border-box}
+    html{scroll-behavior:smooth}
+    body{margin:0;font-family:Inter,system-ui,-apple-system,Segoe UI,sans-serif;color:var(--dark);background:var(--bg);overflow-x:hidden}
+    a{text-decoration:none;color:inherit}
+    .container{max-width:1180px;margin:0 auto;padding:0 24px}
+    .nav{height:78px;display:flex;align-items:center;justify-content:space-between;gap:24px;position:sticky;top:0;z-index:50;background:rgba(247,249,255,.82);backdrop-filter:blur(18px);border-bottom:1px solid rgba(226,232,240,.7)}
+    .brand{display:flex;align-items:center;gap:12px;font-weight:900;letter-spacing:-.04em;font-size:20px}
+    .brand-mark{width:42px;height:42px;border-radius:16px;background:linear-gradient(135deg,var(--primary),var(--cyan));display:grid;place-items:center;color:#fff;box-shadow:0 12px 30px rgba(91,92,246,.28)}
+    .navlinks{display:flex;align-items:center;gap:26px;color:#64748b;font-size:14px;font-weight:700}
+    .navlinks a:hover{color:var(--primary)}
+    .btn{display:inline-flex;align-items:center;justify-content:center;gap:10px;border-radius:999px;padding:14px 22px;font-weight:800;font-size:14px;transition:.2s ease;cursor:pointer;border:0;white-space:nowrap}
+    .btn-primary{background:linear-gradient(135deg,var(--primary),var(--primary-2));color:#fff;box-shadow:0 18px 40px rgba(91,92,246,.25)}
+    .btn-primary:hover{transform:translateY(-2px);box-shadow:0 22px 55px rgba(91,92,246,.34)}
+    .btn-white{background:#fff;color:var(--dark);box-shadow:var(--shadow-soft);border:1px solid var(--line)}
+    .btn-ghost{background:#eef2ff;color:var(--primary);border:1px solid #dbe4ff}
+    .hero{position:relative;padding:76px 0 90px;overflow:hidden}
+    .hero:before{content:"";position:absolute;inset:-180px -120px auto auto;width:620px;height:620px;background:radial-gradient(circle,rgba(91,92,246,.22),transparent 62%);pointer-events:none}
+    .hero:after{content:"";position:absolute;left:-220px;top:120px;width:560px;height:560px;background:radial-gradient(circle,rgba(6,182,212,.15),transparent 64%);pointer-events:none}
+    .hero-grid{position:relative;display:grid;grid-template-columns:1.02fr .98fr;gap:48px;align-items:center}
+    .pill{display:inline-flex;align-items:center;gap:9px;background:#fff;border:1px solid var(--line);box-shadow:0 10px 26px rgba(30,41,59,.06);border-radius:999px;padding:9px 14px;font-weight:800;font-size:13px;color:#475569;margin-bottom:22px}
+    .pill-dot{width:9px;height:9px;border-radius:50%;background:var(--accent);box-shadow:0 0 0 6px rgba(34,197,94,.12)}
+    h1{font-size:clamp(42px,6vw,74px);line-height:.96;letter-spacing:-.075em;margin:0 0 24px;font-weight:900}
+    .gradient-text{background:linear-gradient(135deg,var(--primary),var(--cyan));-webkit-background-clip:text;background-clip:text;color:transparent}
+    .lead{font-size:19px;line-height:1.75;color:#52637a;margin:0 0 34px;max-width:650px}
+    .hero-actions{display:flex;gap:14px;flex-wrap:wrap;align-items:center}
+    .trust-row{display:flex;gap:20px;flex-wrap:wrap;margin-top:30px;color:#64748b;font-size:14px;font-weight:700}
+    .trust-row span{display:flex;align-items:center;gap:8px}
+    .check{width:20px;height:20px;border-radius:50%;display:grid;place-items:center;background:#dcfce7;color:#16a34a;font-size:12px}
+    .visual{position:relative;min-height:585px}
+    .blob-card{position:absolute;inset:44px 0 0 30px;border-radius:46px;background:linear-gradient(135deg,#eef2ff,#ecfeff 52%,#fff7ed);box-shadow:var(--shadow);border:1px solid #fff;overflow:hidden}
+    .blob-card:before{content:"";position:absolute;right:-140px;top:-120px;width:320px;height:320px;border-radius:50%;background:rgba(124,58,237,.18)}
+    .blob-card:after{content:"";position:absolute;left:-90px;bottom:-90px;width:260px;height:260px;border-radius:50%;background:rgba(34,197,94,.16)}
+    .illustration{position:absolute;left:40px;right:22px;top:0;height:385px;z-index:2}
+    .dashboard{position:absolute;left:0;right:28px;bottom:20px;background:rgba(255,255,255,.88);border:1px solid rgba(255,255,255,.9);backdrop-filter:blur(18px);border-radius:30px;padding:18px;box-shadow:0 24px 80px rgba(15,23,42,.16);z-index:3}
+    .dash-top{display:flex;align-items:center;justify-content:space-between;margin-bottom:14px}
+    .dash-title{font-weight:900;font-size:15px;letter-spacing:-.03em}.dash-sub{font-size:12px;color:#64748b;margin-top:3px}
+    .status{display:inline-flex;gap:7px;align-items:center;background:#ecfdf5;color:#16a34a;border-radius:999px;padding:8px 12px;font-weight:900;font-size:12px}
+    .status i{width:8px;height:8px;border-radius:50%;background:#22c55e}
+    .dash-grid{display:grid;grid-template-columns:.9fr 1.1fr;gap:14px}.side-list,.chat-pane{background:#f8fafc;border:1px solid #edf2f7;border-radius:22px;padding:12px}.user{display:flex;gap:10px;align-items:center;background:#fff;border:1px solid #edf2f7;border-radius:16px;padding:10px;margin-bottom:8px}.avatar{width:34px;height:34px;border-radius:12px;display:grid;place-items:center;color:#fff;font-weight:900;background:linear-gradient(135deg,var(--primary),var(--cyan))}.user b{display:block;font-size:12px}.user small{color:#64748b;font-size:10px}.bubble{max-width:84%;font-size:12px;line-height:1.4;border-radius:16px;padding:10px 12px;margin:8px 0}.bubble.in{background:#fff;color:#334155;border-top-left-radius:5px}.bubble.out{background:linear-gradient(135deg,var(--primary),var(--primary-2));color:#fff;margin-left:auto;border-top-right-radius:5px}.metric-strip{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-top:12px}.metric{background:#fff;border:1px solid #edf2f7;border-radius:16px;padding:12px}.metric strong{font-size:18px}.metric span{display:block;font-size:10px;color:#64748b;margin-top:2px}.float-tag{position:absolute;z-index:4;background:#fff;border:1px solid #edf2f7;border-radius:18px;box-shadow:var(--shadow-soft);padding:13px 15px;font-weight:900;font-size:13px;display:flex;align-items:center;gap:10px}.tag1{left:0;top:95px}.tag2{right:-6px;top:210px}.tag3{left:70px;bottom:6px}.tag-icon{width:34px;height:34px;border-radius:12px;display:grid;place-items:center;color:#fff;background:linear-gradient(135deg,var(--accent),var(--cyan))}
+    section{padding:86px 0}.section-head{text-align:center;max-width:760px;margin:0 auto 46px}.eyebrow{color:var(--primary);font-weight:900;font-size:13px;text-transform:uppercase;letter-spacing:.14em}.section-head h2{font-size:clamp(31px,4vw,48px);line-height:1.05;letter-spacing:-.055em;margin:12px 0 14px}.section-head p{color:#64748b;font-size:17px;line-height:1.65;margin:0}.pain-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:18px}.pain-card{background:#fff;border:1px solid var(--line);border-radius:26px;padding:24px;box-shadow:0 12px 30px rgba(30,41,59,.05)}.pain-card .icon{width:50px;height:50px;border-radius:18px;display:grid;place-items:center;margin-bottom:18px}.pain-card h3{margin:0 0 10px;font-size:17px;letter-spacing:-.02em}.pain-card p{margin:0;color:#64748b;font-size:14px;line-height:1.55}.solution{background:#111827;color:#fff;position:relative;overflow:hidden}.solution:before{content:"";position:absolute;inset:-220px auto auto -120px;width:520px;height:520px;background:radial-gradient(circle,rgba(91,92,246,.36),transparent 62%)}.solution-grid{position:relative;display:grid;grid-template-columns:.9fr 1.1fr;gap:42px;align-items:center}.solution h2{font-size:clamp(34px,4vw,52px);letter-spacing:-.06em;line-height:1.05;margin:0 0 18px}.solution p{color:#cbd5e1;font-size:17px;line-height:1.7}.steps{display:grid;gap:16px}.step{display:flex;gap:16px;background:rgba(255,255,255,.07);border:1px solid rgba(255,255,255,.1);border-radius:24px;padding:20px}.num{width:42px;height:42px;border-radius:16px;background:#fff;color:var(--primary);display:grid;place-items:center;font-weight:900;flex-shrink:0}.step h3{margin:0 0 6px}.step p{margin:0;font-size:14px;line-height:1.5;color:#cbd5e1}.features{display:grid;grid-template-columns:repeat(3,1fr);gap:18px}.feature{background:#fff;border:1px solid var(--line);border-radius:26px;padding:26px;box-shadow:0 10px 28px rgba(30,41,59,.05)}.feature .icon{width:52px;height:52px;border-radius:18px;display:grid;place-items:center;color:#fff;margin-bottom:18px}.feature h3{margin:0 0 9px;font-size:18px;letter-spacing:-.025em}.feature p{margin:0;color:#64748b;font-size:14px;line-height:1.6}.pricing-wrap{display:grid;grid-template-columns:repeat(3,1fr);gap:22px;align-items:stretch}.price-card{background:#fff;border:1px solid var(--line);border-radius:32px;padding:30px;box-shadow:var(--shadow-soft);position:relative}.price-card.popular{background:#111827;color:#fff;transform:translateY(-10px);border:2px solid var(--primary)}.badge{position:absolute;top:-13px;left:50%;transform:translateX(-50%);background:linear-gradient(135deg,var(--accent),var(--cyan));color:#fff;border-radius:999px;padding:8px 14px;font-size:11px;font-weight:900}.price-card h3{font-size:22px;margin:0 0 8px}.price-card p{color:#64748b;margin:0 0 24px}.popular p,.popular li{color:#cbd5e1}.price{font-size:44px;font-weight:900;letter-spacing:-.06em;margin-bottom:20px}.price small{font-size:15px;color:#94a3b8;letter-spacing:0}.price-card ul{list-style:none;padding:0;margin:0 0 26px;display:grid;gap:12px;color:#475569;font-weight:600;font-size:14px}.faq{max-width:820px;margin:0 auto;display:grid;gap:12px}details{background:#fff;border:1px solid var(--line);border-radius:22px;padding:20px 22px;box-shadow:0 10px 24px rgba(30,41,59,.04)}summary{cursor:pointer;font-weight:900;display:flex;justify-content:space-between;gap:16px;list-style:none}summary::-webkit-details-marker{display:none}details p{color:#64748b;line-height:1.6;margin:14px 0 0}.final-cta{padding:80px 0;background:linear-gradient(135deg,#eef2ff,#ecfeff);text-align:center}.final-box{background:#fff;border:1px solid var(--line);border-radius:40px;padding:48px;box-shadow:var(--shadow)}.final-box h2{font-size:clamp(32px,4vw,52px);letter-spacing:-.06em;margin:0 0 14px}.final-box p{margin:0 auto 26px;color:#64748b;font-size:17px;line-height:1.65;max-width:650px}footer{padding:36px 0;color:#64748b}.footer-row{display:flex;justify-content:space-between;align-items:center;gap:20px;flex-wrap:wrap}.wa-float{position:fixed;right:22px;bottom:22px;width:62px;height:62px;border-radius:22px;background:linear-gradient(135deg,#22c55e,#06b6d4);display:grid;place-items:center;color:#fff;box-shadow:0 18px 42px rgba(34,197,94,.35);z-index:60}
+    @media(max-width:980px){.hero-grid,.solution-grid{grid-template-columns:1fr}.visual{min-height:560px}.pain-grid,.features,.pricing-wrap{grid-template-columns:1fr 1fr}.navlinks{display:none}.dash-grid{grid-template-columns:1fr}.price-card.popular{transform:none}}
+    @media(max-width:640px){.container{padding:0 18px}.hero{padding-top:48px}.visual{min-height:520px}.blob-card{left:0}.illustration{left:5px;right:5px;height:330px}.dashboard{right:0}.pain-grid,.features,.pricing-wrap{grid-template-columns:1fr}.metric-strip{grid-template-columns:1fr}.float-tag{display:none}.final-box{padding:32px 22px;border-radius:28px}.hero-actions .btn{width:100%}.trust-row{gap:12px}}
   </style>
 </head>
-<body class="font-sans text-ink antialiased">
-
-  <!-- =========== CONFIG: troca este número pelo teu WhatsApp (formato 55DDDNUMERO) =========== -->
-  <script>
-    window.WA_NUMBER = '5585999999999'; // ⚠️ TROCAR pelo número real
-    window.waLink = (msg) => `https://wa.me/${window.WA_NUMBER}?text=${encodeURIComponent(msg || 'Olá! Quero testar o WhatsApp Multi-Atendente grátis por 1 mês.')}`;
-    document.addEventListener('DOMContentLoaded', () => {
-      document.querySelectorAll('[data-wa]').forEach(a => {
-        a.href = window.waLink(a.getAttribute('data-wa') || '');
-        a.target = '_blank'; a.rel = 'noopener';
-      });
-    });
-  </script>
-
-  <!-- ============ NAV ============ -->
-  <header class="sticky top-0 z-50 bg-white/90 backdrop-blur border-b border-slate-100">
-    <nav class="max-w-6xl mx-auto px-5 h-16 flex items-center justify-between">
-      <a href="#" class="flex items-center gap-2 font-extrabold text-lg">
-        <span class="text-2xl">💬</span> WhatsApp <span class="text-wa-dark">Multi-Atendente</span>
-      </a>
-      <div class="hidden md:flex items-center gap-7 text-sm font-medium text-slate-600">
-        <a href="#funcionalidades" class="hover:text-wa-dark">Funcionalidades</a>
-        <a href="#como-funciona" class="hover:text-wa-dark">Como funciona</a>
-        <a href="#planos" class="hover:text-wa-dark">Planos</a>
-        <a href="#faq" class="hover:text-wa-dark">FAQ</a>
-      </div>
-      <a data-wa class="bg-wa hover:bg-wa-dark text-white font-semibold text-sm px-4 py-2 rounded-lg transition">Testar grátis</a>
-    </nav>
-  </header>
-
-  <!-- ============ HERO ============ -->
-  <section class="grad-hero text-white relative overflow-hidden">
-    <!-- padrão de pontos decorativo -->
-    <svg class="absolute inset-0 w-full h-full opacity-[0.07] pointer-events-none" aria-hidden="true">
-      <defs><pattern id="dots" width="28" height="28" patternUnits="userSpaceOnUse"><circle cx="2" cy="2" r="1.5" fill="#25D366"/></pattern></defs>
-      <rect width="100%" height="100%" fill="url(#dots)"/>
-    </svg>
-    <!-- blob verde difuso -->
-    <div class="absolute -top-24 -right-24 w-96 h-96 bg-wa/20 rounded-full blur-3xl pointer-events-none"></div>
-    <div class="max-w-6xl mx-auto px-5 py-20 md:py-28 grid md:grid-cols-2 gap-12 items-center relative">
-      <div>
-        <span class="inline-block bg-wa/15 text-wa border border-wa/30 text-xs font-semibold px-3 py-1 rounded-full mb-5">🚀 Sem pagar por mensagem à Meta</span>
-        <h1 class="text-4xl md:text-5xl font-extrabold leading-tight">
-          Vários atendentes,<br><span class="text-wa">um só número</span> de WhatsApp.
-        </h1>
-        <p class="mt-5 text-lg text-slate-300 leading-relaxed">
-          Sua equipe inteira atende pelo mesmo número, com conversas distribuídas automaticamente, departamentos, relatórios e bot. Tudo num painel web — sem instalar nada.
-        </p>
-        <div class="mt-8 flex flex-col sm:flex-row gap-3">
-          <a data-wa class="bg-wa hover:bg-wa-dark text-white font-bold px-7 py-3.5 rounded-xl text-center transition shadow-lg shadow-wa/20">
-            Testar 1 mês grátis →
-          </a>
-          <a href="#como-funciona" class="border border-white/20 hover:bg-white/5 text-white font-semibold px-7 py-3.5 rounded-xl text-center transition">
-            Ver como funciona
-          </a>
-        </div>
-        <p class="mt-4 text-sm text-slate-400">Sem cartão de crédito · Configuração em ~30 minutos · Suporte em português</p>
-      </div>
-      <div class="relative h-[420px] md:h-[460px]">
-        <!-- blobs coloridos de fundo -->
-        <div class="blob w-56 h-56 bg-emerald-400/30 top-4 right-8"></div>
-        <div class="blob w-44 h-44 bg-indigo-400/25 bottom-0 left-4"></div>
-        <div class="blob w-40 h-40 bg-amber-300/25 top-28 left-24"></div>
-
-        <!-- avatares de atendentes (topo) -->
-        <div class="absolute top-0 left-1/2 -translate-x-1/2 flex -space-x-2 z-20">
-          <span class="w-11 h-11 rounded-full bg-gradient-to-br from-pink-400 to-rose-500 border-2 border-white shadow-lg flex items-center justify-center text-white font-bold anim-float-slow">M</span>
-          <span class="w-11 h-11 rounded-full bg-gradient-to-br from-sky-400 to-blue-500 border-2 border-white shadow-lg flex items-center justify-center text-white font-bold anim-float" style="animation-delay:.6s">J</span>
-          <span class="w-11 h-11 rounded-full bg-gradient-to-br from-amber-400 to-orange-500 border-2 border-white shadow-lg flex items-center justify-center text-white font-bold anim-float-slow" style="animation-delay:1.2s">A</span>
-          <span class="w-11 h-11 rounded-full bg-gradient-to-br from-violet-400 to-purple-500 border-2 border-white shadow-lg flex items-center justify-center text-white font-bold anim-float" style="animation-delay:.3s">R</span>
-        </div>
-
-        <!-- card de chat central -->
-        <div class="absolute top-16 left-1/2 -translate-x-1/2 w-[260px] max-w-[88%] bg-white rounded-2xl shadow-2xl p-4 z-10 anim-float-slow">
-          <div class="flex items-center gap-2 pb-3 border-b border-slate-100">
-            <span class="w-9 h-9 rounded-full bg-gradient-to-br from-emerald-400 to-teal-500 flex items-center justify-center text-white">
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M12.04 2C6.58 2 2.13 6.45 2.13 11.91c0 1.75.46 3.45 1.32 4.95L2 22l5.25-1.38c1.45.79 3.08 1.21 4.79 1.21 5.46 0 9.91-4.45 9.91-9.91C21.95 6.45 17.5 2 12.04 2z"/></svg>
-            </span>
-            <div class="leading-tight">
-              <div class="text-sm font-bold text-ink">Maria Silva</div>
-              <div class="text-[10px] text-emerald-500 font-medium">a escrever…</div>
-            </div>
-            <span class="ml-auto text-[9px] bg-emerald-50 text-emerald-600 font-semibold px-2 py-0.5 rounded-full">Vendas</span>
-          </div>
-          <div class="space-y-2 pt-3">
-            <div class="bg-slate-100 text-slate-700 text-xs rounded-2xl rounded-tl-sm px-3 py-2 max-w-[80%]">Bom dia! Vocês entregam aqui?</div>
-            <div class="bg-wa text-white text-xs rounded-2xl rounded-tr-sm px-3 py-2 max-w-[85%] ml-auto">Bom dia! 😊 Sim, entregamos em toda a cidade. <span class="block text-right text-[9px] opacity-80 mt-0.5">✓✓</span></div>
-            <div class="bg-slate-100 text-slate-700 text-xs rounded-2xl rounded-tl-sm px-3 py-2 max-w-[60%]">Perfeito! 👍</div>
-          </div>
-        </div>
-
-        <!-- badges flutuantes -->
-        <div class="absolute top-24 -left-2 md:left-0 bg-white rounded-xl shadow-xl px-3 py-2 flex items-center gap-2 z-20 anim-float" style="animation-delay:.4s">
-          <span class="w-8 h-8 rounded-lg bg-amber-100 text-amber-500 flex items-center justify-center"><svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><polygon points="12 2 15 9 22 9.3 16.5 14 18.5 21 12 17 5.5 21 7.5 14 2 9.3 9 9"/></svg></span>
-          <div class="leading-tight"><div class="text-sm font-bold text-ink">4.9</div><div class="text-[9px] text-slate-400">avaliação</div></div>
-        </div>
-        <div class="absolute bottom-10 -right-2 md:right-0 bg-white rounded-xl shadow-xl px-3 py-2 flex items-center gap-2 z-20 anim-float-slow" style="animation-delay:.9s">
-          <span class="w-8 h-8 rounded-lg bg-indigo-100 text-indigo-500 flex items-center justify-center"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="10" rx="2"/><circle cx="12" cy="5" r="2"/><path d="M12 7v4"/></svg></span>
-          <div class="leading-tight"><div class="text-sm font-bold text-ink">Bot ativo</div><div class="text-[9px] text-slate-400">responde sozinho</div></div>
-        </div>
-        <div class="absolute bottom-0 left-10 bg-white rounded-xl shadow-xl px-3 py-2 flex items-center gap-2 z-20 anim-float" style="animation-delay:1.4s">
-          <span class="w-8 h-8 rounded-lg bg-emerald-100 text-emerald-600 flex items-center justify-center"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg></span>
-          <div class="leading-tight"><div class="text-sm font-bold text-ink">+3 atendentes</div><div class="text-[9px] text-slate-400">online agora</div></div>
-        </div>
-      </div>
-    </div>
-  </section>
-
-  <!-- ============ A DOR ============ -->
-  <section class="py-20 bg-slate-50">
-    <div class="max-w-5xl mx-auto px-5 text-center">
-      <h2 class="text-3xl font-extrabold">Atender no WhatsApp vira bagunça rápido</h2>
-      <p class="mt-3 text-slate-500 max-w-2xl mx-auto">Se a sua empresa cresce, o celular único não acompanha. Reconhece algum destes?</p>
-      <div class="mt-12 grid md:grid-cols-2 gap-5 text-left">
-        <div class="flex gap-4 bg-white p-5 rounded-xl border border-slate-100">
-          <span class="shrink-0 w-10 h-10 rounded-lg bg-red-50 text-red-500 flex items-center justify-center"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="2" width="14" height="20" rx="2"/><line x1="12" y1="18" x2="12.01" y2="18"/></svg></span>
-          <div><strong>Um celular, vários atendentes</strong><p class="text-slate-500 text-sm mt-1">Todo mundo brigando pelo mesmo aparelho, mensagens se cruzando.</p></div>
-        </div>
-        <div class="flex gap-4 bg-white p-5 rounded-xl border border-slate-100">
-          <span class="shrink-0 w-10 h-10 rounded-lg bg-red-50 text-red-500 flex items-center justify-center"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/><line x1="12" y1="7" x2="12" y2="11"/><line x1="12" y1="14" x2="12.01" y2="14"/></svg></span>
-          <div><strong>Cliente sem resposta</strong><p class="text-slate-500 text-sm mt-1">Mensagens se perdem, ninguém sabe quem responde o quê.</p></div>
-        </div>
-        <div class="flex gap-4 bg-white p-5 rounded-xl border border-slate-100">
-          <span class="shrink-0 w-10 h-10 rounded-lg bg-red-50 text-red-500 flex items-center justify-center"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg></span>
-          <div><strong>Atendente sai e leva os contatos</strong><p class="text-slate-500 text-sm mt-1">O histórico estava no celular dele. Você perdeu tudo.</p></div>
-        </div>
-        <div class="flex gap-4 bg-white p-5 rounded-xl border border-slate-100">
-          <span class="shrink-0 w-10 h-10 rounded-lg bg-red-50 text-red-500 flex items-center justify-center"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M16 16s-1.5-2-4-2-4 2-4 2"/><line x1="9" y1="9" x2="9.01" y2="9"/><line x1="15" y1="9" x2="15.01" y2="9"/></svg></span>
-          <div><strong>Cliente irritado e ninguém vê</strong><p class="text-slate-500 text-sm mt-1">Sem priorização, o cliente bravo espera igual aos outros.</p></div>
-        </div>
-      </div>
-    </div>
-  </section>
-
-  <!-- ============ COMO FUNCIONA ============ -->
-  <section id="como-funciona" class="py-20 bg-gradient-to-b from-white to-emerald-50/40">
-    <div class="max-w-5xl mx-auto px-5 text-center">
-      <span class="text-wa-dark font-bold text-sm tracking-wide uppercase">Simples assim</span>
-      <h2 class="text-3xl font-extrabold mt-2">Funcionando em 30 minutos</h2>
-      <div class="mt-14 grid md:grid-cols-3 gap-10 relative">
-        <!-- linha conectora -->
-        <div class="hidden md:block absolute top-16 left-[16%] right-[16%] h-0.5 bg-gradient-to-r from-emerald-200 via-sky-200 to-violet-200"></div>
-
-        <div class="reveal relative">
-          <div class="w-32 h-32 mx-auto rounded-2xl bg-emerald-100 flex items-center justify-center relative">
-            <!-- telemóvel com QR -->
-            <svg width="56" height="56" viewBox="0 0 24 24" fill="none" stroke="#059669" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="2" width="14" height="20" rx="2"/><rect x="8" y="6" width="3" height="3"/><rect x="13" y="6" width="3" height="3"/><rect x="8" y="11" width="3" height="3"/><rect x="13" y="11" width="3" height="3" fill="#059669"/><line x1="9" y1="18" x2="15" y2="18"/></svg>
-            <span class="absolute -top-3 -right-3 w-8 h-8 rounded-full bg-wa text-white font-bold flex items-center justify-center shadow-lg">1</span>
-          </div>
-          <h3 class="font-bold mt-5 text-lg">Conecte o WhatsApp</h3>
-          <p class="text-slate-500 text-sm mt-2">Escaneia um QR Code (igual ao WhatsApp Web). Usa o número que você já tem.</p>
-        </div>
-
-        <div class="reveal relative" style="animation-delay:.15s">
-          <div class="w-32 h-32 mx-auto rounded-2xl bg-sky-100 flex items-center justify-center relative">
-            <!-- equipa -->
-            <svg width="56" height="56" viewBox="0 0 24 24" fill="none" stroke="#0284c7" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="7" r="3"/><path d="M3 21v-1a5 5 0 0 1 5-5h2a5 5 0 0 1 5 5v1"/><circle cx="17" cy="6" r="2.5"/><path d="M21 21v-1a4 4 0 0 0-3-3.87"/></svg>
-            <span class="absolute -top-3 -right-3 w-8 h-8 rounded-full bg-sky-500 text-white font-bold flex items-center justify-center shadow-lg">2</span>
-          </div>
-          <h3 class="font-bold mt-5 text-lg">Cadastre a equipe</h3>
-          <p class="text-slate-500 text-sm mt-2">Crie os atendentes, organize por departamentos (Vendas, Suporte, Financeiro).</p>
-        </div>
-
-        <div class="reveal relative" style="animation-delay:.3s">
-          <div class="w-32 h-32 mx-auto rounded-2xl bg-violet-100 flex items-center justify-center relative">
-            <!-- distribuição -->
-            <svg width="56" height="56" viewBox="0 0 24 24" fill="none" stroke="#7c3aed" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="5" r="2.5"/><circle cx="5" cy="19" r="2.5"/><circle cx="19" cy="19" r="2.5"/><path d="M12 7.5v4M12 11.5l-5 5M12 11.5l5 5"/></svg>
-            <span class="absolute -top-3 -right-3 w-8 h-8 rounded-full bg-violet-500 text-white font-bold flex items-center justify-center shadow-lg">3</span>
-          </div>
-          <h3 class="font-bold mt-5 text-lg">Atenda em equipe</h3>
-          <p class="text-slate-500 text-sm mt-2">As conversas são distribuídas automaticamente. Cada um vê só o que é dele.</p>
-        </div>
-      </div>
-    </div>
-  </section>
-
-  <!-- ============ FUNCIONALIDADES ============ -->
-  <section id="funcionalidades" class="py-20 bg-slate-50">
-    <div class="max-w-6xl mx-auto px-5">
-      <div class="text-center">
-        <h2 class="text-3xl font-extrabold">Tudo o que sua operação precisa</h2>
-        <p class="mt-3 text-slate-500">Recursos pensados para equipes de atendimento que querem escalar.</p>
-      </div>
-      <div class="mt-12 grid sm:grid-cols-2 lg:grid-cols-3 gap-5">
-        <!-- card -->
-        <div class="reveal bg-white p-6 rounded-xl border border-slate-100 card-hover">
-          <div class="ficon w-12 h-12 rounded-xl flex items-center justify-center">
-            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
-          </div>
-          <h3 class="font-bold mt-4">Multi-atendente</h3>
-          <p class="text-slate-500 text-sm mt-1">Toda a equipe no mesmo número, com distribuição automática por carga.</p>
-        </div>
-        <div class="reveal bg-white p-6 rounded-xl border border-slate-100 card-hover">
-          <div class="ficon w-12 h-12 rounded-xl flex items-center justify-center">
-            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72c.13.96.36 1.9.7 2.81a2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45c.91.34 1.85.57 2.81.7A2 2 0 0 1 22 16.92z"/></svg>
-          </div>
-          <h3 class="font-bold mt-4">Múltiplas linhas</h3>
-          <p class="text-slate-500 text-sm mt-1">Vários números num só painel — Vendas, SAC, Financeiro separados.</p>
-        </div>
-        <div class="reveal bg-white p-6 rounded-xl border border-slate-100 card-hover">
-          <div class="ficon w-12 h-12 rounded-xl flex items-center justify-center">
-            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 21h18"/><path d="M5 21V7l8-4v18"/><path d="M19 21V11l-6-4"/><path d="M9 9v.01"/><path d="M9 12v.01"/><path d="M9 15v.01"/></svg>
-          </div>
-          <h3 class="font-bold mt-4">Departamentos & supervisores</h3>
-          <p class="text-slate-500 text-sm mt-1">Roteamento por setor e supervisores que veem só a sua equipe.</p>
-        </div>
-        <div class="reveal bg-white p-6 rounded-xl border border-slate-100 card-hover">
-          <div class="ficon w-12 h-12 rounded-xl flex items-center justify-center">
-            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="10" rx="2"/><circle cx="12" cy="5" r="2"/><path d="M12 7v4"/><line x1="8" y1="16" x2="8" y2="16"/><line x1="16" y1="16" x2="16" y2="16"/></svg>
-          </div>
-          <h3 class="font-bold mt-4">Bot de FAQ</h3>
-          <p class="text-slate-500 text-sm mt-1">Responde perguntas comuns sozinho, antes de chegar a um humano.</p>
-        </div>
-        <div class="reveal bg-white p-6 rounded-xl border border-slate-100 card-hover">
-          <div class="ficon w-12 h-12 rounded-xl flex items-center justify-center">
-            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/></svg>
-          </div>
-          <h3 class="font-bold mt-4">Transcrição de áudio</h3>
-          <p class="text-slate-500 text-sm mt-1">Áudio do cliente vira texto automaticamente. Leia em segundos.</p>
-        </div>
-        <div class="reveal bg-white p-6 rounded-xl border border-slate-100 card-hover">
-          <div class="ficon w-12 h-12 rounded-xl flex items-center justify-center">
-            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
-          </div>
-          <h3 class="font-bold mt-4">Avaliação 1-5</h3>
-          <p class="text-slate-500 text-sm mt-1">Pesquisa de satisfação automática ao fechar o atendimento.</p>
-        </div>
-        <div class="reveal bg-white p-6 rounded-xl border border-slate-100 card-hover">
-          <div class="ficon w-12 h-12 rounded-xl flex items-center justify-center">
-            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>
-          </div>
-          <h3 class="font-bold mt-4">Relatórios & SLA</h3>
-          <p class="text-slate-500 text-sm mt-1">Tempo de resposta, volume por hora, ranking de atendentes, alertas de SLA.</p>
-        </div>
-        <div class="reveal bg-white p-6 rounded-xl border border-slate-100 card-hover">
-          <div class="ficon w-12 h-12 rounded-xl flex items-center justify-center">
-            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M16 16s-1.5-2-4-2-4 2-4 2"/><line x1="9" y1="9" x2="9.01" y2="9"/><line x1="15" y1="9" x2="15.01" y2="9"/></svg>
-          </div>
-          <h3 class="font-bold mt-4">Detector de cliente irritado</h3>
-          <p class="text-slate-500 text-sm mt-1">Sinaliza conversas com tom negativo para você priorizar.</p>
-        </div>
-        <div class="reveal bg-white p-6 rounded-xl border border-slate-100 card-hover">
-          <div class="ficon w-12 h-12 rounded-xl flex items-center justify-center">
-            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 9a2 2 0 0 1-2 2H6l-4 4V4a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2z"/><path d="M18 9h2a2 2 0 0 1 2 2v11l-4-4h-6a2 2 0 0 1-2-2v-1"/></svg>
-          </div>
-          <h3 class="font-bold mt-4">Chat interno</h3>
-          <p class="text-slate-500 text-sm mt-1">Equipe conversa entre si com @menções, sem sair do painel.</p>
-        </div>
-      </div>
-    </div>
-  </section>
-
-  <!-- ============ DIFERENCIAL ============ -->
-  <section class="py-20 bg-wa-deep text-white">
-    <div class="max-w-5xl mx-auto px-5 grid md:grid-cols-2 gap-10 items-center">
-      <div>
-        <h2 class="text-3xl font-extrabold">Não pague por mensagem</h2>
-        <p class="mt-4 text-slate-200 leading-relaxed">
-          A maioria das soluções usa a <strong>API oficial paga da Meta</strong> — onde você paga por cada conversa iniciada. Nós usamos o WhatsApp como ele já é, no número que você já tem.
-        </p>
-        <p class="mt-3 text-slate-200">Para quem manda muita mensagem, a economia é grande.</p>
-      </div>
-      <div class="space-y-3">
-        <div class="flex items-center gap-3 bg-white/5 rounded-lg p-4"><span class="text-wa text-xl">✓</span> Sem custo por mensagem</div>
-        <div class="flex items-center gap-3 bg-white/5 rounded-lg p-4"><span class="text-wa text-xl">✓</span> Domínio próprio (atendimento.suaempresa.com.br)</div>
-        <div class="flex items-center gap-3 bg-white/5 rounded-lg p-4"><span class="text-wa text-xl">✓</span> 100% em português, suporte direto</div>
-        <div class="flex items-center gap-3 bg-white/5 rounded-lg p-4"><span class="text-wa text-xl">✓</span> Funciona no PC e no celular, sem instalar</div>
-      </div>
-    </div>
-  </section>
-
-  <!-- ============ PLANOS ============ -->
-  <section id="planos" class="py-20">
-    <div class="max-w-6xl mx-auto px-5">
-      <div class="text-center">
-        <h2 class="text-3xl font-extrabold">Planos simples, sem surpresa</h2>
-        <p class="mt-3 text-slate-500">Cobramos por linha e atendentes — nunca por mensagem. Cancela quando quiser.</p>
-      </div>
-      <div class="mt-12 grid md:grid-cols-3 gap-6 items-stretch">
-        <!-- Básico -->
-        <div class="bg-white p-7 rounded-2xl border border-slate-200 flex flex-col">
-          <h3 class="font-bold text-lg">Básico</h3>
-          <p class="text-slate-500 text-sm mt-1">Para quem está começando</p>
-          <div class="mt-5"><span class="text-4xl font-extrabold">R$ 197</span><span class="text-slate-400">/mês</span></div>
-          <ul class="mt-6 space-y-2.5 text-sm text-slate-600 flex-1">
-            <li>✅ 1 linha WhatsApp</li>
-            <li>✅ Até 3 atendentes</li>
-            <li>✅ 1 departamento</li>
-            <li>✅ Bot de boas-vindas</li>
-            <li>✅ Histórico de conversas</li>
-          </ul>
-          <a data-wa="Olá! Tenho interesse no plano Básico (R$197/mês). Quero testar grátis." class="mt-6 text-center border border-wa text-wa-dark font-semibold py-2.5 rounded-lg hover:bg-wa/5 transition">Começar</a>
-        </div>
-        <!-- Profissional (destaque) -->
-        <div class="bg-ink text-white p-7 rounded-2xl border-2 border-wa flex flex-col relative shadow-xl">
-          <span class="absolute -top-3 left-1/2 -translate-x-1/2 bg-wa text-white text-xs font-bold px-3 py-1 rounded-full">MAIS POPULAR</span>
-          <h3 class="font-bold text-lg">Profissional</h3>
-          <p class="text-slate-300 text-sm mt-1">Para equipes organizadas</p>
-          <div class="mt-5"><span class="text-4xl font-extrabold">R$ 397</span><span class="text-slate-400">/mês</span></div>
-          <ul class="mt-6 space-y-2.5 text-sm text-slate-200 flex-1">
-            <li>✅ Até 2 linhas WhatsApp</li>
-            <li>✅ Até 10 atendentes</li>
-            <li>✅ Até 3 departamentos</li>
-            <li>✅ Agendamento de mensagens</li>
-            <li>✅ Etiquetas, prioridades, transferências</li>
-            <li>✅ Avaliação 1-5 + respostas rápidas</li>
-            <li>✅ Relatórios + export CSV + SLA</li>
-          </ul>
-          <a data-wa="Olá! Tenho interesse no plano Profissional (R$397/mês). Quero testar grátis." class="mt-6 text-center bg-wa hover:bg-wa-dark text-white font-bold py-2.5 rounded-lg transition">Testar 1 mês grátis</a>
-        </div>
-        <!-- Empresarial -->
-        <div class="bg-white p-7 rounded-2xl border border-slate-200 flex flex-col">
-          <h3 class="font-bold text-lg">Empresarial</h3>
-          <p class="text-slate-500 text-sm mt-1">Para operações maiores</p>
-          <div class="mt-5"><span class="text-4xl font-extrabold">R$ 797</span><span class="text-slate-400">/mês</span></div>
-          <ul class="mt-6 space-y-2.5 text-sm text-slate-600 flex-1">
-            <li>✅ Linhas ilimitadas</li>
-            <li>✅ Atendentes ilimitados</li>
-            <li>✅ Departamentos ilimitados</li>
-            <li>✅ Operações em massa</li>
-            <li>✅ Logs de transferência</li>
-            <li>✅ Suporte prioritário</li>
-          </ul>
-          <a data-wa="Olá! Tenho interesse no plano Empresarial (R$797/mês). Quero falar com vocês." class="mt-6 text-center border border-wa text-wa-dark font-semibold py-2.5 rounded-lg hover:bg-wa/5 transition">Falar com vendas</a>
-        </div>
-      </div>
-      <p class="text-center text-slate-400 text-sm mt-8">💡 Pagamento anual: <strong>2 meses grátis</strong>. Add-ons: linha extra R$ 79/mês · atendente extra R$ 29/mês · setup R$ 297.</p>
-    </div>
-  </section>
-
-  <!-- ============ FAQ ============ -->
-  <section id="faq" class="py-20 bg-slate-50">
-    <div class="max-w-3xl mx-auto px-5">
-      <h2 class="text-3xl font-extrabold text-center">Perguntas frequentes</h2>
-      <div class="mt-10 space-y-3">
-        <details class="bg-white rounded-xl border border-slate-100 p-5 group" open>
-          <summary class="font-semibold cursor-pointer list-none flex justify-between items-center">Preciso instalar alguma coisa? <span class="text-wa group-open:rotate-45 transition">+</span></summary>
-          <p class="text-slate-500 text-sm mt-3">Não. É um painel web — funciona no navegador do PC ou celular. Você só escaneia um QR Code uma vez para conectar o WhatsApp.</p>
-        </details>
-        <details class="bg-white rounded-xl border border-slate-100 p-5 group">
-          <summary class="font-semibold cursor-pointer list-none flex justify-between items-center">Uso o número que já tenho? <span class="text-wa group-open:rotate-45 transition">+</span></summary>
-          <p class="text-slate-500 text-sm mt-3">Sim. Conecta o número de WhatsApp que a sua empresa já usa. Não precisa de chip novo nem número novo.</p>
-        </details>
-        <details class="bg-white rounded-xl border border-slate-100 p-5 group">
-          <summary class="font-semibold cursor-pointer list-none flex justify-between items-center">Meu número pode ser banido? <span class="text-wa group-open:rotate-45 transition">+</span></summary>
-          <p class="text-slate-500 text-sm mt-3">O sistema usa uma conexão não oficial (como o WhatsApp Web). Banimentos são raros quando se respeita o uso normal (sem spam em massa), mas é uma possibilidade que orientamos a mitigar. Falamos sobre isso na configuração.</p>
-        </details>
-        <details class="bg-white rounded-xl border border-slate-100 p-5 group">
-          <summary class="font-semibold cursor-pointer list-none flex justify-between items-center">Os dados ficam seguros? <span class="text-wa group-open:rotate-45 transition">+</span></summary>
-          <p class="text-slate-500 text-sm mt-3">Cada cliente tem o seu ambiente isolado, com a sua própria base de dados. As conversas ficam guardadas no servidor — se um atendente sair, o histórico permanece com você.</p>
-        </details>
-        <details class="bg-white rounded-xl border border-slate-100 p-5 group">
-          <summary class="font-semibold cursor-pointer list-none flex justify-between items-center">Como funciona o teste grátis? <span class="text-wa group-open:rotate-45 transition">+</span></summary>
-          <p class="text-slate-500 text-sm mt-3">1 mês completo, sem cartão de crédito e sem compromisso. A gente configura tudo para você. Se não servir, é só desligar.</p>
-        </details>
-      </div>
-    </div>
-  </section>
-
-  <!-- ============ CTA FINAL ============ -->
-  <section class="py-20 bg-wa-deep text-white text-center">
-    <div class="max-w-2xl mx-auto px-5">
-      <h2 class="text-3xl md:text-4xl font-extrabold">Pronto para organizar o seu atendimento?</h2>
-      <p class="mt-4 text-slate-200">Teste 1 mês grátis. A gente configura tudo e você vê funcionando com o seu próprio número.</p>
-      <a data-wa class="inline-block mt-8 bg-wa hover:bg-white hover:text-wa-deep text-white font-bold px-10 py-4 rounded-xl text-lg transition shadow-lg">
-        Falar no WhatsApp →
-      </a>
-      <p class="mt-4 text-sm text-slate-300">Resposta rápida · Sem compromisso</p>
-    </div>
-  </section>
-
-  <!-- ============ FOOTER ============ -->
-  <footer class="bg-ink text-slate-400 py-10">
-    <div class="max-w-6xl mx-auto px-5 flex flex-col md:flex-row justify-between items-center gap-4 text-sm">
-      <div class="flex items-center gap-2 font-bold text-white"><span>💬</span> WhatsApp Multi-Atendente</div>
-      <div class="flex gap-6">
-        <a href="#funcionalidades" class="hover:text-white">Funcionalidades</a>
-        <a href="#planos" class="hover:text-white">Planos</a>
-        <a data-wa class="hover:text-white">Contacto</a>
-      </div>
-      <div>© <span id="year"></span> · Feito com 💚</div>
-    </div>
-  </footer>
-
-  <!-- Botão flutuante WhatsApp -->
-  <a data-wa class="fixed bottom-5 right-5 z-50 bg-wa hover:bg-wa-dark text-white w-14 h-14 rounded-full flex items-center justify-center text-2xl shadow-lg shadow-wa/30 transition" title="Falar no WhatsApp">💬</a>
-
-  <script>
-    document.getElementById('year').textContent = new Date().getFullYear();
-    // Reveal on scroll — fade-up suave quando a secção entra no ecrã.
-    // Fallback: sem IntersectionObserver, mostra tudo imediatamente.
-    const reveals = document.querySelectorAll('.reveal');
-    if ('IntersectionObserver' in window) {
-      const io = new IntersectionObserver((entries) => {
-        entries.forEach(e => { if (e.isIntersecting) { e.target.classList.add('in'); io.unobserve(e.target); } });
-      }, { threshold: 0.12 });
-      reveals.forEach(el => io.observe(el));
-      // Rede de segurança: força visível após 2.5s caso algo falhe
-      setTimeout(() => reveals.forEach(el => el.classList.add('in')), 2500);
-    } else {
-      reveals.forEach(el => el.classList.add('in'));
-    }
-  </script>
+<body>
+<script>
+  window.WA_NUMBER = '5596991120773';
+  window.waLink = msg => `https://wa.me/${window.WA_NUMBER}?text=${encodeURIComponent(msg || 'Olá! Quero testar o WhatsApp Multi-Atendente.')}`;
+  document.addEventListener('DOMContentLoaded',()=>document.querySelectorAll('[data-wa]').forEach(a=>{a.href=window.waLink(a.dataset.wa||'');a.target='_blank';a.rel='noopener'}));
+</script>
+<header class="nav"><div class="container" style="display:flex;align-items:center;justify-content:space-between;gap:24px"><a href="#" class="brand"><span class="brand-mark">☎</span><span>Multi<span class="gradient-text">Atendente</span></span></a><nav class="navlinks"><a href="#solucao">Como funciona</a><a href="#recursos">Recursos</a><a href="#planos">Planos</a><a href="#faq">FAQ</a></nav><a class="btn btn-primary" data-wa>Testar grátis</a></div></header>
+<main>
+<section class="hero"><div class="container hero-grid"><div><div class="pill"><span class="pill-dot"></span> Atendimento profissional para WhatsApp</div><h1>Transforme seu WhatsApp em uma central de atendimento.</h1><p class="lead">Vários atendentes, departamentos, bot, relatórios e histórico em um painel bonito e organizado — usando o número que sua empresa já divulga.</p><div class="hero-actions"><a class="btn btn-primary" data-wa="Olá! Quero testar o WhatsApp Multi-Atendente grátis.">Começar teste grátis →</a><a class="btn btn-white" href="#recursos">Ver recursos</a></div><div class="trust-row"><span><i class="check">✓</i> Sem cartão</span><span><i class="check">✓</i> Configuração assistida</span><span><i class="check">✓</i> Suporte em português</span></div></div><div class="visual" aria-hidden="true"><div class="blob-card"></div><svg class="illustration" viewBox="0 0 620 430" fill="none" xmlns="http://www.w3.org/2000/svg"><ellipse cx="304" cy="388" rx="218" ry="23" fill="#DDE7F7"/><path d="M210 88c48-65 178-74 229-6 51 69 93 173 23 244-71 72-228 70-293-1-65-71-7-172 41-237Z" fill="#EEF2FF"/><circle cx="454" cy="80" r="38" fill="#CFFAFE"/><circle cx="157" cy="132" r="29" fill="#DCFCE7"/><rect x="211" y="58" width="196" height="270" rx="34" fill="#111827"/><rect x="225" y="78" width="168" height="228" rx="22" fill="#fff"/><rect x="245" y="100" width="128" height="32" rx="16" fill="#EEF2FF"/><circle cx="263" cy="116" r="10" fill="#5B5CF6"/><rect x="282" y="108" width="72" height="8" rx="4" fill="#CBD5E1"/><rect x="245" y="154" width="92" height="35" rx="16" fill="#F1F5F9"/><rect x="274" y="199" width="99" height="38" rx="17" fill="#5B5CF6"/><rect x="245" y="248" width="82" height="35" rx="16" fill="#F1F5F9"/><path d="M133 260c7-39 45-65 83-56 38 9 62 47 53 85l-14 59H121l12-88Z" fill="#5B5CF6"/><circle cx="205" cy="165" r="45" fill="#FDBA74"/><path d="M164 155c8-36 40-58 74-45 20 8 29 23 27 43-31-7-64-4-101 2Z" fill="#111827"/><path d="M165 347h88l23 58h-44l-15-31-22 31h-48l18-58Z" fill="#1E293B"/><path d="M444 240c-11-35-50-54-84-42-34 12-53 50-41 85l22 65h128l-25-108Z" fill="#06B6D4"/><circle cx="367" cy="164" r="43" fill="#F9A8D4"/><path d="M326 159c3-32 33-57 66-47 25 8 38 26 39 50-30-10-65-11-105-3Z" fill="#111827"/><path d="M348 347h91l39 58h-50l-21-30-13 30h-49l3-58Z" fill="#1E293B"/><rect x="423" y="126" width="120" height="64" rx="20" fill="#fff" stroke="#E2E8F0"/><path d="M448 161c18-27 54-23 70 0" stroke="#22C55E" stroke-width="10" stroke-linecap="round"/><circle cx="448" cy="161" r="8" fill="#22C55E"/><circle cx="518" cy="161" r="8" fill="#22C55E"/><rect x="76" y="96" width="112" height="66" rx="20" fill="#fff" stroke="#E2E8F0"/><rect x="98" y="118" width="68" height="8" rx="4" fill="#CBD5E1"/><rect x="98" y="136" width="44" height="8" rx="4" fill="#5B5CF6"/></svg><div class="float-tag tag1"><span class="tag-icon">✓</span> 14 chats resolvidos</div><div class="float-tag tag2"><span class="tag-icon">★</span> 4.9 satisfação</div><div class="float-tag tag3"><span class="tag-icon">⚡</span> SLA no prazo</div><div class="dashboard"><div class="dash-top"><div><div class="dash-title">Central de Atendimento</div><div class="dash-sub">Hoje · 38 conversas ativas</div></div><span class="status"><i></i> online</span></div><div class="dash-grid"><div class="side-list"><div class="user"><span class="avatar">M</span><div><b>Maria — Vendas</b><small>Cliente aguardando orçamento</small></div></div><div class="user"><span class="avatar" style="background:linear-gradient(135deg,#f59e0b,#ec4899)">J</span><div><b>João — Suporte</b><small>Pedido em andamento</small></div></div><div class="user"><span class="avatar" style="background:linear-gradient(135deg,#22c55e,#06b6d4)">A</span><div><b>Ana — Financeiro</b><small>Pagamento confirmado</small></div></div></div><div class="chat-pane"><div class="bubble in">Olá! Quero saber se vocês conseguem atender minha empresa.</div><div class="bubble out">Conseguimos sim 😊 Vou te mostrar os planos e configurar um teste.</div><div class="bubble in">Perfeito. Pode ser hoje?</div><div class="metric-strip"><div class="metric"><strong>2m</strong><span>tempo médio</span></div><div class="metric"><strong>97%</strong><span>SLA</span></div><div class="metric"><strong>4.9</strong><span>nota média</span></div></div></div></div></div></div></div></section>
+<section><div class="container"><div class="section-head"><span class="eyebrow">O problema</span><h2>O WhatsApp da empresa não pode depender de um celular na mão.</h2><p>Quando o atendimento cresce, as conversas se misturam, clientes ficam sem resposta e você perde controle do histórico.</p></div><div class="pain-grid"><article class="pain-card"><div class="icon" style="background:#fee2e2;color:#ef4444">☎</div><h3>Um aparelho para todos</h3><p>Atendentes disputam o mesmo celular e ninguém sabe quem respondeu.</p></article><article class="pain-card"><div class="icon" style="background:#fef3c7;color:#f59e0b">⏱</div><h3>Demora no retorno</h3><p>Mensagens importantes ficam perdidas entre áudios, fotos e grupos.</p></article><article class="pain-card"><div class="icon" style="background:#ede9fe;color:#7c3aed">👥</div><h3>Sem supervisão</h3><p>O gestor não enxerga fila, produtividade, atrasos nem qualidade.</p></article><article class="pain-card"><div class="icon" style="background:#dcfce7;color:#16a34a">💬</div><h3>Histórico espalhado</h3><p>Se alguém sai da equipe, parte do relacionamento vai junto.</p></article></div></div></section>
+<section id="solucao" class="solution"><div class="container solution-grid"><div><span class="eyebrow" style="color:#67e8f9">A solução</span><h2>Um painel único para vender, atender e acompanhar tudo.</h2><p>Cada atendente acessa com seu próprio login. O gestor acompanha a operação, transfere conversas, mede atendimento e mantém o relacionamento dentro da empresa.</p><a class="btn btn-primary" data-wa="Olá! Quero ver uma demonstração do WhatsApp Multi-Atendente.">Quero uma demonstração</a></div><div class="steps"><div class="step"><span class="num">1</span><div><h3>Conecte seu número</h3><p>Escaneie o QR Code uma vez, como no WhatsApp Web.</p></div></div><div class="step"><span class="num">2</span><div><h3>Cadastre equipe e setores</h3><p>Separe Vendas, Suporte, Financeiro e supervisores.</p></div></div><div class="step"><span class="num">3</span><div><h3>Atenda com controle</h3><p>Distribuição, histórico, etiquetas, avaliação e relatórios.</p></div></div></div></div></section>
+<section id="recursos"><div class="container"><div class="section-head"><span class="eyebrow">Recursos</span><h2>Visual limpo por fora. Operação forte por dentro.</h2><p>Funcionalidades para transformar WhatsApp em processo, não em bagunça.</p></div><div class="features"><article class="feature"><div class="icon" style="background:linear-gradient(135deg,#5b5cf6,#06b6d4)">👥</div><h3>Multi-atendente</h3><p>Vários usuários atendendo pelo mesmo número, com login próprio.</p></article><article class="feature"><div class="icon" style="background:linear-gradient(135deg,#22c55e,#06b6d4)">🏢</div><h3>Departamentos</h3><p>Organize filas por setor e direcione conversas para a equipe correta.</p></article><article class="feature"><div class="icon" style="background:linear-gradient(135deg,#f59e0b,#ec4899)">🤖</div><h3>Bot e respostas rápidas</h3><p>Automatize perguntas frequentes e reduza o tempo de primeira resposta.</p></article><article class="feature"><div class="icon" style="background:linear-gradient(135deg,#7c3aed,#ec4899)">📊</div><h3>Relatórios e SLA</h3><p>Acompanhe volume, tempo médio, produtividade e atendimento atrasado.</p></article><article class="feature"><div class="icon" style="background:linear-gradient(135deg,#06b6d4,#5b5cf6)">🏷</div><h3>Etiquetas e prioridades</h3><p>Classifique conversas por interesse, urgência, status e origem.</p></article><article class="feature"><div class="icon" style="background:linear-gradient(135deg,#111827,#5b5cf6)">🔒</div><h3>Histórico centralizado</h3><p>O relacionamento fica na empresa, mesmo se o atendente sair.</p></article></div></div></section>
+<section id="planos"><div class="container"><div class="section-head"><span class="eyebrow">Planos</span><h2>Preço simples para colocar sua equipe para atender melhor.</h2><p>Sem custo por mensagem. Você paga pela estrutura de atendimento.</p></div><div class="pricing-wrap"><article class="price-card"><h3>Básico</h3><p>Para começar organizado.</p><div class="price">R$197<small>/mês</small></div><ul><li>✓ 1 linha WhatsApp</li><li>✓ Até 3 atendentes</li><li>✓ Histórico de conversas</li><li>✓ Respostas rápidas</li></ul><a class="btn btn-ghost" data-wa="Olá! Tenho interesse no plano Básico.">Começar</a></article><article class="price-card popular"><span class="badge">MAIS INDICADO</span><h3>Profissional</h3><p>Para equipes que vendem e atendem todos os dias.</p><div class="price">R$397<small>/mês</small></div><ul><li>✓ Até 2 linhas</li><li>✓ Até 10 atendentes</li><li>✓ Departamentos</li><li>✓ Bot, etiquetas e relatórios</li><li>✓ Avaliação de atendimento</li></ul><a class="btn btn-primary" data-wa="Olá! Tenho interesse no plano Profissional.">Testar grátis</a></article><article class="price-card"><h3>Empresarial</h3><p>Para operações maiores.</p><div class="price">R$797<small>/mês</small></div><ul><li>✓ Linhas ilimitadas</li><li>✓ Atendentes ilimitados</li><li>✓ Supervisores</li><li>✓ Suporte prioritário</li></ul><a class="btn btn-ghost" data-wa="Olá! Tenho interesse no plano Empresarial.">Falar com vendas</a></article></div></div></section>
+<section id="faq"><div class="container"><div class="section-head"><span class="eyebrow">FAQ</span><h2>Perguntas frequentes</h2></div><div class="faq"><details open><summary>Preciso trocar meu número?<span>+</span></summary><p>Não. Você usa o número que sua empresa já divulga e conecta no painel por QR Code.</p></details><details><summary>Funciona no celular e no computador?<span>+</span></summary><p>Sim. O painel é web e pode ser acessado pelo navegador.</p></details><details><summary>Tem custo por mensagem?<span>+</span></summary><p>Não cobramos por mensagem. Os planos são por estrutura de atendimento.</p></details><details><summary>Vocês configuram para mim?<span>+</span></summary><p>Sim. O teste inclui configuração assistida para deixar sua equipe operando.</p></details></div></div></section>
+<section class="final-cta"><div class="container"><div class="final-box"><h2>Quer ver funcionando com o seu WhatsApp?</h2><p>Chame agora e receba uma configuração inicial para testar com sua equipe, seus setores e seu número atual.</p><a class="btn btn-primary" data-wa="Olá! Quero testar o WhatsApp Multi-Atendente com meu número atual.">Falar no WhatsApp →</a></div></div></section>
+</main>
+<footer><div class="container footer-row"><div class="brand"><span class="brand-mark">☎</span><span>MultiAtendente</span></div><div>© <span id="year"></span> · Atendimento profissional para WhatsApp</div></div></footer><a class="wa-float" data-wa title="Falar no WhatsApp">☎</a><script>document.getElementById('year').textContent=new Date().getFullYear()</script>
 </body>
 </html>
