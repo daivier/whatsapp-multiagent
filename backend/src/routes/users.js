@@ -13,17 +13,18 @@ router.get('/team', authMiddleware, (req, res) => {
   res.json(users);
 });
 
-// GET /users/available — atendentes/supervisores disponíveis para transferência
+// GET /users/available — atendentes/supervisores disponíveis para transferência.
 // Atendentes precisam de on_shift=1 (turno aberto); supervisores não têm conceito de turno.
+// NÃO exclui o próprio user — um supervisor a ver a conversa de outro precisa de
+// poder assumir (transferir para si). O frontend esconde o atual dono da conversa.
 router.get('/available', authMiddleware, (req, res) => {
   const users = db.prepare(
     `SELECT id, name, status, role FROM users
      WHERE active = 1
        AND status != 'offline'
-       AND id != ?
        AND ((role = 'attendant' AND on_shift = 1) OR role = 'supervisor')
      ORDER BY role = 'supervisor' ASC, name ASC`
-  ).all(req.user.id);
+  ).all();
   res.json(users);
 });
 

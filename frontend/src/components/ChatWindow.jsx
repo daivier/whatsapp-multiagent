@@ -1487,15 +1487,15 @@ export default function ChatWindow({ conversation: convProp, socket, onClose, on
             <strong style={{ fontSize: '0.85rem', color: 'var(--text)' }}>🔄 Transferir conversa</strong>
             <button onClick={() => setShowTransfer(false)} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: '1rem', color: 'var(--muted)' }}>✕</button>
           </div>
-          {availableAttendants.length === 0 ? (
+          {availableAttendants.filter(a => a.id !== conversation.assigned_to).length === 0 ? (
             <p style={{ margin: 0, fontSize: '0.83rem', color: 'var(--hint)' }}>Nenhum atendente disponível no momento.</p>
           ) : (
             <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center', flexWrap: 'wrap' }}>
               <select value={transferToId} onChange={e => setTransferToId(e.target.value)}
                 style={{ flex: 1, padding: '0.35rem 0.5rem', border: '1px solid var(--border-m)', borderRadius: 'var(--r-sm)', fontSize: '0.85rem', background: 'var(--card)', color: 'var(--text)' }}>
                 <option value=''>Selecionar atendente...</option>
-                {availableAttendants.map(a => (
-                  <option key={a.id} value={a.id}>{a.name} ({a.status === 'online' ? '🟢' : a.status === 'busy' ? '🟡' : '⚫'} {a.status})</option>
+                {availableAttendants.filter(a => a.id !== conversation.assigned_to).map(a => (
+                  <option key={a.id} value={a.id}>{a.name}{a.role === 'supervisor' ? ' (supervisor)' : ''} ({a.status === 'online' ? '🟢' : a.status === 'busy' ? '🟡' : '⚫'} {a.status})</option>
                 ))}
               </select>
               <button onClick={doTransfer} disabled={!transferToId || transferring}
