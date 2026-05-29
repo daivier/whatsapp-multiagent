@@ -13,6 +13,18 @@ import InternalChatPage from './InternalChatPage';
 
 const COLORS = ['#ef4444','#f97316','#eab308','#22c55e','#3b82f6','#8b5cf6','#ec4899','#6b7280'];
 
+function formatDuration(seconds) {
+  if (!seconds || seconds < 0) return '—';
+  const d = Math.floor(seconds / 86400);
+  const h = Math.floor((seconds % 86400) / 3600);
+  const m = Math.floor((seconds % 3600) / 60);
+  const s = Math.floor(seconds % 60);
+  if (d > 0) return `${d}d ${h}h`;
+  if (h > 0) return `${h}h ${m}m`;
+  if (m > 0) return `${m}m ${s}s`;
+  return `${s}s`;
+}
+
 function SimpleBar({ label, value, max, color }) {
   const pct = max ? Math.round((value / max) * 100) : 0;
   return (
@@ -107,6 +119,18 @@ export default function AdminPanel({ socket }) {
   const [transferLogs, setTransferLogs] = useState([]);
   const [keywordRules, setKeywordRules] = useState([]);
   const [faqItems, setFaqItems] = useState([]);
+  // Audit log
+  const [auditEntries, setAuditEntries] = useState([]);
+  const [auditFilters, setAuditFilters] = useState({ action: '', user_id: '', from: '', to: '', limit: 100 });
+  const [auditActions, setAuditActions] = useState([]);
+  const [auditLoading, setAuditLoading] = useState(false);
+  // Métricas
+  const [metricsParsed, setMetricsParsed] = useState(null);
+  const [metricsLoading, setMetricsLoading] = useState(false);
+  const [metricsError, setMetricsError] = useState('');
+  // Health
+  const [healthData, setHealthData] = useState(null);
+  const [healthLoading, setHealthLoading] = useState(false);
   const [faqForm, setFaqForm] = useState({ id: null, question: '', answer: '', variations: '', department_id: '', active: true });
   const [faqError, setFaqError] = useState('');
   const [newKR, setNewKR] = useState({ keyword: '', response: '', department_id: '', tag_id: '', priority: 100 });
@@ -181,6 +205,9 @@ export default function AdminPanel({ socket }) {
     if (tab === 'lines') { loadLines(); loadDepartments(); }
     if (tab === 'bot') { loadLines(); }
     if (tab === 'faq') { loadFaq(); loadDepartments(); }
+    if (tab === 'audit') { loadAudit(); loadAuditActions(); loadAttendants(); }
+    if (tab === 'metrics') { loadMetrics(); }
+    if (tab === 'health') { loadHealth(); }
   }, [tab]);
 
   // Internal unread badge — busca contagem inicial e sincroniza via socket
@@ -555,6 +582,84 @@ export default function AdminPanel({ socket }) {
     await api.patch(`/faq/${item.id}`, { active: !item.active });
     loadFaq();
   }
+
+  // ─── Audit log ────────────────────────────────────────────────────────────
+  async function loadAudit() {
+    setAuditLoading(true);
+    try {
+      const params = {};
+      if (auditFilters.action) params.action = auditFilters.action;
+      if (auditFilters.user_id) params.user_id = auditFilters.user_id;
+      if (auditFilters.from) params.from = auditFilters.from;
+      if (auditFilters.to) params.to = auditFilters.to;
+      params.limit = auditFilters.limit;
+      const { data } = await api.get('/audit', { params });
+      setAuditEntries(Array.isArray(data) ? data : []);
+    } catch (_) { setAuditEntries([]); }
+    setAuditLoading(false);
+  }
+  async function loadAuditActions() {
+    try { const { data } = await api.get('/audit/actions'); setAuditActions(Array.isArray(data) ? data : []); } catch (_) {}
+  }
+
+  // ─── Métricas Prometheus — parse simples do output text ───────────────────
+  async function loadMetrics() {
+    setMetricsLoading(true); setMetricsError('');
+    try {
+      // /metrics não tem auth, mas api.get faz GET autenticado por default — OK
+      const { data } = await api.get('/metrics', { responseType: 'text', transformResponse: x => x });
+      setMetricsParsed(parsePrometheus(data));
+    } catch (err) {
+      setMetricsError(err.message || 'Erro ao carregar métricas');
+      setMetricsParsed(null);
+    }
+    setMetricsLoading(false);
+  }
+
+  function parsePrometheus(text) {
+    const lines = (text || '').split('\n');
+    const samples = []; // { name, labels, value }
+    for (const line of lines) {
+      if (!line || line.startsWith('#')) continue;
+      // formato: metric_name{label="x",...} 123.45 [timestamp]
+      const m = line.match(/^([a-zA-Z_:][a-zA-Z0-9_:]*)({[^}]*})?\s+([\d.eE+-]+)/);
+      if (!m) continue;
+      const name = m[1];
+      const labelsRaw = m[2] || '';
+      const value = parseFloat(m[3]);
+      const labels = {};
+      for (const lm of labelsRaw.matchAll(/(\w+)="([^"]*)"/g)) labels[lm[1]] = lm[2];
+      samples.push({ name, labels, value });
+    }
+    // Agrupar por familia interessante
+    return {
+      messagesIn: samples.filter(s => s.name === 'whatsapp_messages_total' && s.labels.direction === 'in').reduce((sum, s) => sum + s.value, 0),
+      messagesOut: samples.filter(s => s.name === 'whatsapp_messages_total' && s.labels.direction === 'out').reduce((sum, s) => sum + s.value, 0),
+      messagesByLine: samples.filter(s => s.name === 'whatsapp_messages_total'),
+      conversationsActive: samples.filter(s => s.name === 'whatsapp_conversations_active'),
+      linesConnected: samples.filter(s => s.name === 'whatsapp_line_connected'),
+      transcribe: samples.filter(s => s.name === 'whatsapp_transcribe_total'),
+      pushSent: samples.filter(s => s.name === 'whatsapp_push_sent_total'),
+      httpRequests: samples.filter(s => s.name === 'http_requests_total').slice(0, 30),
+      heapBytes: samples.find(s => s.name === 'node_nodejs_heap_size_used_bytes')?.value || 0,
+      uptimeSec: samples.find(s => s.name === 'node_process_start_time_seconds')?.value
+        ? (Date.now() / 1000 - samples.find(s => s.name === 'node_process_start_time_seconds').value)
+        : 0,
+      cpuTotal: samples.find(s => s.name === 'node_process_cpu_seconds_total')?.value || 0,
+    };
+  }
+
+  // ─── Healthcheck ──────────────────────────────────────────────────────────
+  async function loadHealth() {
+    setHealthLoading(true);
+    try {
+      const { data } = await api.get('/health');
+      setHealthData(data);
+    } catch (err) {
+      setHealthData({ ok: false, db: 'fail', error: err.message });
+    }
+    setHealthLoading(false);
+  }
   async function addKeywordRule(e) {
     e.preventDefault();
     if (!newKR.keyword?.trim()) return;
@@ -778,6 +883,7 @@ export default function AdminPanel({ socket }) {
     ['tags','Etiquetas'],['automation','🤖 Automação'],['bot','Bot'],['faq','❓ FAQ Bot'],
     ['signature','🔔 Assinatura'],['rating','⭐ Avaliação'],
     ['blacklist','🚫 Blacklist'],['broadcast','📣 Envio em Massa'],['whatsapp','WhatsApp'],['chat','👥 Chat Interno'],
+    ['audit','📋 Auditoria'],['metrics','📊 Métricas'],['health','❤️ Saúde'],
   ];
 
   function selectTab(key) {
@@ -2085,6 +2191,194 @@ export default function AdminPanel({ socket }) {
                 </div>
               </div>
             ))}
+          </div>
+        )}
+
+        {/* AUDITORIA */}
+        {tab === 'audit' && (
+          <div style={S.section}>
+            <h2 style={S.sectionTitle}>📋 Log de Auditoria</h2>
+            <p style={{ color: 'var(--muted)', fontSize: '0.85rem', marginBottom: '1rem' }}>
+              Acções sensíveis registadas: transferências, eliminações, blacklist, mudança de papel, broadcasts. Útil para LGPD e investigação de queixas internas.
+            </p>
+
+            {/* Filtros */}
+            <div style={{ background: 'var(--card)', border: '1px solid var(--border)', borderRadius: 'var(--r-md)', padding: '0.75rem 1rem', marginBottom: '1rem', display: 'flex', gap: '0.5rem', flexWrap: 'wrap', alignItems: 'flex-end' }}>
+              <div>
+                <label style={{ ...S.fieldLabel, fontSize: '0.72rem' }}>Acção</label>
+                <select style={{ ...S.input, minWidth: '180px' }} value={auditFilters.action} onChange={e => setAuditFilters(f => ({ ...f, action: e.target.value }))}>
+                  <option value="">(todas)</option>
+                  {auditActions.map(a => <option key={a} value={a}>{a}</option>)}
+                </select>
+              </div>
+              <div>
+                <label style={{ ...S.fieldLabel, fontSize: '0.72rem' }}>Utilizador</label>
+                <select style={{ ...S.input, minWidth: '150px' }} value={auditFilters.user_id} onChange={e => setAuditFilters(f => ({ ...f, user_id: e.target.value }))}>
+                  <option value="">(todos)</option>
+                  {attendants.map(a => <option key={a.id} value={a.id}>{a.name}</option>)}
+                </select>
+              </div>
+              <div>
+                <label style={{ ...S.fieldLabel, fontSize: '0.72rem' }}>De</label>
+                <input type="date" style={S.input} value={auditFilters.from} onChange={e => setAuditFilters(f => ({ ...f, from: e.target.value }))} />
+              </div>
+              <div>
+                <label style={{ ...S.fieldLabel, fontSize: '0.72rem' }}>Até</label>
+                <input type="date" style={S.input} value={auditFilters.to} onChange={e => setAuditFilters(f => ({ ...f, to: e.target.value }))} />
+              </div>
+              <button style={S.addBtn} onClick={loadAudit} disabled={auditLoading}>{auditLoading ? '...' : '🔍 Filtrar'}</button>
+              <button style={S.outlineBtn} onClick={() => { setAuditFilters({ action: '', user_id: '', from: '', to: '', limit: 100 }); setTimeout(loadAudit, 50); }}>Limpar</button>
+            </div>
+
+            {/* Tabela */}
+            <div style={{ overflowX: 'auto', background: 'var(--card)', border: '1px solid var(--border)', borderRadius: 'var(--r-md)' }}>
+              <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.82rem' }}>
+                <thead>
+                  <tr style={{ background: 'var(--bg)', borderBottom: '1px solid var(--border)' }}>
+                    <th style={{ padding: '0.5rem 0.75rem', textAlign: 'left', whiteSpace: 'nowrap' }}>Quando</th>
+                    <th style={{ padding: '0.5rem 0.75rem', textAlign: 'left' }}>Quem</th>
+                    <th style={{ padding: '0.5rem 0.75rem', textAlign: 'left' }}>Acção</th>
+                    <th style={{ padding: '0.5rem 0.75rem', textAlign: 'left' }}>Alvo</th>
+                    <th style={{ padding: '0.5rem 0.75rem', textAlign: 'left' }}>Detalhes</th>
+                    <th style={{ padding: '0.5rem 0.75rem', textAlign: 'left' }}>IP</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {auditEntries.length === 0 && (
+                    <tr><td colSpan={6} style={{ padding: '1.5rem', color: 'var(--hint)', textAlign: 'center' }}>Sem registos.</td></tr>
+                  )}
+                  {auditEntries.map(e => (
+                    <tr key={e.id} style={{ borderBottom: '1px solid var(--border)' }}>
+                      <td style={{ padding: '0.5rem 0.75rem', whiteSpace: 'nowrap', fontSize: '0.78rem', color: 'var(--muted)' }}>
+                        {new Date(e.created_at + (e.created_at.includes('Z') ? '' : 'Z')).toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'medium' })}
+                      </td>
+                      <td style={{ padding: '0.5rem 0.75rem' }}>{e.user_name || '—'}</td>
+                      <td style={{ padding: '0.5rem 0.75rem' }}><code style={{ background: 'var(--bg)', padding: '1px 6px', borderRadius: '4px', fontSize: '0.76rem' }}>{e.action}</code></td>
+                      <td style={{ padding: '0.5rem 0.75rem', fontSize: '0.78rem' }}>{e.target_type ? `${e.target_type}#${e.target_id || '?'}` : '—'}</td>
+                      <td style={{ padding: '0.5rem 0.75rem', fontSize: '0.75rem', color: 'var(--muted)', maxWidth: '300px', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                        {e.details ? <code style={{ fontSize: '0.72rem' }}>{JSON.stringify(e.details)}</code> : '—'}
+                      </td>
+                      <td style={{ padding: '0.5rem 0.75rem', fontSize: '0.75rem', color: 'var(--hint)' }}>{e.ip || '—'}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            <p style={{ fontSize: '0.75rem', color: 'var(--hint)', marginTop: '0.5rem' }}>{auditEntries.length} registo(s) — limite máx. {auditFilters.limit}</p>
+          </div>
+        )}
+
+        {/* MÉTRICAS */}
+        {tab === 'metrics' && (
+          <div style={S.section}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
+              <h2 style={S.sectionTitle}>📊 Métricas Operacionais</h2>
+              <button style={S.outlineBtn} onClick={loadMetrics} disabled={metricsLoading}>{metricsLoading ? '...' : '🔄 Actualizar'}</button>
+            </div>
+            {metricsError && <p style={{ color: 'var(--danger)', fontSize: '0.85rem' }}>{metricsError}</p>}
+            {metricsParsed && (
+              <>
+                {/* KPI cards */}
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))', gap: '0.75rem', marginBottom: '1.25rem' }}>
+                  {[
+                    ['📥 Msgs recebidas', metricsParsed.messagesIn.toLocaleString('pt-PT'), 'desde o boot'],
+                    ['📤 Msgs enviadas', metricsParsed.messagesOut.toLocaleString('pt-PT'), 'desde o boot'],
+                    ['⏱️ Uptime', formatDuration(metricsParsed.uptimeSec), 'do processo'],
+                    ['🧠 Heap em uso', `${(metricsParsed.heapBytes / 1024 / 1024).toFixed(1)} MB`, 'Node.js'],
+                    ['🔥 CPU total', `${metricsParsed.cpuTotal.toFixed(1)}s`, 'tempo CPU acumulado'],
+                  ].map(([label, value, hint], i) => (
+                    <div key={i} style={{ background: 'var(--card)', border: '1px solid var(--border)', borderRadius: 'var(--r-md)', padding: '0.85rem 1rem' }}>
+                      <div style={{ fontSize: '0.72rem', color: 'var(--muted)', fontWeight: 600, marginBottom: '0.2rem' }}>{label}</div>
+                      <div style={{ fontSize: '1.4rem', fontWeight: 700, color: 'var(--text)' }}>{value}</div>
+                      <div style={{ fontSize: '0.7rem', color: 'var(--hint)', marginTop: '0.2rem' }}>{hint}</div>
+                    </div>
+                  ))}
+                </div>
+
+                {/* Conversas activas + linhas */}
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '1rem' }}>
+                  <div style={{ background: 'var(--card)', border: '1px solid var(--border)', borderRadius: 'var(--r-md)', padding: '1rem' }}>
+                    <h3 style={{ margin: '0 0 0.5rem', fontSize: '0.95rem' }}>📞 Linhas WhatsApp</h3>
+                    {metricsParsed.linesConnected.length === 0 && <p style={{ color: 'var(--hint)', fontSize: '0.85rem' }}>Sem dados.</p>}
+                    {metricsParsed.linesConnected.map((l, i) => (
+                      <div key={i} style={{ display: 'flex', justifyContent: 'space-between', padding: '0.35rem 0', borderBottom: '1px solid var(--border)' }}>
+                        <span style={{ fontSize: '0.85rem' }}>{l.labels.line_name || l.labels.line_id}</span>
+                        <span style={{ fontSize: '0.85rem', fontWeight: 700, color: l.value > 0 ? 'var(--success)' : 'var(--danger)' }}>{l.value > 0 ? '🟢 Conectada' : '🔴 Desconectada'}</span>
+                      </div>
+                    ))}
+                  </div>
+
+                  <div style={{ background: 'var(--card)', border: '1px solid var(--border)', borderRadius: 'var(--r-md)', padding: '1rem' }}>
+                    <h3 style={{ margin: '0 0 0.5rem', fontSize: '0.95rem' }}>💬 Conversas activas</h3>
+                    {metricsParsed.conversationsActive.length === 0 && <p style={{ color: 'var(--hint)', fontSize: '0.85rem' }}>Sem dados.</p>}
+                    {metricsParsed.conversationsActive.map((c, i) => (
+                      <div key={i} style={{ display: 'flex', justifyContent: 'space-between', padding: '0.35rem 0', borderBottom: '1px solid var(--border)' }}>
+                        <span style={{ fontSize: '0.85rem' }}>{c.labels.status}</span>
+                        <span style={{ fontSize: '1rem', fontWeight: 700, color: 'var(--accent)' }}>{c.value}</span>
+                      </div>
+                    ))}
+                  </div>
+
+                  <div style={{ background: 'var(--card)', border: '1px solid var(--border)', borderRadius: 'var(--r-md)', padding: '1rem' }}>
+                    <h3 style={{ margin: '0 0 0.5rem', fontSize: '0.95rem' }}>🎤 Transcrições</h3>
+                    {metricsParsed.transcribe.length === 0 && <p style={{ color: 'var(--hint)', fontSize: '0.85rem' }}>Sem dados.</p>}
+                    {metricsParsed.transcribe.map((t, i) => (
+                      <div key={i} style={{ display: 'flex', justifyContent: 'space-between', padding: '0.3rem 0' }}>
+                        <span style={{ fontSize: '0.85rem' }}>{t.labels.outcome}</span>
+                        <span style={{ fontSize: '0.95rem', fontWeight: 700 }}>{t.value}</span>
+                      </div>
+                    ))}
+                  </div>
+
+                  <div style={{ background: 'var(--card)', border: '1px solid var(--border)', borderRadius: 'var(--r-md)', padding: '1rem' }}>
+                    <h3 style={{ margin: '0 0 0.5rem', fontSize: '0.95rem' }}>📲 Push notifications</h3>
+                    {metricsParsed.pushSent.length === 0 && <p style={{ color: 'var(--hint)', fontSize: '0.85rem' }}>Sem dados.</p>}
+                    {metricsParsed.pushSent.map((p, i) => (
+                      <div key={i} style={{ display: 'flex', justifyContent: 'space-between', padding: '0.3rem 0' }}>
+                        <span style={{ fontSize: '0.85rem' }}>{p.labels.outcome}</span>
+                        <span style={{ fontSize: '0.95rem', fontWeight: 700 }}>{p.value}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                <p style={{ fontSize: '0.75rem', color: 'var(--hint)', marginTop: '1rem' }}>
+                  Dados crus em <code>/metrics</code> (formato Prometheus). Para gráficos históricos: instala Prometheus + Grafana.
+                </p>
+              </>
+            )}
+          </div>
+        )}
+
+        {/* SAÚDE */}
+        {tab === 'health' && (
+          <div style={S.section}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
+              <h2 style={S.sectionTitle}>❤️ Saúde do Sistema</h2>
+              <button style={S.outlineBtn} onClick={loadHealth} disabled={healthLoading}>{healthLoading ? '...' : '🔄 Verificar'}</button>
+            </div>
+            {healthData && (
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '0.75rem' }}>
+                {[
+                  ['Estado geral', healthData.ok ? '✅ OK' : '❌ Falha', healthData.ok ? 'var(--success)' : 'var(--danger)'],
+                  ['Base de dados', healthData.db === 'ok' ? '✅ Conectada' : '❌ Sem ligação', healthData.db === 'ok' ? 'var(--success)' : 'var(--danger)'],
+                  ['WhatsApp', healthData.whatsapp?.ready ? '✅ Pronto' : healthData.whatsapp?.hasQr ? '⚠️ A aguardar QR' : '❌ Desconectado',
+                    healthData.whatsapp?.ready ? 'var(--success)' : 'var(--warn)'],
+                  ['Push (VAPID)', healthData.push === 'configured' ? '✅ Configurado' : '⚪ Inactivo', healthData.push === 'configured' ? 'var(--success)' : 'var(--muted)'],
+                  ['Transcrição', healthData.transcribe === 'configured' ? '✅ Configurada' : '⚪ Inactiva', healthData.transcribe === 'configured' ? 'var(--success)' : 'var(--muted)'],
+                  ['Uptime do processo', formatDuration(healthData.uptime_seconds || 0), 'var(--accent)'],
+                  ['Versão', healthData.version || '—', 'var(--text)'],
+                ].map(([label, value, color], i) => (
+                  <div key={i} style={{ background: 'var(--card)', border: '1px solid var(--border)', borderRadius: 'var(--r-md)', padding: '0.85rem 1rem' }}>
+                    <div style={{ fontSize: '0.72rem', color: 'var(--muted)', fontWeight: 600, marginBottom: '0.2rem' }}>{label}</div>
+                    <div style={{ fontSize: '1.05rem', fontWeight: 700, color }}>{value}</div>
+                  </div>
+                ))}
+              </div>
+            )}
+            <p style={{ fontSize: '0.75rem', color: 'var(--hint)', marginTop: '1rem' }}>
+              Endpoint público em <code>/health</code> (sem auth). Aponta UptimeRobot ou Better Stack aqui para alertas SMS/email quando algum tenant cair.
+            </p>
           </div>
         )}
 
