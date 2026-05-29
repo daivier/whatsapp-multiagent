@@ -139,8 +139,23 @@ export default function ConversationList({ socket, selected, onSelect }) {
   useEffect(() => {
     if (!socket) return;
 
+    // Escopo de visibilidade por role. Os eventos socket (message:new,
+    // conversation:updated) são broadcast GLOBAL — sem este filtro, supervisor
+    // e atendente recebiam conversas fora do seu escopo.
+    const myDeptIds = new Set(myDepartments.map(d => Number(d.id)));
+    function convInScope(conv) {
+      if (!conv) return false;
+      if (user.role === 'owner') return true;
+      if (user.role === 'attendant') return conv.assigned_to === user.id;
+      if (user.role === 'supervisor') {
+        // Sem departamentos atribuídos → não vê nada. Com → só os seus.
+        return conv.department_id != null && myDeptIds.has(Number(conv.department_id));
+      }
+      return false;
+    }
+
     function onNewMessage({ conversation }) {
-      if (user.role === 'attendant' && conversation?.assigned_to !== user.id) return;
+      if (!convInScope(conversation)) return;
       setConversations(prev => {
         const idx = prev.findIndex(c => c.id === conversation?.id);
         if (idx >= 0) {
@@ -157,8 +172,9 @@ export default function ConversationList({ socket, selected, onSelect }) {
       setConversations(prev => {
         const idx = prev.findIndex(c => c.id === conversation.id);
         if (idx < 0) return prev;
-        // Atendente: se a conversa foi reatribuída a outro, remover da lista
-        if (user.role === 'attendant' && conversation.assigned_to !== user.id) {
+        // Se a conversa saiu do escopo do user (reatribuída / mudou de dept),
+        // remover da lista.
+        if (!convInScope({ ...prev[idx], ...conversation })) {
           return prev.filter(c => c.id !== conversation.id);
         }
         const next = [...prev];
@@ -187,6 +203,7 @@ export default function ConversationList({ socket, selected, onSelect }) {
 
     function onConversationAssigned({ conversation }) {
       if (!conversation?.id) return;
+      if (!convInScope(conversation)) return;
       setConversations(prev => {
         const exists = prev.some(c => c.id === conversation.id);
         if (exists) return prev.map(c => c.id === conversation.id ? { ...c, ...conversation } : c);
@@ -212,7 +229,7 @@ export default function ConversationList({ socket, selected, onSelect }) {
       socket.off('contact:updated', onContactUpdated);
       socket.off('conversation:assigned', onConversationAssigned);
     };
-  }, [socket, selected]);
+  }, [socket, selected, myDepartments]);
 
   useEffect(() => {
     if (!selected) return;
