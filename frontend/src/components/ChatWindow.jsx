@@ -1652,7 +1652,7 @@ export default function ChatWindow({ conversation: convProp, socket, onClose, on
               </>
             )}
           </div>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.3rem' }}>
+          <div style={{ display: 'flex', flexDirection: 'row', alignItems: 'center', gap: '0.3rem', flexShrink: 0, flexWrap: 'wrap', justifyContent: 'flex-end', maxWidth: '210px' }}>
             {!recording && !audioFile && (
               <>
                 <button style={S.schedIconBtn} onClick={() => fileInputRef.current?.click()} title="Enviar ficheiro" disabled={uploadingFile}>
