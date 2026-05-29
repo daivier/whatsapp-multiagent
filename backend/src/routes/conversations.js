@@ -115,8 +115,20 @@ router.post('/outbound', authMiddleware, async (req, res) => {
   }
   if (!lineId) return res.status(400).json({ error: 'Nenhuma linha activa para envio' });
 
-  // Atendentes só podem usar linhas do seu departamento
+  // Atendentes só podem usar linhas do seu departamento. Linha sem
+  // department_id é considerada configuração administrativa e fica
+  // INACESSÍVEL a atendentes (antes era 'global' a todos — security leak
+  // para tenants com SAC/Financeiro internos).
   if (req.user.role === 'attendant') {
+    const line = db.prepare('SELECT department_id FROM lines WHERE id = ?').get(lineId);
+    if (!line?.department_id) {
+      return res.status(403).json({ error: 'Esta linha não está atribuída a um departamento. Peça ao Dono para configurar.' });
+    }
+    const isMember = db.prepare('SELECT 1 FROM user_departments WHERE department_id = ? AND user_id = ?').get(line.department_id, req.user.id);
+    if (!isMember) return res.status(403).json({ error: 'Não tens permissão para usar esta linha.' });
+  } else if (req.user.role === 'supervisor') {
+    // Supervisor: mesma lógica do frontend — linha sem dept OK (administrativa),
+    // linha com dept exige ser membro.
     const line = db.prepare('SELECT department_id FROM lines WHERE id = ?').get(lineId);
     if (line?.department_id) {
       const isMember = db.prepare('SELECT 1 FROM user_departments WHERE department_id = ? AND user_id = ?').get(line.department_id, req.user.id);

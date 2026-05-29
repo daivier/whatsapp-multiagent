@@ -52,15 +52,15 @@ router.post('/', authMiddleware, (req, res) => {
 
 // PATCH — pode editar:
 // - próprio (owner_user_id = req.user.id), ou
-// - global (owner_user_id IS NULL) se for owner
+// - qualquer um se for owner (gestão administrativa — inclui pessoais de outros)
 router.patch('/:id', authMiddleware, (req, res) => {
   const { shortcut, body, category } = req.body;
   const qr = db.prepare('SELECT * FROM quick_replies WHERE id = ?').get(req.params.id);
   if (!qr) return res.status(404).json({ error: 'Não encontrado' });
 
   const isOwn = qr.owner_user_id === req.user.id;
-  const isGlobal = qr.owner_user_id === null;
-  if (!isOwn && !(isGlobal && req.user.role === 'owner')) {
+  const isOwner = req.user.role === 'owner';
+  if (!isOwn && !isOwner) {
     return res.status(403).json({ error: 'Sem permissão para editar este atalho' });
   }
 
@@ -78,13 +78,13 @@ router.patch('/:id', authMiddleware, (req, res) => {
   }
 });
 
-// DELETE — mesmas regras do PATCH
+// DELETE — mesmas regras do PATCH (owner pode tudo, user só os seus)
 router.delete('/:id', authMiddleware, (req, res) => {
   const qr = db.prepare('SELECT owner_user_id FROM quick_replies WHERE id = ?').get(req.params.id);
   if (!qr) return res.status(404).json({ error: 'Não encontrado' });
   const isOwn = qr.owner_user_id === req.user.id;
-  const isGlobal = qr.owner_user_id === null;
-  if (!isOwn && !(isGlobal && req.user.role === 'owner')) {
+  const isOwner = req.user.role === 'owner';
+  if (!isOwn && !isOwner) {
     return res.status(403).json({ error: 'Sem permissão para eliminar este atalho' });
   }
   db.prepare('DELETE FROM quick_replies WHERE id = ?').run(req.params.id);

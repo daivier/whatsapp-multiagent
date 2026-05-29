@@ -34,9 +34,15 @@ export default function NewConversationModal({ onClose, onCreated }) {
           .filter(d => d.is_mine)
           .map(d => d.id)
       );
+      // Owner: vê todas. Supervisor: linhas dos seus depts + sem dept (linha
+      // global aberta a todos). Atendente: APENAS linhas dos depts a que
+      // pertence — linha sem dept é considerada não-configurada e fica
+      // invisível para atendentes (evita vazar números de SAC interno, etc.).
       const allowed = user.role === 'owner'
         ? allLines
-        : allLines.filter(l => !l.department_id || myDeptIds.has(l.department_id));
+        : user.role === 'supervisor'
+          ? allLines.filter(l => !l.department_id || myDeptIds.has(l.department_id))
+          : allLines.filter(l => l.department_id && myDeptIds.has(l.department_id));
       setLines(allowed);
       const def = allowed.find(l => l.is_default) || allowed[0];
       if (def) setLineId(String(def.id));
