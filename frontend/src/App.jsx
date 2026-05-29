@@ -26,6 +26,7 @@ function App() {
   const unreadRef = useRef(0);
   const originalTitle = useRef(document.title);
   const mutedIds = useRef(new Set());
+  const scopeDeptIds = useRef(null); // deptos do supervisor (null = sem restrição)
 
   // Timer proactivo: desligar socket e fazer logout quando o JWT expirar
   useEffect(() => {
@@ -52,11 +53,28 @@ function App() {
     api.get('/conversations/mutes').then(r => {
       if (Array.isArray(r.data)) mutedIds.current = new Set(r.data);
     }).catch(() => {});
+    // Supervisor: carregar deptos dele para filtrar badge/título.
+    if (user.role === 'supervisor') {
+      api.get('/departments').then(r => {
+        const mine = (Array.isArray(r.data) ? r.data : []).filter(d => d.is_mine).map(d => Number(d.id));
+        scopeDeptIds.current = new Set(mine);
+      }).catch(() => { scopeDeptIds.current = new Set(); });
+    }
+
+    const titleInScope = (conversation) => {
+      if (user.role === 'attendant') return conversation?.assigned_to === user.id;
+      if (user.role === 'supervisor') {
+        const sc = scopeDeptIds.current;
+        if (!sc) return false;
+        return conversation?.department_id != null && sc.has(Number(conversation.department_id));
+      }
+      return true; // owner
+    };
 
     s.on('message:new', ({ message, conversation }) => {
       if (message?.from_me) return;
       if (!document.hidden) return;
-      if (user.role === 'attendant' && conversation?.assigned_to !== user.id) return;
+      if (!titleInScope(conversation)) return;
       if (mutedIds.current.has(conversation?.id)) return;
       unreadRef.current += 1;
       document.title = `(${unreadRef.current}) ${originalTitle.current}`;

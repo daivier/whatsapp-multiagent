@@ -49,6 +49,9 @@ export function useNotifications(socket, selectedConv, user) {
   // (do getConversationWithContact) e não inclui is_muted per-user, por
   // isso filtramos aqui com fetch inicial + sync via socket mute_change.
   const mutedIds = useRef(new Set());
+  // Departamentos do supervisor — para não notificar conversas fora do escopo
+  // dele (o payload do socket é broadcast global). Vazio para owner/atendente.
+  const scopeDeptIds = useRef(null); // null = sem restrição (owner/attendant)
 
   // Pede permissão ao montar
   useEffect(() => {
@@ -59,7 +62,26 @@ export function useNotifications(socket, selectedConv, user) {
     api.get('/conversations/mutes').then(r => {
       if (Array.isArray(r.data)) mutedIds.current = new Set(r.data);
     }).catch(() => {});
+    // Supervisor: carregar os departamentos dele para filtrar notificações
+    if (user?.role === 'supervisor') {
+      api.get('/departments').then(r => {
+        const mine = (Array.isArray(r.data) ? r.data : []).filter(d => d.is_mine).map(d => Number(d.id));
+        scopeDeptIds.current = new Set(mine);
+      }).catch(() => { scopeDeptIds.current = new Set(); });
+    }
   }, []);
+
+  // Verifica se a conversa está no escopo de notificação do user.
+  function notifyInScope(conversation) {
+    if (!conversation) return false;
+    if (user?.role === 'attendant') return conversation.assigned_to === user.id;
+    if (user?.role === 'supervisor') {
+      const s = scopeDeptIds.current;
+      if (!s) return false; // ainda não carregou — não notificar (evita vazar)
+      return conversation.department_id != null && s.has(Number(conversation.department_id));
+    }
+    return true; // owner
+  }
 
   useEffect(() => {
     if (!socket) return;
@@ -67,7 +89,8 @@ export function useNotifications(socket, selectedConv, user) {
     function onNewMessage({ message, conversation }) {
       if (message?.from_me) return;
       if (conversation?.id === selectedConv?.id) return;
-      if (user?.role === 'attendant' && conversation?.assigned_to !== user?.id) return;
+      // Escopo por role — atendente só as suas, supervisor só dos seus deptos.
+      if (!notifyInScope(conversation)) return;
       // Conversa silenciada por este user — sem som nem desktop notification.
       // Usa Set local (is_muted no payload chega indefinido por ser per-user).
       if (mutedIds.current.has(conversation?.id)) return;
