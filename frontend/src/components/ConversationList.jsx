@@ -60,13 +60,28 @@ export default function ConversationList({ socket, selected, onSelect }) {
   const [bulkBusy, setBulkBusy] = useState(false);
   const [departments2, setDepartments2] = useState([]); // depts para o picker de bulk (só owner)
 
+  // Filtros de Departamento e Linha — persistem em localStorage por user.
+  // Validados depois de loadar a lista (se o id guardado já não existe, limpa).
+  const LS_DEPT = `cl.filterDept:${user?.id || 'anon'}`;
+  const LS_LINE = `cl.filterLine:${user?.id || 'anon'}`;
+
   // Departamentos a que o user pertence (só relevante para atendentes com >1 dept)
   const [myDepartments, setMyDepartments] = useState([]);
-  const [filterDept, setFilterDept] = useState(''); // '' = todos
+  const [filterDept, setFilterDeptState] = useState(() => localStorage.getItem(LS_DEPT) || '');
+  function setFilterDept(v) {
+    setFilterDeptState(v);
+    if (v) localStorage.setItem(LS_DEPT, String(v));
+    else localStorage.removeItem(LS_DEPT);
+  }
 
   // Linhas WhatsApp activas — chip strip aparece se houver >1
   const [lines, setLines] = useState([]);
-  const [filterLine, setFilterLine] = useState('');
+  const [filterLine, setFilterLineState] = useState(() => localStorage.getItem(LS_LINE) || '');
+  function setFilterLine(v) {
+    setFilterLineState(v);
+    if (v) localStorage.setItem(LS_LINE, String(v));
+    else localStorage.removeItem(LS_LINE);
+  }
   // Collapsible strips — persiste em localStorage
   const [linesExpanded, setLinesExpanded] = useState(() => localStorage.getItem('cl.linesExpanded') === '1');
   const [deptsExpanded, setDeptsExpanded] = useState(() => localStorage.getItem('cl.deptsExpanded') === '1');
@@ -83,8 +98,14 @@ export default function ConversationList({ socket, selected, onSelect }) {
       const all = Array.isArray(data) ? data : [];
       const list = (user.role === 'owner' || user.role === 'supervisor') ? all : all.filter(d => d.is_mine);
       setMyDepartments(list);
+      // Validar filtro persistido — se o dept guardado já não existe, limpar
+      if (filterDept && !list.find(d => String(d.id) === String(filterDept))) setFilterDept('');
     }).catch(() => {});
-    api.get('/lines').then(({ data }) => setLines(Array.isArray(data) ? data : [])).catch(() => {});
+    api.get('/lines').then(({ data }) => {
+      const list = Array.isArray(data) ? data : [];
+      setLines(list);
+      if (filterLine && !list.find(l => String(l.id) === String(filterLine))) setFilterLine('');
+    }).catch(() => {});
     if (user.role === 'owner') {
       api.get('/departments').then(({ data }) => setDepartments2(Array.isArray(data) ? data : [])).catch(() => {});
     }
