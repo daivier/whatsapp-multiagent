@@ -62,6 +62,26 @@ function renderBodyWithMentions(body) {
   );
 }
 
+// Renderiza a formatação estilo-WhatsApp do corpo da mensagem:
+//   *negrito*  _itálico_  ~riscado~  ```mono```
+// Escapa HTML primeiro (segurança), depois aplica as marcações. Devolve
+// um objeto para dangerouslySetInnerHTML. As marcas seguem a regra do
+// WhatsApp: delimitadores colados ao texto, sem espaço logo a seguir/antes.
+function renderWhatsAppFormat(text) {
+  if (!text) return { __html: '' };
+  let s = text
+    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  // monospace ```...``` (primeiro, para não colidir com os outros)
+  s = s.replace(/```([\s\S]+?)```/g, '<code style="background:rgba(0,0,0,.06);padding:1px 4px;border-radius:4px;font-size:.85em">$1</code>');
+  // negrito *...*
+  s = s.replace(/(^|[\s(])\*(?=\S)([^*\n]+?)\*(?=[\s).,!?:;]|$)/g, '$1<strong>$2</strong>');
+  // itálico _..._
+  s = s.replace(/(^|[\s(])_(?=\S)([^_\n]+?)_(?=[\s).,!?:;]|$)/g, '$1<em>$2</em>');
+  // riscado ~...~
+  s = s.replace(/(^|[\s(])~(?=\S)([^~\n]+?)~(?=[\s).,!?:;]|$)/g, '$1<s>$2</s>');
+  return { __html: s };
+}
+
 function renderTemplate(body, conversation, user) {
   if (!body || !body.includes('{{')) return body;
   const contact = conversation?.contact_name || conversation?.phone || '';
@@ -157,9 +177,15 @@ function MessageContent({ msg, onMediaLoad }) {
       </a>
     );
   }
-  return <p style={{ margin: 0, fontSize: '0.9rem', whiteSpace: 'pre-wrap', overflowWrap: 'break-word', wordBreak: 'break-word' }}>
-    {msg.is_internal ? renderBodyWithMentions(msg.body) : msg.body}
-  </p>;
+  // Notas internas: realça @menções (sem formatação WhatsApp).
+  // Mensagens normais: renderiza formatação estilo-WhatsApp (*negrito*, _itálico_…).
+  if (msg.is_internal) {
+    return <p style={{ margin: 0, fontSize: '0.9rem', whiteSpace: 'pre-wrap', overflowWrap: 'break-word', wordBreak: 'break-word' }}>
+      {renderBodyWithMentions(msg.body)}
+    </p>;
+  }
+  return <p style={{ margin: 0, fontSize: '0.9rem', whiteSpace: 'pre-wrap', overflowWrap: 'break-word', wordBreak: 'break-word' }}
+    dangerouslySetInnerHTML={renderWhatsAppFormat(msg.body)} />;
 }
 
 export default function ChatWindow({ conversation: convProp, socket, onClose, onDelete, onConversationChange }) {
