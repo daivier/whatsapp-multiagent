@@ -42,6 +42,17 @@
     .reveal { opacity: 0; }
     .reveal.in { animation: fadeUp .6s ease forwards; }
     .blob { filter: blur(40px); border-radius: 50%; position: absolute; }
+    /* ícones de funcionalidades — cor diferente por posição */
+    #funcionalidades .ficon:nth-child(1) {} /* placeholder */
+    #funcionalidades .grid > div:nth-child(1) .ficon { background:#d1fae5; color:#059669; }
+    #funcionalidades .grid > div:nth-child(2) .ficon { background:#e0f2fe; color:#0284c7; }
+    #funcionalidades .grid > div:nth-child(3) .ficon { background:#ede9fe; color:#7c3aed; }
+    #funcionalidades .grid > div:nth-child(4) .ficon { background:#ffedd5; color:#ea580c; }
+    #funcionalidades .grid > div:nth-child(5) .ficon { background:#ffe4e6; color:#e11d48; }
+    #funcionalidades .grid > div:nth-child(6) .ficon { background:#fef9c3; color:#ca8a04; }
+    #funcionalidades .grid > div:nth-child(7) .ficon { background:#ccfbf1; color:#0d9488; }
+    #funcionalidades .grid > div:nth-child(8) .ficon { background:#fee2e2; color:#dc2626; }
+    #funcionalidades .grid > div:nth-child(9) .ficon { background:#e0e7ff; color:#4f46e5; }
   </style>
 </head>
 <body class="font-sans text-ink antialiased">
@@ -179,23 +190,41 @@
   </section>
 
   <!-- ============ COMO FUNCIONA ============ -->
-  <section id="como-funciona" class="py-20">
+  <section id="como-funciona" class="py-20 bg-gradient-to-b from-white to-emerald-50/40">
     <div class="max-w-5xl mx-auto px-5 text-center">
-      <h2 class="text-3xl font-extrabold">Funcionando em 30 minutos</h2>
-      <div class="mt-12 grid md:grid-cols-3 gap-8">
-        <div>
-          <div class="w-14 h-14 mx-auto rounded-full bg-wa/10 text-wa text-2xl font-bold flex items-center justify-center">1</div>
-          <h3 class="font-bold mt-4">Conecte o WhatsApp</h3>
+      <span class="text-wa-dark font-bold text-sm tracking-wide uppercase">Simples assim</span>
+      <h2 class="text-3xl font-extrabold mt-2">Funcionando em 30 minutos</h2>
+      <div class="mt-14 grid md:grid-cols-3 gap-10 relative">
+        <!-- linha conectora -->
+        <div class="hidden md:block absolute top-16 left-[16%] right-[16%] h-0.5 bg-gradient-to-r from-emerald-200 via-sky-200 to-violet-200"></div>
+
+        <div class="reveal relative">
+          <div class="w-32 h-32 mx-auto rounded-2xl bg-emerald-100 flex items-center justify-center relative">
+            <!-- telemóvel com QR -->
+            <svg width="56" height="56" viewBox="0 0 24 24" fill="none" stroke="#059669" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="2" width="14" height="20" rx="2"/><rect x="8" y="6" width="3" height="3"/><rect x="13" y="6" width="3" height="3"/><rect x="8" y="11" width="3" height="3"/><rect x="13" y="11" width="3" height="3" fill="#059669"/><line x1="9" y1="18" x2="15" y2="18"/></svg>
+            <span class="absolute -top-3 -right-3 w-8 h-8 rounded-full bg-wa text-white font-bold flex items-center justify-center shadow-lg">1</span>
+          </div>
+          <h3 class="font-bold mt-5 text-lg">Conecte o WhatsApp</h3>
           <p class="text-slate-500 text-sm mt-2">Escaneia um QR Code (igual ao WhatsApp Web). Usa o número que você já tem.</p>
         </div>
-        <div>
-          <div class="w-14 h-14 mx-auto rounded-full bg-wa/10 text-wa text-2xl font-bold flex items-center justify-center">2</div>
-          <h3 class="font-bold mt-4">Cadastre a equipe</h3>
+
+        <div class="reveal relative" style="animation-delay:.15s">
+          <div class="w-32 h-32 mx-auto rounded-2xl bg-sky-100 flex items-center justify-center relative">
+            <!-- equipa -->
+            <svg width="56" height="56" viewBox="0 0 24 24" fill="none" stroke="#0284c7" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="7" r="3"/><path d="M3 21v-1a5 5 0 0 1 5-5h2a5 5 0 0 1 5 5v1"/><circle cx="17" cy="6" r="2.5"/><path d="M21 21v-1a4 4 0 0 0-3-3.87"/></svg>
+            <span class="absolute -top-3 -right-3 w-8 h-8 rounded-full bg-sky-500 text-white font-bold flex items-center justify-center shadow-lg">2</span>
+          </div>
+          <h3 class="font-bold mt-5 text-lg">Cadastre a equipe</h3>
           <p class="text-slate-500 text-sm mt-2">Crie os atendentes, organize por departamentos (Vendas, Suporte, Financeiro).</p>
         </div>
-        <div>
-          <div class="w-14 h-14 mx-auto rounded-full bg-wa/10 text-wa text-2xl font-bold flex items-center justify-center">3</div>
-          <h3 class="font-bold mt-4">Atenda em equipe</h3>
+
+        <div class="reveal relative" style="animation-delay:.3s">
+          <div class="w-32 h-32 mx-auto rounded-2xl bg-violet-100 flex items-center justify-center relative">
+            <!-- distribuição -->
+            <svg width="56" height="56" viewBox="0 0 24 24" fill="none" stroke="#7c3aed" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="5" r="2.5"/><circle cx="5" cy="19" r="2.5"/><circle cx="19" cy="19" r="2.5"/><path d="M12 7.5v4M12 11.5l-5 5M12 11.5l5 5"/></svg>
+            <span class="absolute -top-3 -right-3 w-8 h-8 rounded-full bg-violet-500 text-white font-bold flex items-center justify-center shadow-lg">3</span>
+          </div>
+          <h3 class="font-bold mt-5 text-lg">Atenda em equipe</h3>
           <p class="text-slate-500 text-sm mt-2">As conversas são distribuídas automaticamente. Cada um vê só o que é dele.</p>
         </div>
       </div>
@@ -211,64 +240,64 @@
       </div>
       <div class="mt-12 grid sm:grid-cols-2 lg:grid-cols-3 gap-5">
         <!-- card -->
-        <div class="bg-white p-6 rounded-xl border border-slate-100 card-hover">
-          <div class="w-12 h-12 rounded-xl bg-wa/10 text-wa-dark flex items-center justify-center">
+        <div class="reveal bg-white p-6 rounded-xl border border-slate-100 card-hover">
+          <div class="ficon w-12 h-12 rounded-xl flex items-center justify-center">
             <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
           </div>
           <h3 class="font-bold mt-4">Multi-atendente</h3>
           <p class="text-slate-500 text-sm mt-1">Toda a equipe no mesmo número, com distribuição automática por carga.</p>
         </div>
-        <div class="bg-white p-6 rounded-xl border border-slate-100 card-hover">
-          <div class="w-12 h-12 rounded-xl bg-wa/10 text-wa-dark flex items-center justify-center">
+        <div class="reveal bg-white p-6 rounded-xl border border-slate-100 card-hover">
+          <div class="ficon w-12 h-12 rounded-xl flex items-center justify-center">
             <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72c.13.96.36 1.9.7 2.81a2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45c.91.34 1.85.57 2.81.7A2 2 0 0 1 22 16.92z"/></svg>
           </div>
           <h3 class="font-bold mt-4">Múltiplas linhas</h3>
           <p class="text-slate-500 text-sm mt-1">Vários números num só painel — Vendas, SAC, Financeiro separados.</p>
         </div>
-        <div class="bg-white p-6 rounded-xl border border-slate-100 card-hover">
-          <div class="w-12 h-12 rounded-xl bg-wa/10 text-wa-dark flex items-center justify-center">
+        <div class="reveal bg-white p-6 rounded-xl border border-slate-100 card-hover">
+          <div class="ficon w-12 h-12 rounded-xl flex items-center justify-center">
             <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 21h18"/><path d="M5 21V7l8-4v18"/><path d="M19 21V11l-6-4"/><path d="M9 9v.01"/><path d="M9 12v.01"/><path d="M9 15v.01"/></svg>
           </div>
           <h3 class="font-bold mt-4">Departamentos & supervisores</h3>
           <p class="text-slate-500 text-sm mt-1">Roteamento por setor e supervisores que veem só a sua equipe.</p>
         </div>
-        <div class="bg-white p-6 rounded-xl border border-slate-100 card-hover">
-          <div class="w-12 h-12 rounded-xl bg-wa/10 text-wa-dark flex items-center justify-center">
+        <div class="reveal bg-white p-6 rounded-xl border border-slate-100 card-hover">
+          <div class="ficon w-12 h-12 rounded-xl flex items-center justify-center">
             <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="10" rx="2"/><circle cx="12" cy="5" r="2"/><path d="M12 7v4"/><line x1="8" y1="16" x2="8" y2="16"/><line x1="16" y1="16" x2="16" y2="16"/></svg>
           </div>
           <h3 class="font-bold mt-4">Bot de FAQ</h3>
           <p class="text-slate-500 text-sm mt-1">Responde perguntas comuns sozinho, antes de chegar a um humano.</p>
         </div>
-        <div class="bg-white p-6 rounded-xl border border-slate-100 card-hover">
-          <div class="w-12 h-12 rounded-xl bg-wa/10 text-wa-dark flex items-center justify-center">
+        <div class="reveal bg-white p-6 rounded-xl border border-slate-100 card-hover">
+          <div class="ficon w-12 h-12 rounded-xl flex items-center justify-center">
             <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/></svg>
           </div>
           <h3 class="font-bold mt-4">Transcrição de áudio</h3>
           <p class="text-slate-500 text-sm mt-1">Áudio do cliente vira texto automaticamente. Leia em segundos.</p>
         </div>
-        <div class="bg-white p-6 rounded-xl border border-slate-100 card-hover">
-          <div class="w-12 h-12 rounded-xl bg-wa/10 text-wa-dark flex items-center justify-center">
+        <div class="reveal bg-white p-6 rounded-xl border border-slate-100 card-hover">
+          <div class="ficon w-12 h-12 rounded-xl flex items-center justify-center">
             <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
           </div>
           <h3 class="font-bold mt-4">Avaliação 1-5</h3>
           <p class="text-slate-500 text-sm mt-1">Pesquisa de satisfação automática ao fechar o atendimento.</p>
         </div>
-        <div class="bg-white p-6 rounded-xl border border-slate-100 card-hover">
-          <div class="w-12 h-12 rounded-xl bg-wa/10 text-wa-dark flex items-center justify-center">
+        <div class="reveal bg-white p-6 rounded-xl border border-slate-100 card-hover">
+          <div class="ficon w-12 h-12 rounded-xl flex items-center justify-center">
             <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>
           </div>
           <h3 class="font-bold mt-4">Relatórios & SLA</h3>
           <p class="text-slate-500 text-sm mt-1">Tempo de resposta, volume por hora, ranking de atendentes, alertas de SLA.</p>
         </div>
-        <div class="bg-white p-6 rounded-xl border border-slate-100 card-hover">
-          <div class="w-12 h-12 rounded-xl bg-wa/10 text-wa-dark flex items-center justify-center">
+        <div class="reveal bg-white p-6 rounded-xl border border-slate-100 card-hover">
+          <div class="ficon w-12 h-12 rounded-xl flex items-center justify-center">
             <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M16 16s-1.5-2-4-2-4 2-4 2"/><line x1="9" y1="9" x2="9.01" y2="9"/><line x1="15" y1="9" x2="15.01" y2="9"/></svg>
           </div>
           <h3 class="font-bold mt-4">Detector de cliente irritado</h3>
           <p class="text-slate-500 text-sm mt-1">Sinaliza conversas com tom negativo para você priorizar.</p>
         </div>
-        <div class="bg-white p-6 rounded-xl border border-slate-100 card-hover">
-          <div class="w-12 h-12 rounded-xl bg-wa/10 text-wa-dark flex items-center justify-center">
+        <div class="reveal bg-white p-6 rounded-xl border border-slate-100 card-hover">
+          <div class="ficon w-12 h-12 rounded-xl flex items-center justify-center">
             <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 9a2 2 0 0 1-2 2H6l-4 4V4a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2z"/><path d="M18 9h2a2 2 0 0 1 2 2v11l-4-4h-6a2 2 0 0 1-2-2v-1"/></svg>
           </div>
           <h3 class="font-bold mt-4">Chat interno</h3>
@@ -413,6 +442,21 @@
   <!-- Botão flutuante WhatsApp -->
   <a data-wa class="fixed bottom-5 right-5 z-50 bg-wa hover:bg-wa-dark text-white w-14 h-14 rounded-full flex items-center justify-center text-2xl shadow-lg shadow-wa/30 transition" title="Falar no WhatsApp">💬</a>
 
-  <script>document.getElementById('year').textContent = new Date().getFullYear();</script>
+  <script>
+    document.getElementById('year').textContent = new Date().getFullYear();
+    // Reveal on scroll — fade-up suave quando a secção entra no ecrã.
+    // Fallback: sem IntersectionObserver, mostra tudo imediatamente.
+    const reveals = document.querySelectorAll('.reveal');
+    if ('IntersectionObserver' in window) {
+      const io = new IntersectionObserver((entries) => {
+        entries.forEach(e => { if (e.isIntersecting) { e.target.classList.add('in'); io.unobserve(e.target); } });
+      }, { threshold: 0.12 });
+      reveals.forEach(el => io.observe(el));
+      // Rede de segurança: força visível após 2.5s caso algo falhe
+      setTimeout(() => reveals.forEach(el => el.classList.add('in')), 2500);
+    } else {
+      reveals.forEach(el => el.classList.add('in'));
+    }
+  </script>
 </body>
 </html>
