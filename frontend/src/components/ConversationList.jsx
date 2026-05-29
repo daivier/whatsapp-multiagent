@@ -154,8 +154,34 @@ export default function ConversationList({ socket, selected, onSelect }) {
       return false;
     }
 
+    // Respeita os filtros activos da UI (status, dept, linha, prioridade,
+    // atendente). Sem isto, uma message:new de OUTRO dept/linha/status era
+    // adicionada à lista mesmo com um filtro activo (bug reportado: dono com
+    // dept HelpDesk seleccionado via conversas de Contas a Pagar).
+    function matchesActiveFilters(conv) {
+      if (!conv) return false;
+      if (filter === 'open' || filter === 'waiting' || filter === 'closed') {
+        if (conv.status !== filter) return false;
+      } else if (filter === 'snoozed') {
+        if (!conv.snoozed_until || utc(conv.snoozed_until) <= new Date()) return false;
+      } else {
+        // '' (Todas) — esconde snoozed activos como o backend faz
+        if (conv.snoozed_until && utc(conv.snoozed_until) > new Date()) return false;
+      }
+      if (filterDept && Number(conv.department_id) !== Number(filterDept)) return false;
+      if (filterLine && Number(conv.line_id) !== Number(filterLine)) return false;
+      if (filterPriority && conv.priority !== filterPriority) return false;
+      if (filterAttendant && Number(conv.assigned_to) !== Number(filterAttendant)) return false;
+      return true;
+    }
+
     function onNewMessage({ conversation }) {
       if (!convInScope(conversation)) return;
+      if (!matchesActiveFilters(conversation)) {
+        // Se já está na lista mas deixou de corresponder ao filtro, remover.
+        setConversations(prev => prev.some(c => c.id === conversation?.id) ? prev.filter(c => c.id !== conversation?.id) : prev);
+        return;
+      }
       setConversations(prev => {
         const idx = prev.findIndex(c => c.id === conversation?.id);
         if (idx >= 0) {
@@ -172,13 +198,14 @@ export default function ConversationList({ socket, selected, onSelect }) {
       setConversations(prev => {
         const idx = prev.findIndex(c => c.id === conversation.id);
         if (idx < 0) return prev;
-        // Se a conversa saiu do escopo do user (reatribuída / mudou de dept),
-        // remover da lista.
-        if (!convInScope({ ...prev[idx], ...conversation })) {
+        const merged = { ...prev[idx], ...conversation };
+        // Saiu do escopo (reatribuída / mudou dept) OU deixou de corresponder
+        // ao filtro activo → remover da lista.
+        if (!convInScope(merged) || !matchesActiveFilters(merged)) {
           return prev.filter(c => c.id !== conversation.id);
         }
         const next = [...prev];
-        next[idx] = { ...next[idx], ...conversation };
+        next[idx] = merged;
         return next;
       });
     }
@@ -203,7 +230,7 @@ export default function ConversationList({ socket, selected, onSelect }) {
 
     function onConversationAssigned({ conversation }) {
       if (!conversation?.id) return;
-      if (!convInScope(conversation)) return;
+      if (!convInScope(conversation) || !matchesActiveFilters(conversation)) return;
       setConversations(prev => {
         const exists = prev.some(c => c.id === conversation.id);
         if (exists) return prev.map(c => c.id === conversation.id ? { ...c, ...conversation } : c);
@@ -229,7 +256,7 @@ export default function ConversationList({ socket, selected, onSelect }) {
       socket.off('contact:updated', onContactUpdated);
       socket.off('conversation:assigned', onConversationAssigned);
     };
-  }, [socket, selected, myDepartments]);
+  }, [socket, selected, myDepartments, filter, filterDept, filterLine, filterPriority, filterAttendant]);
 
   useEffect(() => {
     if (!selected) return;
