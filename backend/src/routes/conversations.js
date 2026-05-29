@@ -178,8 +178,12 @@ router.post('/outbound', authMiddleware, async (req, res) => {
   }
 
   if (!conversation) {
+    // Herdar o departamento da linha (se a linha tiver dept fixo). Sem isto,
+    // conversas outbound ficavam sem department_id e invisíveis a supervisores
+    // (216 conversas órfãs no supermercados antes deste fix).
+    const lineDept = db.prepare('SELECT department_id FROM lines WHERE id = ?').get(lineId)?.department_id || null;
     try {
-      db.prepare(`INSERT INTO conversations (contact_id, assigned_to, status, line_id) VALUES (?, ?, 'open', ?)`).run(contact.id, req.user.id, lineId);
+      db.prepare(`INSERT INTO conversations (contact_id, assigned_to, status, line_id, department_id) VALUES (?, ?, 'open', ?, ?)`).run(contact.id, req.user.id, lineId, lineDept);
     } catch (constraintErr) {
       // UNIQUE constraint failed: já existe conversa aberta para este contact+line.
       // Em vez de crashar, reutilizamos a existente.
