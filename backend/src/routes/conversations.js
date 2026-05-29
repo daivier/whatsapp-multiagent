@@ -439,22 +439,19 @@ router.post('/:id/transfer', authMiddleware, async (req, res) => {
   const attendant = db.prepare("SELECT id, name, role FROM users WHERE id = ? AND role IN ('attendant', 'supervisor') AND active = 1").get(attendant_id);
   if (!attendant) return res.status(404).json({ error: 'Utilizador não encontrado' });
 
-  // Inferir departamento e linha do novo atendente para actualizar a conversa
-  const attendantDept = db.prepare(`
-    SELECT ud.department_id, l.id AS line_id
-    FROM user_departments ud
-    LEFT JOIN lines l ON l.department_id = ud.department_id AND l.active = 1
-    WHERE ud.user_id = ?
-    ORDER BY ud.department_id
-    LIMIT 1
-  `).get(attendant_id);
+  // O departamento acompanha o novo atendente (a equipa que passa a tratar a
+  // conversa). Mas a LINHA de origem — o número de WhatsApp que o cliente
+  // contactou — NÃO muda numa transferência. Reescrevê-la corrompia o registo
+  // de origem: uma conversa da Ouvidoria passava a aparecer como SAC só por ter
+  // sido transferida a um atendente do Marketing. Por isso já não tocamos em
+  // line_id aqui.
+  const attendantDept = db.prepare(
+    'SELECT department_id FROM user_departments WHERE user_id = ? ORDER BY department_id LIMIT 1'
+  ).get(attendant_id);
 
   const prevConv = db.prepare('SELECT assigned_to FROM conversations WHERE id = ?').get(req.params.id);
 
-  if (attendantDept?.line_id) {
-    db.prepare(`UPDATE conversations SET assigned_to = ?, department_id = ?, line_id = ?, status = 'open', updated_at = CURRENT_TIMESTAMP WHERE id = ?`)
-      .run(attendant_id, attendantDept.department_id, attendantDept.line_id, req.params.id);
-  } else if (attendantDept?.department_id) {
+  if (attendantDept?.department_id) {
     db.prepare(`UPDATE conversations SET assigned_to = ?, department_id = ?, status = 'open', updated_at = CURRENT_TIMESTAMP WHERE id = ?`)
       .run(attendant_id, attendantDept.department_id, req.params.id);
   } else {
