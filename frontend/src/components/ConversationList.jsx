@@ -452,7 +452,7 @@ export default function ConversationList({ socket, selected, onSelect }) {
                 )}
               </div>
               {linesExpanded && (
-                <div style={{ display: 'flex', gap: '0.3rem', padding: '0 1rem 0.4rem', flexWrap: 'nowrap', overflowX: 'auto', scrollbarWidth: 'thin' }}>
+                <div style={{ display: 'flex', gap: '0.3rem', padding: '0 1rem 0.4rem', flexWrap: 'wrap' }}>
                   <button
                     style={{ ...S.filterBtn, ...(filterLine === '' ? S.filterActive : {}), flexShrink: 0 }}
                     onClick={() => setFilterLine('')}>
@@ -495,7 +495,7 @@ export default function ConversationList({ socket, selected, onSelect }) {
                 )}
               </div>
               {deptsExpanded && (
-                <div style={{ display: 'flex', gap: '0.3rem', padding: '0 1rem 0.4rem', flexWrap: 'nowrap', overflowX: 'auto', scrollbarWidth: 'thin' }}>
+                <div style={{ display: 'flex', gap: '0.3rem', padding: '0 1rem 0.4rem', flexWrap: 'wrap' }}>
                   <button
                     style={{ ...S.filterBtn, ...(filterDept === '' ? S.filterActive : {}), display: 'inline-flex', alignItems: 'center', gap: '0.3rem', flexShrink: 0 }}
                     onClick={() => setFilterDept('')}>
