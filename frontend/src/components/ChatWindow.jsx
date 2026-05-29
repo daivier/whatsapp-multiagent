@@ -1248,13 +1248,13 @@ export default function ChatWindow({ conversation: convProp, socket, onClose, on
           return (
             <div key={msg.id} id={`msg-${msg.id}`} style={{ ...S.bubble, ...(msg.from_me ? S.mine : S.theirs), ...(msg.is_internal ? S.internal : {}), position: 'relative' }}
               onMouseEnter={e => {
-                e.currentTarget.querySelector('.reply-btn').style.opacity = '1';
+                const rb0 = e.currentTarget.querySelector('.reply-btn'); if (rb0) rb0.style.opacity = '1';
                 if (canEdit) e.currentTarget.querySelector('.edit-btn')?.style && (e.currentTarget.querySelector('.edit-btn').style.opacity = '1');
                 const del = e.currentTarget.querySelector('.delete-btn'); if (del) del.style.opacity = '1';
                 const rb = e.currentTarget.querySelector('.react-btn'); if (rb) rb.style.opacity = '1';
               }}
               onMouseLeave={e => {
-                e.currentTarget.querySelector('.reply-btn').style.opacity = '0';
+                const rb0 = e.currentTarget.querySelector('.reply-btn'); if (rb0) rb0.style.opacity = '0';
                 e.currentTarget.querySelector('.edit-btn')?.style && (e.currentTarget.querySelector('.edit-btn').style.opacity = '0');
                 const del = e.currentTarget.querySelector('.delete-btn'); if (del) del.style.opacity = '0';
                 // O picker tem o seu próprio onMouseLeave (mantém aberto enquanto
@@ -1359,11 +1359,14 @@ export default function ChatWindow({ conversation: convProp, socket, onClose, on
                   </span>
                 )}
               </span>
-              {/* Botão reply — sempre presente (visível no hover) */}
-              <button className="reply-btn" onClick={() => !msg.is_internal && setReplyTo({ id: msg.id, body: msg.body, from_me: msg.from_me, sender_name: msg.sender_name, quoted_media_type: msg.media_type })}
-                style={{ opacity: 0, transition: 'opacity .15s', position: 'absolute', top: '4px', left: msg.from_me ? '-52px' : 'auto', right: msg.from_me ? 'auto' : '-52px', background: 'var(--card)', border: '1px solid var(--border-m)', borderRadius: '50%', width: 22, height: 22, cursor: 'pointer', fontSize: '0.7rem', display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: 'var(--sh)' }}>
-                ↩️
-              </button>
+              {/* Botão reply — visível no hover, EXCEPTO em notas internas
+                  (reply não faz sentido numa nota interna). */}
+              {!msg.is_internal && (
+                <button className="reply-btn" onClick={() => setReplyTo({ id: msg.id, body: msg.body, from_me: msg.from_me, sender_name: msg.sender_name, quoted_media_type: msg.media_type })}
+                  style={{ opacity: 0, transition: 'opacity .15s', position: 'absolute', top: '4px', left: msg.from_me ? '-52px' : 'auto', right: msg.from_me ? 'auto' : '-52px', background: 'var(--card)', border: '1px solid var(--border-m)', borderRadius: '50%', width: 22, height: 22, cursor: 'pointer', fontSize: '0.7rem', display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: 'var(--sh)' }}>
+                  ↩️
+                </button>
+              )}
               {canEdit && !isEditing && (
                 <button className="edit-btn" onClick={() => { setEditingMsg(msg); setEditBody(msg.body); }}
                   style={{ opacity: 0, transition: 'opacity .15s', position: 'absolute', top: '4px', left: msg.from_me ? '-28px' : 'auto', right: msg.from_me ? 'auto' : '-28px', background: 'var(--card)', border: '1px solid var(--border-m)', borderRadius: '50%', width: 22, height: 22, cursor: 'pointer', fontSize: '0.7rem', display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: 'var(--sh)' }}>
@@ -1407,14 +1410,20 @@ export default function ChatWindow({ conversation: convProp, socket, onClose, on
                   </div>
                 </div>
               )}
-              {!!msg.from_me && !msg.is_internal && !msg.deleted && (
-                <button className="delete-btn" title="Apagar para todos"
+              {!!msg.from_me && !msg.deleted && (
+                <button className="delete-btn" title={msg.is_internal ? 'Apagar nota interna' : 'Apagar para todos'}
                   onClick={async () => {
-                    if (!window.confirm('Apagar esta mensagem? Vai também ser apagada no WhatsApp do destinatário.')) return;
+                    const confirmMsg = msg.is_internal
+                      ? 'Apagar esta nota interna? (só some do painel, o cliente nunca a viu)'
+                      : 'Apagar esta mensagem? Vai também ser apagada no WhatsApp do destinatário.';
+                    if (!window.confirm(confirmMsg)) return;
                     try { await api.delete(`/messages/${msg.id}`); }
                     catch (err) { setWarning(err.response?.data?.error || 'Erro ao apagar mensagem'); }
                   }}
-                  style={{ opacity: 0, transition: 'opacity .15s', position: 'absolute', top: '4px', left: msg.from_me ? '-76px' : 'auto', right: msg.from_me ? 'auto' : '-76px', background: 'var(--card)', border: '1px solid var(--border-m)', borderRadius: '50%', width: 22, height: 22, cursor: 'pointer', fontSize: '0.7rem', display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: 'var(--sh)', color: 'var(--danger)' }}>
+                  style={{ opacity: 0, transition: 'opacity .15s', position: 'absolute', top: '4px',
+                    left: msg.from_me ? (msg.is_internal ? '-28px' : '-76px') : 'auto',
+                    right: msg.from_me ? 'auto' : (msg.is_internal ? '-28px' : '-76px'),
+                    background: 'var(--card)', border: '1px solid var(--border-m)', borderRadius: '50%', width: 22, height: 22, cursor: 'pointer', fontSize: '0.7rem', display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: 'var(--sh)', color: 'var(--danger)' }}>
                   🗑️
                 </button>
               )}
