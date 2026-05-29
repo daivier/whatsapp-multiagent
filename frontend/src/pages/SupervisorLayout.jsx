@@ -23,6 +23,7 @@ export default function SupervisorLayout({ socket }) {
   const [selectedConv, setSelectedConv] = useState(null);
   const [internalUnread, setInternalUnread] = useState(0);
   const [status, setStatus] = useState(() => (user.status && user.status !== 'offline') ? user.status : 'online');
+  const [onShift, setOnShift] = useState(!!user.on_shift);
   const [isMobile, setIsMobile] = useState(window.innerWidth < 640);
   const [takenNotice, setTakenNotice] = useState(null);
   useNotifications(socket, selectedConv, user);
@@ -45,6 +46,13 @@ export default function SupervisorLayout({ socket }) {
   async function changeStatus(s) {
     setStatus(s);
     try { await api.patch('/auth/status', { status: s }); } catch (_) {}
+  }
+
+  async function toggleShift() {
+    const next = !onShift;
+    setOnShift(next);
+    try { await api.patch('/users/me/shift', { on_shift: next }); }
+    catch (_) { setOnShift(!next); }
   }
 
   const showConvList = view === 'conversations' && (!isMobile || !selectedConv);
@@ -95,6 +103,10 @@ export default function SupervisorLayout({ socket }) {
           </select>
         </div>
 
+        <button onClick={toggleShift} title={onShift ? 'Sair do turno' : 'Entrar em turno'}
+          style={{ padding: '0.25rem 0.6rem', borderRadius: '6px', border: '1px solid', cursor: 'pointer', fontSize: '0.78rem', fontWeight: 600, background: onShift ? 'var(--success)' : 'none', color: onShift ? '#fff' : 'var(--muted)', borderColor: onShift ? 'var(--success)' : 'var(--border)', flexShrink: 0 }}>
+          {onShift ? '🟢 Turno' : '⚪ Turno'}
+        </button>
         <span style={{ fontSize: '0.78rem', color: 'var(--muted)', flexShrink: 0 }}>{user.name}</span>
         <span style={{ fontSize: '0.68rem', background: '#7c3aed20', color: '#7c3aed', border: '1px solid #7c3aed40', borderRadius: '999px', padding: '1px 7px', fontWeight: 700, flexShrink: 0 }}>SUPERVISOR</span>
         <button onClick={toggleTheme} title={dark ? 'Modo claro' : 'Modo escuro'} style={{ padding: '0.25rem 0.5rem', border: '1px solid var(--border)', borderRadius: '6px', background: 'none', cursor: 'pointer', fontSize: '1rem', flexShrink: 0 }}>{dark ? '☀️' : '🌙'}</button>
