@@ -395,14 +395,29 @@ router.post('/:id/send-media', authMiddleware, (req, res, next) => {
 router.get('/contact/:phone', authMiddleware, (req, res) => {
   const contact = db.prepare('SELECT * FROM contacts WHERE phone = ? OR wa_id LIKE ?').get(req.params.phone, `${req.params.phone}%`);
   if (!contact) return res.json([]);
+
+  // Scope por papel: atendente só vê as conversas atribuídas a si; supervisor
+  // só as do(s) seu(s) departamento(s); owner vê todas. Sem isto, qualquer
+  // atendente podia obter (pelo telefone) o ID e os metadados de conversas de
+  // outros setores — fuga de privacidade e vector para transferências indevidas.
+  let scope = '';
+  const params = [contact.id];
+  if (req.user.role === 'attendant') {
+    scope = 'AND conv.assigned_to = ?';
+    params.push(req.user.id);
+  } else if (req.user.role === 'supervisor') {
+    scope = 'AND conv.department_id IN (SELECT department_id FROM user_departments WHERE user_id = ?)';
+    params.push(req.user.id);
+  }
+
   const convs = db.prepare(`
     SELECT conv.*, u.name as attendant_name,
       (SELECT COUNT(*) FROM messages WHERE conversation_id = conv.id) as message_count
     FROM conversations conv
     LEFT JOIN users u ON u.id = conv.assigned_to
-    WHERE conv.contact_id = ?
+    WHERE conv.contact_id = ? ${scope}
     ORDER BY conv.created_at DESC
-  `).all(contact.id);
+  `).all(...params);
   res.json(convs);
 });
 
@@ -410,6 +425,16 @@ router.get('/contact/:phone', authMiddleware, (req, res) => {
 router.post('/:id/transfer', authMiddleware, async (req, res) => {
   const { attendant_id, notify = true } = req.body;
   if (!attendant_id) return res.status(400).json({ error: 'attendant_id obrigatório' });
+
+  // Scope: só pode transferir uma conversa a que tem acesso (atendente: as suas;
+  // supervisor: as do seu depto; owner: todas). O bulk/transfer já tinha esta
+  // guarda (filterAllowedIds); o transfer singular tinha ficado sem ela, o que
+  // permitia a qualquer utilizador transferir qualquer conversa por ID.
+  const convToTransfer = db.prepare('SELECT id, assigned_to, department_id FROM conversations WHERE id = ?').get(req.params.id);
+  if (!convToTransfer) return res.status(404).json({ error: 'Conversa não encontrada' });
+  if (!userCanAccessConv(convToTransfer, req.user)) {
+    return res.status(403).json({ error: 'Sem permissão para transferir esta conversa' });
+  }
 
   const attendant = db.prepare("SELECT id, name, role FROM users WHERE id = ? AND role IN ('attendant', 'supervisor') AND active = 1").get(attendant_id);
   if (!attendant) return res.status(404).json({ error: 'Utilizador não encontrado' });
@@ -674,6 +699,23 @@ function filterAllowedIds(rawIds, user) {
   const allowed = db.prepare(`SELECT id FROM conversations WHERE id IN (${placeholders}) AND assigned_to = ?`).all(...ids, user.id).map(r => r.id);
   const allowedSet = new Set(allowed);
   return { ids: allowed, denied: ids.filter(i => !allowedSet.has(i)) };
+}
+
+// Verifica se o utilizador pode aceder a uma conversa específica.
+//   owner      → todas
+//   supervisor → só as dos seus departamentos
+//   atendente  → só as atribuídas a si
+// `conv` deve conter pelo menos { assigned_to, department_id }.
+function userCanAccessConv(conv, user) {
+  if (!conv) return false;
+  if (user.role === 'owner') return true;
+  if (user.role === 'supervisor') {
+    if (conv.department_id == null) return false;
+    return !!db.prepare(
+      'SELECT 1 FROM user_departments WHERE user_id = ? AND department_id = ?'
+    ).get(user.id, conv.department_id);
+  }
+  return conv.assigned_to === user.id;
 }
 
 // POST /conversations/bulk/close — fecha N conversas
