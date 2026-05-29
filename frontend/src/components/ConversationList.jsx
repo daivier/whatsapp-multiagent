@@ -516,9 +516,10 @@ export default function ConversationList({ socket, selected, onSelect }) {
             </>
           )}
 
-          {/* Chip strip de departamentos. Owner/supervisor: todos.
-              Atendente: só os seus (e só se em ≥2 depts). */}
-          {((user.role === 'owner' || user.role === 'supervisor') ? myDepartments.length >= 1 : myDepartments.length >= 2) && (
+          {/* Chip strip de departamentos — só aparece se houver ≥2 deptos
+              visíveis ao user. Com 1 só (ou nenhum) não há filtro a fazer,
+              independentemente do role. */}
+          {myDepartments.length >= 2 && (
             <>
               <div onClick={toggleDeptsExpanded}
                 style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', padding: '0.35rem 1rem', borderTop: '1px dashed var(--border)', cursor: 'pointer', userSelect: 'none', background: deptsExpanded ? 'var(--bg)' : 'none' }}>
