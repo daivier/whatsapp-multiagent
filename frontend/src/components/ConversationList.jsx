@@ -67,6 +67,11 @@ export default function ConversationList({ socket, selected, onSelect }) {
   // Linhas WhatsApp activas — chip strip aparece se houver >1
   const [lines, setLines] = useState([]);
   const [filterLine, setFilterLine] = useState('');
+  // Collapsible strips — persiste em localStorage
+  const [linesExpanded, setLinesExpanded] = useState(() => localStorage.getItem('cl.linesExpanded') === '1');
+  const [deptsExpanded, setDeptsExpanded] = useState(() => localStorage.getItem('cl.deptsExpanded') === '1');
+  function toggleLinesExpanded() { setLinesExpanded(v => { localStorage.setItem('cl.linesExpanded', v ? '0' : '1'); return !v; }); }
+  function toggleDeptsExpanded() { setDeptsExpanded(v => { localStorage.setItem('cl.deptsExpanded', v ? '0' : '1'); return !v; }); }
 
   useEffect(() => {
     api.get('/tags').then(({ data }) => setTags(Array.isArray(data) ? data : [])).catch(() => {});
@@ -430,65 +435,100 @@ export default function ConversationList({ socket, selected, onSelect }) {
 
           {/* Chip strip de linhas WhatsApp — só se houver ≥2 linhas activas */}
           {lines.length >= 2 && (
-            <div style={{ display: 'flex', gap: '0.3rem', padding: '0.4rem 1rem 0.2rem', flexWrap: 'nowrap', overflowX: 'auto', borderTop: '1px dashed var(--border)', scrollbarWidth: 'thin' }}>
-              <span style={{ fontSize: '0.65rem', color: 'var(--hint)', fontWeight: 700, padding: '0.3rem 0', flexShrink: 0 }}>📱</span>
-              <button
-                style={{ ...S.filterBtn, ...(filterLine === '' ? S.filterActive : {}), flexShrink: 0 }}
-                onClick={() => setFilterLine('')}>
-                Todas
-              </button>
-              {lines.map(l => (
-                <button key={l.id}
-                  style={{
-                    ...S.filterBtn,
-                    display: 'inline-flex', alignItems: 'center', gap: '0.3rem', flexShrink: 0,
-                    whiteSpace: 'nowrap',
-                    ...(String(filterLine) === String(l.id) ? { background: l.color, color: '#fff', border: `1px solid ${l.color}` } : { borderColor: l.color + '55', color: l.color }),
-                  }}
-                  onClick={() => setFilterLine(String(filterLine) === String(l.id) ? '' : l.id)}>
-                  <span style={{ width: 7, height: 7, borderRadius: '50%', background: String(filterLine) === String(l.id) ? '#fff' : l.color }} />
-                  {l.name}
-                </button>
-              ))}
-            </div>
+            <>
+              {/* Header collapsible: ▶ 📱 Linhas (N) · filtro actual */}
+              <div onClick={toggleLinesExpanded}
+                style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', padding: '0.35rem 1rem', borderTop: '1px dashed var(--border)', cursor: 'pointer', userSelect: 'none', background: linesExpanded ? 'var(--bg)' : 'none' }}>
+                <span style={{ fontSize: '0.7rem', color: 'var(--muted)' }}>{linesExpanded ? '▼' : '▶'}</span>
+                <span style={{ fontSize: '0.75rem', fontWeight: 700, color: 'var(--muted)' }}>📱 Linhas ({lines.length})</span>
+                {filterLine ? (
+                  (() => { const sel = lines.find(l => String(l.id) === String(filterLine)); return sel && (
+                    <span style={{ display: 'inline-flex', alignItems: 'center', gap: '0.25rem', fontSize: '0.72rem', color: sel.color, fontWeight: 600 }}>
+                      · <span style={{ width: 6, height: 6, borderRadius: '50%', background: sel.color }} /> {sel.name}
+                    </span>
+                  ); })()
+                ) : (
+                  <span style={{ fontSize: '0.72rem', color: 'var(--hint)' }}>· Todas</span>
+                )}
+              </div>
+              {linesExpanded && (
+                <div style={{ display: 'flex', gap: '0.3rem', padding: '0 1rem 0.4rem', flexWrap: 'nowrap', overflowX: 'auto', scrollbarWidth: 'thin' }}>
+                  <button
+                    style={{ ...S.filterBtn, ...(filterLine === '' ? S.filterActive : {}), flexShrink: 0 }}
+                    onClick={() => setFilterLine('')}>
+                    Todas
+                  </button>
+                  {lines.map(l => (
+                    <button key={l.id}
+                      style={{
+                        ...S.filterBtn,
+                        display: 'inline-flex', alignItems: 'center', gap: '0.3rem', flexShrink: 0,
+                        whiteSpace: 'nowrap',
+                        ...(String(filterLine) === String(l.id) ? { background: l.color, color: '#fff', border: `1px solid ${l.color}` } : { borderColor: l.color + '55', color: l.color }),
+                      }}
+                      onClick={() => setFilterLine(String(filterLine) === String(l.id) ? '' : l.id)}>
+                      <span style={{ width: 7, height: 7, borderRadius: '50%', background: String(filterLine) === String(l.id) ? '#fff' : l.color }} />
+                      {l.name}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </>
           )}
 
           {/* Chip strip de departamentos. Owner/supervisor: todos.
               Atendente: só os seus (e só se em ≥2 depts). */}
           {((user.role === 'owner' || user.role === 'supervisor') ? myDepartments.length >= 1 : myDepartments.length >= 2) && (
-            <div style={{ display: 'flex', gap: '0.3rem', padding: '0.4rem 1rem 0.2rem', flexWrap: 'nowrap', overflowX: 'auto', borderTop: '1px dashed var(--border)', scrollbarWidth: 'thin' }}>
-              <span style={{ fontSize: '0.65rem', color: 'var(--hint)', fontWeight: 700, padding: '0.3rem 0', flexShrink: 0 }}>🏢</span>
-              <button
-                style={{ ...S.filterBtn, ...(filterDept === '' ? S.filterActive : {}), display: 'inline-flex', alignItems: 'center', gap: '0.3rem', flexShrink: 0 }}
-                onClick={() => setFilterDept('')}>
-                Todos
-              </button>
-              {myDepartments.map(d => {
-                const active = String(filterDept) === String(d.id);
-                const count = d.active_conversations || 0;
-                return (
-                  <button key={d.id}
-                    style={{
-                      ...S.filterBtn,
-                      display: 'inline-flex', alignItems: 'center', gap: '0.3rem', flexShrink: 0,
-                      whiteSpace: 'nowrap',
-                      ...(active ? { background: d.color, color: '#fff', border: `1px solid ${d.color}` } : { borderColor: d.color + '55', color: d.color }),
-                    }}
-                    onClick={() => setFilterDept(active ? '' : d.id)}>
-                    <span style={{ width: 7, height: 7, borderRadius: '50%', background: active ? '#fff' : d.color }} />
-                    {d.name}
-                    {count > 0 && (
-                      <span style={{
-                        background: active ? 'rgba(255,255,255,0.25)' : d.color + '22',
-                        color: active ? '#fff' : d.color,
-                        borderRadius: '999px', padding: '0 6px',
-                        fontSize: '0.65rem', fontWeight: 700, minWidth: 16, textAlign: 'center',
-                      }}>{count}</span>
-                    )}
+            <>
+              <div onClick={toggleDeptsExpanded}
+                style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', padding: '0.35rem 1rem', borderTop: '1px dashed var(--border)', cursor: 'pointer', userSelect: 'none', background: deptsExpanded ? 'var(--bg)' : 'none' }}>
+                <span style={{ fontSize: '0.7rem', color: 'var(--muted)' }}>{deptsExpanded ? '▼' : '▶'}</span>
+                <span style={{ fontSize: '0.75rem', fontWeight: 700, color: 'var(--muted)' }}>🏢 Departamentos ({myDepartments.length})</span>
+                {filterDept ? (
+                  (() => { const sel = myDepartments.find(d => String(d.id) === String(filterDept)); return sel && (
+                    <span style={{ display: 'inline-flex', alignItems: 'center', gap: '0.25rem', fontSize: '0.72rem', color: sel.color, fontWeight: 600 }}>
+                      · <span style={{ width: 6, height: 6, borderRadius: '50%', background: sel.color }} /> {sel.name}
+                    </span>
+                  ); })()
+                ) : (
+                  <span style={{ fontSize: '0.72rem', color: 'var(--hint)' }}>· Todos</span>
+                )}
+              </div>
+              {deptsExpanded && (
+                <div style={{ display: 'flex', gap: '0.3rem', padding: '0 1rem 0.4rem', flexWrap: 'nowrap', overflowX: 'auto', scrollbarWidth: 'thin' }}>
+                  <button
+                    style={{ ...S.filterBtn, ...(filterDept === '' ? S.filterActive : {}), display: 'inline-flex', alignItems: 'center', gap: '0.3rem', flexShrink: 0 }}
+                    onClick={() => setFilterDept('')}>
+                    Todos
                   </button>
-                );
-              })}
-            </div>
+                  {myDepartments.map(d => {
+                    const active = String(filterDept) === String(d.id);
+                    const count = d.active_conversations || 0;
+                    return (
+                      <button key={d.id}
+                        style={{
+                          ...S.filterBtn,
+                          display: 'inline-flex', alignItems: 'center', gap: '0.3rem', flexShrink: 0,
+                          whiteSpace: 'nowrap',
+                          ...(active ? { background: d.color, color: '#fff', border: `1px solid ${d.color}` } : { borderColor: d.color + '55', color: d.color }),
+                        }}
+                        onClick={() => setFilterDept(active ? '' : d.id)}>
+                        <span style={{ width: 7, height: 7, borderRadius: '50%', background: active ? '#fff' : d.color }} />
+                        {d.name}
+                        {count > 0 && (
+                          <span style={{
+                            background: active ? 'rgba(255,255,255,0.25)' : d.color + '22',
+                            color: active ? '#fff' : d.color,
+                            borderRadius: '999px', padding: '0 6px',
+                            fontSize: '0.65rem', fontWeight: 700, minWidth: 16, textAlign: 'center',
+                          }}>{count}</span>
+                        )}
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
+            </>
           )}
 
           <div style={S.filters}>
