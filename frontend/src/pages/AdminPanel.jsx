@@ -181,6 +181,36 @@ export default function AdminPanel({ socket }) {
     if (tab === 'faq') { loadFaq(); loadDepartments(); }
   }, [tab]);
 
+  // Internal unread badge — busca contagem inicial e sincroniza via socket
+  // mesmo quando a tab Chat Interno NÃO está aberta (caso contrário o badge
+  // nunca aparece em Admin que esteja na tab Dashboard).
+  useEffect(() => {
+    if (!socket || !user?.id) return;
+    api.get('/internal-chat/threads').then(r => {
+      const total = (Array.isArray(r.data) ? r.data : []).reduce((s, t) => s + (t.unread_count || 0), 0);
+      setInternalUnread(total);
+    }).catch(() => {});
+    const onInternalMsg = ({ message, thread_id }) => {
+      if (message?.from_user_id === user.id) return;
+      if (window.__activeThreadId === thread_id && !document.hidden) return;
+      setInternalUnread(n => n + 1);
+    };
+    const onInternalRead = ({ user_id }) => {
+      if (user_id !== user.id) return;
+      // Re-fetch para alinhar com BD (mais robusto que decremento local)
+      api.get('/internal-chat/threads').then(r => {
+        const total = (Array.isArray(r.data) ? r.data : []).reduce((s, t) => s + (t.unread_count || 0), 0);
+        setInternalUnread(total);
+      }).catch(() => {});
+    };
+    socket.on('internal:message', onInternalMsg);
+    socket.on('internal:read', onInternalRead);
+    return () => {
+      socket.off('internal:message', onInternalMsg);
+      socket.off('internal:read', onInternalRead);
+    };
+  }, [socket, user?.id]);
+
   useEffect(() => {
     if (!socket) return;
     // Novo payload tem {line_id, qr/ready}; tab antiga "WhatsApp" só mostra estado

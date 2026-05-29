@@ -84,6 +84,25 @@ export default function AttendantPanel({ socket }) {
     };
   }, [socket, user.id]);
 
+  // Internal unread badge — independente da tab Chat Interno estar aberta.
+  useEffect(() => {
+    if (!socket || !user?.id) return;
+    const recalc = () => api.get('/internal-chat/threads').then(r => {
+      const total = (Array.isArray(r.data) ? r.data : []).reduce((s, t) => s + (t.unread_count || 0), 0);
+      setInternalUnread(total);
+    }).catch(() => {});
+    recalc();
+    const onMsg = ({ message, thread_id }) => {
+      if (message?.from_user_id === user.id) return;
+      if (window.__activeThreadId === thread_id && !document.hidden) return;
+      setInternalUnread(n => n + 1);
+    };
+    const onRead = ({ user_id }) => { if (user_id === user.id) recalc(); };
+    socket.on('internal:message', onMsg);
+    socket.on('internal:read', onRead);
+    return () => { socket.off('internal:message', onMsg); socket.off('internal:read', onRead); };
+  }, [socket, user?.id]);
+
   async function changeStatus(newStatus) {
     setStatus(newStatus);
     socket?.emit('user:status', { status: newStatus });
