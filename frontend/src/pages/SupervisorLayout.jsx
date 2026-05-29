@@ -6,6 +6,7 @@ import SupervisorPanel from './SupervisorPanel';
 import ConversationList from '../components/ConversationList';
 import ChatWindow from '../components/ChatWindow';
 import DashboardPage from './DashboardPage';
+import ReportsPage from './ReportsPage';
 import InternalChatPage from './InternalChatPage';
 import PushNotificationsButton from '../components/PushNotificationsButton';
 import LanguageSwitcher from '../components/LanguageSwitcher';
@@ -213,10 +214,12 @@ export default function SupervisorLayout({ socket }) {
           </>
         )}
 
-        {/* Relatórios */}
+        {/* Relatórios — ReportsPage (histórico, períodos, CSV) restrita ao
+            departamento do supervisor pelo backend. A Monitorização cobre o
+            ao-vivo. */}
         {view === 'reports' && (
           <div style={{ flex: 1, overflowY: 'auto' }}>
-            <DashboardPage socket={socket} />
+            <ReportsPage socket={socket} />
           </div>
         )}
 

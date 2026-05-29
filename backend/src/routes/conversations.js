@@ -949,7 +949,18 @@ router.get('/metrics', authMiddleware, ownerOnly, (req, res) => {
 });
 
 // GET /conversations/export — CSV com histórico
-router.get('/export', authMiddleware, ownerOnly, (req, res) => {
+// Owner: tudo. Supervisor: só conversas dos seus departamentos.
+router.get('/export', authMiddleware, supervisorOrOwner, (req, res) => {
+  const isSupervisor = req.user.role === 'supervisor';
+  const userDeptIds = isSupervisor
+    ? db.prepare('SELECT department_id FROM user_departments WHERE user_id = ?').all(req.user.id).map(r => r.department_id)
+    : [];
+  const dphold = userDeptIds.map(() => '?').join(',');
+  const dp = isSupervisor ? userDeptIds : [];
+  const deptWhere = isSupervisor
+    ? (userDeptIds.length ? `WHERE conv.department_id IN (${dphold})` : 'WHERE 1=0')
+    : '';
+
   const rows = db.prepare(`
     SELECT conv.id, con.name as contact_name, con.phone, conv.status,
       u.name as attendant_name, conv.created_at, conv.updated_at,
@@ -959,8 +970,9 @@ router.get('/export', authMiddleware, ownerOnly, (req, res) => {
     FROM conversations conv
     JOIN contacts con ON con.id = conv.contact_id
     LEFT JOIN users u ON u.id = conv.assigned_to
+    ${deptWhere}
     ORDER BY conv.created_at DESC
-  `).all();
+  `).all(...dp);
 
   const header = 'ID,Contacto,Telefone,Status,Atendente,Criado em,Última actualização,Total msgs,Msgs cliente,Msgs atendente';
   const escape = v => `"${String(v ?? '').replace(/"/g, '""')}"`;
@@ -990,9 +1002,24 @@ router.get('/transfer-logs', authMiddleware, ownerOnly, (req, res) => {
 });
 
 // GET /conversations/reports?period=today|week|month|all
-router.get('/reports', authMiddleware, ownerOnly, (req, res) => {
+// Owner: todos os dados. Supervisor: restrito aos departamentos dele.
+router.get('/reports', authMiddleware, supervisorOrOwner, (req, res) => {
   const VALID = ['today', 'week', 'month', 'all'];
   const period = VALID.includes(req.query.period) ? req.query.period : 'month';
+
+  // Filtro de departamento — só para supervisor
+  const isSupervisor = req.user.role === 'supervisor';
+  const userDeptIds = isSupervisor
+    ? db.prepare('SELECT department_id FROM user_departments WHERE user_id = ?').all(req.user.id).map(r => r.department_id)
+    : [];
+  if (isSupervisor && userDeptIds.length === 0) {
+    return res.json({ period, summary: {}, byAttendant: [], byHour: [], byDay: [], avgResponse: {} });
+  }
+  const dphold = userDeptIds.map(() => '?').join(',');
+  const dp = isSupervisor ? userDeptIds : [];
+  // Clauses de dept para cada forma de referenciar a tabela
+  const fDept = isSupervisor ? ` AND department_id IN (${dphold})` : '';
+  const cDept = isSupervisor ? ` AND c.department_id IN (${dphold})` : '';
 
   // Period WHERE clause (applied directly to conversations table)
   const PERIOD = {
@@ -1012,7 +1039,7 @@ router.get('/reports', authMiddleware, ownerOnly, (req, res) => {
   const w   = PERIOD[period];
   const wc  = PERIOD_C[period];
   // For LEFT JOIN condition (no WHERE keyword)
-  const joinCond = period === 'all' ? '' : `AND ${PERIOD_C[period]}`;
+  const joinCond = (period === 'all' ? '' : `AND ${PERIOD_C[period]}`) + cDept;
 
   // Summary metrics
   const summary = db.prepare(`
@@ -1023,8 +1050,8 @@ router.get('/reports', authMiddleware, ownerOnly, (req, res) => {
       ROUND(AVG(CASE WHEN status = 'closed'
         THEN (julianday(updated_at) - julianday(created_at)) * 24 * 60
       END), 1) as avg_tma_minutes
-    FROM conversations WHERE ${w}
-  `).get();
+    FROM conversations WHERE ${w}${fDept}
+  `).get(...dp);
 
   // Average first response time (client msg → first agent reply)
   const avgResponse = db.prepare(`
@@ -1035,13 +1062,16 @@ router.get('/reports', authMiddleware, ownerOnly, (req, res) => {
          strftime('%s', MIN(CASE WHEN m.from_me = 0 THEN m.timestamp END))) as response_seconds
       FROM conversations c
       JOIN messages m ON m.conversation_id = c.id
-      WHERE ${wc}
+      WHERE ${wc}${cDept}
       GROUP BY c.id
       HAVING response_seconds > 0 AND response_seconds < 86400
     )
-  `).get();
+  `).get(...dp);
 
-  // Per attendant: count + TMA
+  // Per attendant: count + TMA. Supervisor só vê atendentes dos seus deptos.
+  const attDeptFilter = isSupervisor
+    ? `AND u.id IN (SELECT user_id FROM user_departments WHERE department_id IN (${dphold}))`
+    : '';
   const byAttendant = db.prepare(`
     SELECT u.name,
       COUNT(c.id)                                                     as total,
@@ -1052,29 +1082,30 @@ router.get('/reports', authMiddleware, ownerOnly, (req, res) => {
       END), 1)                                                        as avg_tma_minutes
     FROM users u
     LEFT JOIN conversations c ON c.assigned_to = u.id ${joinCond}
-    WHERE u.role = 'attendant' AND u.active = 1
+    WHERE u.role = 'attendant' AND u.active = 1 ${attDeptFilter}
     GROUP BY u.id ORDER BY total DESC
-  `).all();
+  `).all(...dp, ...dp);
 
   // Volume by hour of day
   const byHour = db.prepare(`
     SELECT strftime('%H', created_at, 'localtime') as hour, COUNT(*) as total
-    FROM conversations WHERE ${w}
+    FROM conversations WHERE ${w}${fDept}
     GROUP BY hour ORDER BY hour ASC
-  `).all();
+  `).all(...dp);
 
   // Volume by day
   const byDay = db.prepare(`
     SELECT strftime('%Y-%m-%d', created_at, 'localtime') as day, COUNT(*) as total
-    FROM conversations WHERE ${w}
+    FROM conversations WHERE ${w}${fDept}
     GROUP BY day ORDER BY day ASC
-  `).all();
+  `).all(...dp);
 
   res.json({ period, summary, byAttendant, byHour, byDay, avgResponse });
 });
 
 // GET /conversations/ratings?period=today|week|month|all
-router.get('/ratings', authMiddleware, ownerOnly, (req, res) => {
+// Owner: todos. Supervisor: só ratings das conversas dos seus departamentos.
+router.get('/ratings', authMiddleware, supervisorOrOwner, (req, res) => {
   const VALID = ['today', 'week', 'month', 'all'];
   const period = VALID.includes(req.query.period) ? req.query.period : 'month';
   const PERIOD = {
@@ -1085,6 +1116,24 @@ router.get('/ratings', authMiddleware, ownerOnly, (req, res) => {
   };
   const w = PERIOD[period];
 
+  // Filtro de dept para supervisor — ratings ligam-se à conversa, filtramos
+  // pelo department_id da conversa avaliada.
+  const isSupervisor = req.user.role === 'supervisor';
+  const userDeptIds = isSupervisor
+    ? db.prepare('SELECT department_id FROM user_departments WHERE user_id = ?').all(req.user.id).map(r => r.department_id)
+    : [];
+  if (isSupervisor && userDeptIds.length === 0) {
+    return res.json({ summary: {}, byAttendant: [], recent: [] });
+  }
+  const dphold = userDeptIds.map(() => '?').join(',');
+  const dp = isSupervisor ? userDeptIds : [];
+  const rDept = isSupervisor
+    ? ` AND r.conversation_id IN (SELECT id FROM conversations WHERE department_id IN (${dphold}))`
+    : '';
+  const attDeptFilter = isSupervisor
+    ? `AND u.id IN (SELECT user_id FROM user_departments WHERE department_id IN (${dphold}))`
+    : '';
+
   const summary = db.prepare(`
     SELECT COUNT(*) as total, ROUND(AVG(score), 2) as avg_score,
       COUNT(CASE WHEN score = 5 THEN 1 END) as score5,
@@ -1092,18 +1141,18 @@ router.get('/ratings', authMiddleware, ownerOnly, (req, res) => {
       COUNT(CASE WHEN score = 3 THEN 1 END) as score3,
       COUNT(CASE WHEN score = 2 THEN 1 END) as score2,
       COUNT(CASE WHEN score = 1 THEN 1 END) as score1
-    FROM ratings r WHERE ${w}
-  `).get();
+    FROM ratings r WHERE ${w}${rDept}
+  `).get(...dp);
 
   const byAttendant = db.prepare(`
     SELECT u.name,
       COUNT(r.id) as total,
       ROUND(AVG(r.score), 2) as avg_score
     FROM users u
-    LEFT JOIN ratings r ON r.attendant_id = u.id AND ${w}
-    WHERE u.role IN ('attendant', 'owner') AND u.active = 1
+    LEFT JOIN ratings r ON r.attendant_id = u.id AND ${w}${rDept}
+    WHERE u.role IN ('attendant', 'owner') AND u.active = 1 ${attDeptFilter}
     GROUP BY u.id ORDER BY avg_score DESC NULLS LAST
-  `).all();
+  `).all(...dp, ...dp);
 
   const recent = db.prepare(`
     SELECT r.id, r.score, r.created_at, r.conversation_id,
@@ -1112,9 +1161,9 @@ router.get('/ratings', authMiddleware, ownerOnly, (req, res) => {
     FROM ratings r
     JOIN contacts con ON con.id = r.contact_id
     LEFT JOIN users u ON u.id = r.attendant_id
-    WHERE ${w}
+    WHERE ${w}${rDept}
     ORDER BY r.created_at DESC LIMIT 20
-  `).all();
+  `).all(...dp);
 
   res.json({ summary, byAttendant, recent });
 });
