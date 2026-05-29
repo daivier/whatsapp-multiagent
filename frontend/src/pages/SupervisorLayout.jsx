@@ -2,7 +2,6 @@ import { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useAuth } from '../context/AuthContext';
 import { useNotifications } from '../hooks/useNotifications';
-import SupervisorPanel from './SupervisorPanel';
 import ConversationList from '../components/ConversationList';
 import ChatWindow from '../components/ChatWindow';
 import DashboardPage from './DashboardPage';
@@ -109,9 +108,9 @@ export default function SupervisorLayout({ socket }) {
   const showChatWin  = view === 'conversations' && (!isMobile || !!selectedConv);
 
   const navItems = [
-    { key: 'monitor',       icon: '👁️',  label: t('nav.monitoring') },
+    { key: 'monitor',       icon: '📊',  label: t('nav.dashboard') },
     { key: 'conversations', icon: '💬',  label: t('nav.conversations') },
-    { key: 'reports',       icon: '📊',  label: t('nav.reports') },
+    { key: 'reports',       icon: '📈',  label: t('nav.reports') },
     { key: 'chat',          icon: '👥',  label: t('nav.internalChat') },
   ];
 
@@ -174,10 +173,11 @@ export default function SupervisorLayout({ socket }) {
       {/* Main content */}
       <div style={{ flex: 1, display: 'flex', minHeight: 0, overflow: 'hidden' }}>
 
-        {/* Monitorização */}
+        {/* Dashboard — visão geral ao-vivo (em espera/abertas/fechadas/SLA/
+            por departamento) restrita aos departamentos do supervisor. */}
         {view === 'monitor' && (
           <div style={{ flex: 1, overflowY: 'auto' }}>
-            <SupervisorPanel socket={socket} />
+            <DashboardPage socket={socket} />
           </div>
         )}
 
