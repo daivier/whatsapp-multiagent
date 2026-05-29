@@ -62,7 +62,7 @@ export default function SupervisorLayout({ socket }) {
     { key: 'monitor',       icon: '👁️',  label: 'Monitorização' },
     { key: 'conversations', icon: '💬',  label: 'Conversas' },
     { key: 'reports',       icon: '📊',  label: 'Relatórios' },
-    { key: 'chat',          icon: '🗨️',  label: 'Chat Interno' },
+    { key: 'chat',          icon: '👥',  label: 'Chat Interno' },
   ];
 
   return (

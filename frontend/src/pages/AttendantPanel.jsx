@@ -156,7 +156,7 @@ export default function AttendantPanel({ socket }) {
           ⚡ Meus atalhos
         </button>
         <button style={{ ...S.navBtn, ...(view === 'chat' ? S.navBtnActive : {}), position: 'relative' }} onClick={() => setView('chat')}>
-          💬 Chat Interno
+          👥 Chat Interno
           {internalUnread > 0 && (
             <span style={{ position: 'absolute', top: '2px', right: '4px', background: view === 'chat' ? '#fff' : 'var(--accent)', color: view === 'chat' ? 'var(--accent)' : '#fff', borderRadius: '999px', fontSize: '0.62rem', fontWeight: 700, padding: '0px 4px', minWidth: '14px', textAlign: 'center', lineHeight: '14px' }}>{internalUnread > 99 ? '99+' : internalUnread}</span>
           )}

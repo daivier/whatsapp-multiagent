@@ -718,7 +718,7 @@ export default function AdminPanel({ socket }) {
     ['transfers','Transferências'],['quickreplies','Respostas Rápidas'],
     ['tags','Etiquetas'],['automation','🤖 Automação'],['bot','Bot'],['faq','❓ FAQ Bot'],
     ['signature','🔔 Assinatura'],['rating','⭐ Avaliação'],
-    ['blacklist','🚫 Blacklist'],['broadcast','📣 Envio em Massa'],['whatsapp','WhatsApp'],['chat','💬 Chat Interno'],
+    ['blacklist','🚫 Blacklist'],['broadcast','📣 Envio em Massa'],['whatsapp','WhatsApp'],['chat','👥 Chat Interno'],
   ];
 
   function selectTab(key) {
