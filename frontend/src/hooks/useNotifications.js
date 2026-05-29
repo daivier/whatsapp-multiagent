@@ -1,4 +1,5 @@
-import { useEffect } from 'react';
+import { useEffect, useRef } from 'react';
+import api from '../api';
 
 function playNotificationSound() {
   try {
@@ -43,11 +44,21 @@ function playMentionSound() {
 }
 
 export function useNotifications(socket, selectedConv, user) {
+  // Set local de IDs de conversas mutadas pelo utilizador actual. O
+  // 'conversation' que chega no payload do socket message:new é global
+  // (do getConversationWithContact) e não inclui is_muted per-user, por
+  // isso filtramos aqui com fetch inicial + sync via socket mute_change.
+  const mutedIds = useRef(new Set());
+
   // Pede permissão ao montar
   useEffect(() => {
     if ('Notification' in window && Notification.permission === 'default') {
       Notification.requestPermission();
     }
+    // Fetch inicial dos IDs mutados
+    api.get('/conversations/mutes').then(r => {
+      if (Array.isArray(r.data)) mutedIds.current = new Set(r.data);
+    }).catch(() => {});
   }, []);
 
   useEffect(() => {
@@ -57,8 +68,9 @@ export function useNotifications(socket, selectedConv, user) {
       if (message?.from_me) return;
       if (conversation?.id === selectedConv?.id) return;
       if (user?.role === 'attendant' && conversation?.assigned_to !== user?.id) return;
-      // Conversa silenciada por este user — sem som nem desktop notification
-      if (conversation?.is_muted) return;
+      // Conversa silenciada por este user — sem som nem desktop notification.
+      // Usa Set local (is_muted no payload chega indefinido por ser per-user).
+      if (mutedIds.current.has(conversation?.id)) return;
 
       // Som — sempre que chega mensagem noutras conversas
       playNotificationSound();
@@ -100,15 +112,22 @@ export function useNotifications(socket, selectedConv, user) {
       }
     }
 
+    function onMuteChange({ conversation_id, muted }) {
+      if (muted) mutedIds.current.add(conversation_id);
+      else mutedIds.current.delete(conversation_id);
+    }
+
     socket.on('message:new', onNewMessage);
     socket.on('message:incoming', onNewMessage);
     socket.on('mention:new', onMentionNew);
     socket.on('sla:alert', onSlaAlert);
+    socket.on('conversation:mute_change', onMuteChange);
     return () => {
       socket.off('message:new', onNewMessage);
       socket.off('message:incoming', onNewMessage);
       socket.off('mention:new', onMentionNew);
       socket.off('sla:alert', onSlaAlert);
+      socket.off('conversation:mute_change', onMuteChange);
     };
   }, [socket, selectedConv?.id]);
 }

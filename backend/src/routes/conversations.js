@@ -568,18 +568,30 @@ router.patch('/:id/priority', authMiddleware, (req, res) => {
   res.json(updated);
 });
 
+// GET /conversations/mutes — lista IDs mutados pelo utilizador actual.
+// Frontend usa para filtrar notificações localmente (o broadcast do
+// message:new é global; is_muted per-user não cabe num emit broadcast).
+router.get('/mutes', authMiddleware, (req, res) => {
+  const rows = db.prepare('SELECT conversation_id FROM conversation_mutes WHERE user_id = ?').all(req.user.id);
+  res.json(rows.map(r => r.conversation_id));
+});
+
 // POST /conversations/:id/mute — silencia notificações desta conversa para
 // o utilizador actual (não afecta outros utilizadores).
 router.post('/:id/mute', authMiddleware, (req, res) => {
   const conv = db.prepare('SELECT id FROM conversations WHERE id = ?').get(req.params.id);
   if (!conv) return res.status(404).json({ error: 'Conversa não encontrada' });
   db.prepare('INSERT OR IGNORE INTO conversation_mutes (user_id, conversation_id) VALUES (?, ?)').run(req.user.id, req.params.id);
+  const io = ioInstance.get();
+  io?.to(`user:${req.user.id}`).emit('conversation:mute_change', { conversation_id: parseInt(req.params.id, 10), muted: true });
   res.json({ ok: true, muted: true });
 });
 
 // DELETE /conversations/:id/mute — remove o mute do utilizador actual.
 router.delete('/:id/mute', authMiddleware, (req, res) => {
   db.prepare('DELETE FROM conversation_mutes WHERE user_id = ? AND conversation_id = ?').run(req.user.id, req.params.id);
+  const io = ioInstance.get();
+  io?.to(`user:${req.user.id}`).emit('conversation:mute_change', { conversation_id: parseInt(req.params.id, 10), muted: false });
   res.json({ ok: true, muted: false });
 });
 
