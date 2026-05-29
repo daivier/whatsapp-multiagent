@@ -430,10 +430,10 @@ export default function ConversationList({ socket, selected, onSelect }) {
 
           {/* Chip strip de linhas WhatsApp — só se houver ≥2 linhas activas */}
           {lines.length >= 2 && (
-            <div style={{ display: 'flex', gap: '0.3rem', padding: '0.4rem 1rem 0.2rem', flexWrap: 'wrap', borderTop: '1px dashed var(--border)' }}>
-              <span style={{ fontSize: '0.65rem', color: 'var(--hint)', fontWeight: 700, padding: '0.3rem 0' }}>📱</span>
+            <div style={{ display: 'flex', gap: '0.3rem', padding: '0.4rem 1rem 0.2rem', flexWrap: 'nowrap', overflowX: 'auto', borderTop: '1px dashed var(--border)', scrollbarWidth: 'thin' }}>
+              <span style={{ fontSize: '0.65rem', color: 'var(--hint)', fontWeight: 700, padding: '0.3rem 0', flexShrink: 0 }}>📱</span>
               <button
-                style={{ ...S.filterBtn, ...(filterLine === '' ? S.filterActive : {}) }}
+                style={{ ...S.filterBtn, ...(filterLine === '' ? S.filterActive : {}), flexShrink: 0 }}
                 onClick={() => setFilterLine('')}>
                 Todas
               </button>
@@ -441,7 +441,8 @@ export default function ConversationList({ socket, selected, onSelect }) {
                 <button key={l.id}
                   style={{
                     ...S.filterBtn,
-                    display: 'inline-flex', alignItems: 'center', gap: '0.3rem',
+                    display: 'inline-flex', alignItems: 'center', gap: '0.3rem', flexShrink: 0,
+                    whiteSpace: 'nowrap',
                     ...(String(filterLine) === String(l.id) ? { background: l.color, color: '#fff', border: `1px solid ${l.color}` } : { borderColor: l.color + '55', color: l.color }),
                   }}
                   onClick={() => setFilterLine(String(filterLine) === String(l.id) ? '' : l.id)}>
@@ -455,10 +456,10 @@ export default function ConversationList({ socket, selected, onSelect }) {
           {/* Chip strip de departamentos. Owner/supervisor: todos.
               Atendente: só os seus (e só se em ≥2 depts). */}
           {((user.role === 'owner' || user.role === 'supervisor') ? myDepartments.length >= 1 : myDepartments.length >= 2) && (
-            <div style={{ display: 'flex', gap: '0.3rem', padding: '0.4rem 1rem 0.2rem', flexWrap: 'wrap', borderTop: '1px dashed var(--border)' }}>
-              <span style={{ fontSize: '0.65rem', color: 'var(--hint)', fontWeight: 700, padding: '0.3rem 0' }}>🏢</span>
+            <div style={{ display: 'flex', gap: '0.3rem', padding: '0.4rem 1rem 0.2rem', flexWrap: 'nowrap', overflowX: 'auto', borderTop: '1px dashed var(--border)', scrollbarWidth: 'thin' }}>
+              <span style={{ fontSize: '0.65rem', color: 'var(--hint)', fontWeight: 700, padding: '0.3rem 0', flexShrink: 0 }}>🏢</span>
               <button
-                style={{ ...S.filterBtn, ...(filterDept === '' ? S.filterActive : {}), display: 'inline-flex', alignItems: 'center', gap: '0.3rem' }}
+                style={{ ...S.filterBtn, ...(filterDept === '' ? S.filterActive : {}), display: 'inline-flex', alignItems: 'center', gap: '0.3rem', flexShrink: 0 }}
                 onClick={() => setFilterDept('')}>
                 Todos
               </button>
@@ -469,7 +470,8 @@ export default function ConversationList({ socket, selected, onSelect }) {
                   <button key={d.id}
                     style={{
                       ...S.filterBtn,
-                      display: 'inline-flex', alignItems: 'center', gap: '0.3rem',
+                      display: 'inline-flex', alignItems: 'center', gap: '0.3rem', flexShrink: 0,
+                      whiteSpace: 'nowrap',
                       ...(active ? { background: d.color, color: '#fff', border: `1px solid ${d.color}` } : { borderColor: d.color + '55', color: d.color }),
                     }}
                     onClick={() => setFilterDept(active ? '' : d.id)}>
