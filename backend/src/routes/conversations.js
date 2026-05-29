@@ -518,7 +518,29 @@ router.patch('/:id/reopen', authMiddleware, (req, res) => {
   if (!conv) return res.status(404).json({ error: 'Conversa não encontrada' });
   if (req.user.role === 'attendant' && conv.assigned_to !== req.user.id) return res.status(403).json({ error: 'Sem permissão' });
 
-  db.prepare(`UPDATE conversations SET status = 'open', updated_at = CURRENT_TIMESTAMP WHERE id = ?`).run(req.params.id);
+  // Índice único parcial idx_one_active_conv_per_contact_line impede duas
+  // conversas não-fechadas para o mesmo (contact_id, line_id). Antes de
+  // reabrir, verificar se já existe outra aberta para o mesmo par. Se sim,
+  // devolver 409 com a referência — o frontend redirige para essa.
+  const existing = db.prepare(
+    `SELECT id FROM conversations WHERE contact_id = ? AND line_id IS ? AND status != 'closed' AND id != ? LIMIT 1`
+  ).get(conv.contact_id, conv.line_id, req.params.id);
+  if (existing) {
+    return res.status(409).json({
+      error: 'Já existe uma conversa aberta para este contacto nesta linha',
+      conflict: true,
+      existing_id: existing.id,
+    });
+  }
+
+  try {
+    db.prepare(`UPDATE conversations SET status = 'open', updated_at = CURRENT_TIMESTAMP WHERE id = ?`).run(req.params.id);
+  } catch (err) {
+    if (err.code === 'SQLITE_CONSTRAINT_UNIQUE') {
+      return res.status(409).json({ error: 'Conflito de unicidade ao reabrir', conflict: true });
+    }
+    throw err;
+  }
   const updated = db.prepare(conversationQuery('WHERE conv.id = ?')).get(req.params.id);
   ioInstance.get()?.emit('conversation:updated', updated);
   res.json(updated);
@@ -706,6 +728,7 @@ router.delete('/bulk', authMiddleware, ownerOnly, (req, res) => {
 
   const placeholders = ids.map(() => '?').join(',');
   const tx = db.transaction(() => {
+    db.prepare(`DELETE FROM scheduled_messages WHERE conversation_id IN (${placeholders})`).run(...ids);
     db.prepare(`DELETE FROM messages WHERE conversation_id IN (${placeholders})`).run(...ids);
     db.prepare(`DELETE FROM conversation_tags WHERE conversation_id IN (${placeholders})`).run(...ids);
     db.prepare(`DELETE FROM conversations WHERE id IN (${placeholders})`).run(...ids);
@@ -721,8 +744,15 @@ router.delete('/bulk', authMiddleware, ownerOnly, (req, res) => {
 router.delete('/:id', authMiddleware, ownerOnly, (req, res) => {
   const conv = db.prepare('SELECT id FROM conversations WHERE id = ?').get(req.params.id);
   if (!conv) return res.status(404).json({ error: 'Conversa não encontrada' });
-  db.prepare('DELETE FROM messages WHERE conversation_id = ?').run(req.params.id);
-  db.prepare('DELETE FROM conversations WHERE id = ?').run(req.params.id);
+  // scheduled_messages e messages referenciam conversations sem ON DELETE CASCADE
+  // (FK NO ACTION). Têm de ser apagados antes para evitar FOREIGN KEY violation.
+  const tx = db.transaction(() => {
+    db.prepare('DELETE FROM scheduled_messages WHERE conversation_id = ?').run(req.params.id);
+    db.prepare('DELETE FROM messages WHERE conversation_id = ?').run(req.params.id);
+    db.prepare('DELETE FROM conversations WHERE id = ?').run(req.params.id);
+  });
+  tx();
+  ioInstance.get()?.emit('conversation:deleted', { id: parseInt(req.params.id, 10) });
   res.json({ ok: true });
 });
 
