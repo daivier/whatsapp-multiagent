@@ -4,7 +4,7 @@ const path = require('path');
 const fs = require('fs');
 const db = require('../db/schema');
 const { authMiddleware, ownerOnly, supervisorOrOwner } = require('../middleware/auth');
-const { sendMessage, sendMedia } = require('../whatsapp/client');
+const { sendMessage, sendMedia, registerLidMapping, runLidMerge } = require('../whatsapp/client');
 const ioInstance = require('../io-instance');
 const push = require('../push');
 const { logAction } = require('../utils/audit');
@@ -218,19 +218,12 @@ router.post('/outbound', authMiddleware, async (req, res) => {
           // Actualizar wa_id: sempre para contactos novos, ou quando Baileys devolve LID (mais autoritativo)
           db.prepare('UPDATE contacts SET wa_id = ? WHERE id = ?').run(recipientWaId, contact.id);
           contact = { ...contact, wa_id: recipientWaId };
-          // Guardar mapeamento LID em disco para sobreviver a reinícios
+          // Guardar mapeamento LID em memória + disco. Sem actualizar a
+          // memória, o próximo handleIncomingMessage não vê o mapping e cria
+          // contacto duplicado (bug Elly 2026-05-29).
           if (recipientWaId.endsWith('@lid')) {
-            try {
-              const lidNum = recipientWaId.split('@')[0];
-              const sp = process.env.WA_SESSION_PATH || './baileys-session';
-              const fs = require('fs');
-              const path = require('path');
-              fs.writeFileSync(
-                path.join(sp, `lid-mapping-${lidNum}_reverse.json`),
-                JSON.stringify(contact.phone)
-              );
-              console.log(`[outbound] LID mapeado: ${recipientWaId} → ${contact.phone}`);
-            } catch (_) {}
+            registerLidMapping(lineId, recipientWaId, contact.phone);
+            console.log(`[outbound] LID mapeado: ${recipientWaId} → ${contact.phone}`);
           }
         }
       }

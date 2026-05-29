@@ -499,7 +499,23 @@ async function handleIncomingMessage(msg, lineId) {
         contact = db.prepare('SELECT * FROM contacts WHERE id = ?').get(contact.id);
       }
     } else if (remoteJid.endsWith('@lid')) {
-      const realJidFromMap = state.lidToJidMap.get(remoteJid);
+      // Tentar mapping em memória; se falhar, tenta ler do disco
+      // (lid-mapping-<num>_reverse.json gravado pelo outbound — pode ter sido
+      // criado depois do boot da linha, logo ainda não está no Map em memória).
+      let realJidFromMap = state.lidToJidMap.get(remoteJid);
+      if (!realJidFromMap) {
+        try {
+          const lidNum = remoteJid.split('@')[0];
+          const reverseFile = path.join(state.sessionPath, `lid-mapping-${lidNum}_reverse.json`);
+          if (fs.existsSync(reverseFile)) {
+            const realPhoneFromDisk = JSON.parse(fs.readFileSync(reverseFile, 'utf8'));
+            if (realPhoneFromDisk && typeof realPhoneFromDisk === 'string') {
+              realJidFromMap = `${realPhoneFromDisk}@s.whatsapp.net`;
+              state.lidToJidMap.set(remoteJid, realJidFromMap); // popular memória
+            }
+          }
+        } catch (_) {}
+      }
       if (realJidFromMap) {
         const realPhone = realJidFromMap.split('@')[0];
         contact = db.prepare('SELECT * FROM contacts WHERE phone = ? OR phone = ? OR wa_id = ?').get(realPhone, realPhone.replace(/^55/, ''), realJidFromMap);
@@ -513,7 +529,10 @@ async function handleIncomingMessage(msg, lineId) {
         const name = pushName || phone;
         db.prepare('INSERT INTO contacts (phone, name, wa_id) VALUES (?, ?, ?)').run(phone, name, remoteJid);
         contact = db.prepare('SELECT * FROM contacts WHERE wa_id = ?').get(remoteJid);
-        setTimeout(() => runLidMerge(lineId), 200);
+        // Síncrono — antes era setTimeout 200ms que entrava em race com a
+        // criação da conversa logo a seguir (cliente Elly: criou conv 67 antes
+        // do merge correr, ficou orfã para sempre).
+        try { runLidMerge(lineId); contact = db.prepare('SELECT * FROM contacts WHERE wa_id = ?').get(remoteJid) || contact; } catch (_) {}
       }
     } else if (fromMe) {
       return;
@@ -855,6 +874,32 @@ async function sendMessage(lineId, phone, body, { quotedWaId } = {}) {
   return msgId;
 }
 
+/**
+ * Regista um mapeamento LID → telefone real:
+ *  - actualiza state.lidToJidMap (memória, usado pelo handleIncomingMessage)
+ *  - persiste em lid-mapping-<lidNum>_reverse.json (disco, sobrevive reboot)
+ *
+ * Caller típico: rota /conversations/outbound quando descobre o LID real
+ * do destinatário pela resposta do Baileys. Sem isto, próxima msg inbound
+ * desse cliente cria contacto duplicado e conv nova (bug que aconteceu com
+ * a Elly em 2026-05-29).
+ */
+function registerLidMapping(lineId, lidJid, realPhone) {
+  if (!lidJid?.endsWith('@lid') || !realPhone) return;
+  const state = lineStates.get(resolveLineId(lineId));
+  if (!state) return;
+  // Memória
+  state.lidToJidMap.set(lidJid, `${realPhone}@s.whatsapp.net`);
+  // Disco
+  try {
+    const lidNum = lidJid.split('@')[0];
+    const sp = state.sessionPath || process.env.WA_SESSION_PATH || './baileys-session';
+    fs.writeFileSync(path.join(sp, `lid-mapping-${lidNum}_reverse.json`), JSON.stringify(realPhone));
+  } catch (err) {
+    console.error('[lid-register]', err.message);
+  }
+}
+
 async function editMessage(lineId, waMessageId, newBody) {
   const state = lineStates.get(resolveLineId(lineId));
   if (!state?.isReady || !state.sock) throw new Error('WhatsApp não está conectado nesta linha');
@@ -1056,6 +1101,7 @@ module.exports = {
   deleteMessageForAll,
   reactToMessage,
   applyReactionToList,
+  registerLidMapping,
   subscribePresence,
   getProfilePictureUrl,
   getStatus,
