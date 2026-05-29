@@ -560,6 +560,34 @@ async function handleIncomingMessage(msg, lineId) {
   // em linhas diferentes são INDEPENDENTES; o cliente pode falar com Vendas E Suporte)
   let conversation = db.prepare(`SELECT * FROM conversations WHERE contact_id = ? AND line_id = ? AND status != 'closed' ORDER BY id DESC LIMIT 1`).get(contact.id, lineId);
 
+  // Rating-first: se o cliente responde um número 1-5 e existe uma conversa
+  // FECHADA à espera de avaliação, contabilizar o rating mesmo que exista
+  // outra conversa aberta. Sem isto, a resposta "5" caía na conv aberta e o
+  // rating perdia-se (incidente 559684345354, 2026-05-28).
+  if (!fromMe && body && body.trim()) {
+    const score = parseInt(body.trim(), 10);
+    if (score >= 1 && score <= 5) {
+      const ratingConvEarly = db.prepare("SELECT * FROM conversations WHERE contact_id = ? AND line_id = ? AND status = 'closed' AND awaiting_rating = 1 ORDER BY id DESC LIMIT 1").get(contact.id, lineId);
+      if (ratingConvEarly) {
+        try {
+          db.prepare('INSERT OR IGNORE INTO ratings (conversation_id, contact_id, attendant_id, score) VALUES (?, ?, ?, ?)').run(ratingConvEarly.id, ratingConvEarly.contact_id, ratingConvEarly.assigned_to, score);
+          db.prepare('UPDATE conversations SET awaiting_rating = 0, updated_at = CURRENT_TIMESTAMP WHERE id = ?').run(ratingConvEarly.id);
+          const inWaIdR = msg.key.id || null;
+          if (inWaIdR) {
+            const dupR = db.prepare('SELECT id FROM messages WHERE wa_message_id = ?').get(inWaIdR);
+            if (!dupR) db.prepare('INSERT INTO messages (conversation_id, from_me, body, wa_message_id) VALUES (?, 0, ?, ?)').run(ratingConvEarly.id, sanitizeZalgo(body), inWaIdR);
+          }
+          if (io) io.emit('message:new', {
+            message: db.prepare('SELECT * FROM messages WHERE conversation_id = ? ORDER BY id DESC LIMIT 1').get(ratingConvEarly.id),
+            conversation: getConversationWithContact(ratingConvEarly.id),
+          });
+          console.log(`[rating] linha ${lineId}: conv ${ratingConvEarly.id} avaliada ${score} (rating-first, havia conv aberta=${conversation?.id || 'nenhuma'})`);
+        } catch (err) { console.error('[rating-first]', err.message); }
+        return; // não processa como mensagem normal
+      }
+    }
+  }
+
   if (!conversation && !fromMe) {
     const recentOutbound = db.prepare(`
       SELECT conv.* FROM conversations conv
