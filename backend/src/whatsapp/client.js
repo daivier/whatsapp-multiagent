@@ -757,6 +757,7 @@ async function handleIncomingMessage(msg, lineId) {
         body: safeBody || (mediaType?.startsWith('image/') ? '📷 Imagem' : mediaType?.startsWith('audio/') ? '🎤 Áudio' : mediaType?.startsWith('video/') ? '🎥 Vídeo' : mediaType ? '📎 Ficheiro' : 'Mensagem nova'),
         tag: `conv-${conversation.id}`,
         url: `/?conv=${conversation.id}`,
+        conversation_id: conversation.id,
       });
     }
   }

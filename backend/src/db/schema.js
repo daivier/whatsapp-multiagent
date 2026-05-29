@@ -375,3 +375,21 @@ try {
 } catch (_) {}
 // Flag em conversations para não responder FAQ duas vezes na mesma conv.
 try { db.exec(`ALTER TABLE conversations ADD COLUMN faq_responded INTEGER NOT NULL DEFAULT 0`); } catch (_) {}
+
+// Migração: quiet hours por user (formato HH:MM). NULL = sem janela.
+// Se start < end (ex: 22:00 → 23:30) é a mesma noite; se start > end
+// (ex: 22:00 → 08:00) atravessa a meia-noite.
+try { db.exec(`ALTER TABLE users ADD COLUMN quiet_hours_start TEXT`); } catch (_) {}
+try { db.exec(`ALTER TABLE users ADD COLUMN quiet_hours_end TEXT`); } catch (_) {}
+
+// Migração: mute por conversa (por user). Cada user pode silenciar conversas
+// individualmente para parar pushes/notificações.
+try {
+  db.exec(`CREATE TABLE IF NOT EXISTS conversation_mutes (
+    user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    conversation_id INTEGER NOT NULL REFERENCES conversations(id) ON DELETE CASCADE,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (user_id, conversation_id)
+  );
+  CREATE INDEX IF NOT EXISTS idx_conv_mutes_user ON conversation_mutes(user_id);`);
+} catch (_) {}

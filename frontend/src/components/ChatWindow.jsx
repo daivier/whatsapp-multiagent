@@ -172,6 +172,8 @@ export default function ChatWindow({ conversation: convProp, socket, onClose, on
   const [searchActive, setSearchActive] = useState(false);
   const [searchResults, setSearchResults] = useState([]);
   const [searchLoading, setSearchLoading] = useState(false);
+  const [isDragging, setIsDragging] = useState(false);
+  const dragCounter = useRef(0);
   const PAGE_SIZE = 100;
   const [text, setText] = useState('');
   const [sending, setSending] = useState(false);
@@ -806,12 +808,30 @@ export default function ChatWindow({ conversation: convProp, socket, onClose, on
     URL.revokeObjectURL(url);
   }
 
-  function exportPDF() {
+  async function exportPDF() {
     const contactName = conversation.contact_name || conversation.phone;
     const exported = new Date().toLocaleString('pt-BR', { day:'2-digit', month:'2-digit', year:'numeric', hour:'2-digit', minute:'2-digit' });
     const APIURL = import.meta.env.VITE_API_URL || window.location.origin;
 
-    const msgsHtml = messages.map(m => {
+    // Pega TUDO da conversa — não apenas as 100 carregadas em memória. Limite
+    // máximo do backend é 200 por chamada; paginamos para trás até esgotar.
+    let allMessages = [];
+    try {
+      let cursor = null;
+      while (true) {
+        const url = `/conversations/${conversation.id}/messages?limit=200${cursor ? `&before_id=${cursor}` : ''}`;
+        const { data } = await api.get(url);
+        const arr = Array.isArray(data) ? data : [];
+        if (arr.length === 0) break;
+        allMessages = [...arr, ...allMessages];
+        if (arr.length < 200) break;
+        cursor = arr[0].id;
+      }
+    } catch (_) {
+      allMessages = messages; // fallback para o que está em memória
+    }
+
+    const msgsHtml = allMessages.map(m => {
       const time = utc(m.timestamp).toLocaleString('pt-BR', { day:'2-digit', month:'2-digit', hour:'2-digit', minute:'2-digit' });
       const isMe = !!m.from_me;
       const sender = isMe ? (m.sender_name || 'Atendente') : contactName;
@@ -848,7 +868,7 @@ export default function ChatWindow({ conversation: convProp, socket, onClose, on
   <span>📱 ${conversation.phone}</span>
   <span>👤 ${conversation.attendant_name || 'Sem atendente'}</span>
   <span>📋 ${STATUS_PT[conversation.status] || conversation.status}</span>
-  <span>💬 ${messages.length} mensagens</span>
+  <span>💬 ${allMessages.length} mensagens</span>
   <span>🕒 Exportado: ${exported}</span>
 </div>
 <div class="messages">${msgsHtml}</div>
@@ -893,7 +913,44 @@ export default function ChatWindow({ conversation: convProp, socket, onClose, on
   }
 
   return (
-    <div style={S.container}>
+    <div style={{ ...S.container, position: 'relative' }}
+      onDragEnter={e => {
+        if (!e.dataTransfer?.types?.includes('Files')) return;
+        e.preventDefault();
+        dragCounter.current++;
+        setIsDragging(true);
+      }}
+      onDragOver={e => { if (e.dataTransfer?.types?.includes('Files')) e.preventDefault(); }}
+      onDragLeave={e => {
+        if (!e.dataTransfer?.types?.includes('Files')) return;
+        dragCounter.current--;
+        if (dragCounter.current <= 0) { dragCounter.current = 0; setIsDragging(false); }
+      }}
+      onDrop={e => {
+        if (!e.dataTransfer?.files?.length) return;
+        e.preventDefault();
+        dragCounter.current = 0;
+        setIsDragging(false);
+        if (conversation?.status === 'closed') { setWarning('Conversa fechada. Reabre para enviar ficheiros.'); return; }
+        const files = Array.from(e.dataTransfer.files);
+        (async () => { for (const f of files) await sendFile(f, ''); })();
+      }}>
+      {isDragging && (
+        <div style={{
+          position: 'absolute', inset: 0, zIndex: 800,
+          background: 'rgba(37, 211, 102, 0.12)',
+          border: '3px dashed var(--accent)',
+          borderRadius: 'var(--r-md)',
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          pointerEvents: 'none',
+        }}>
+          <div style={{ background: 'var(--card)', padding: '1.25rem 2rem', borderRadius: 'var(--r-md)', boxShadow: 'var(--sh-md)', textAlign: 'center' }}>
+            <div style={{ fontSize: '2rem', marginBottom: '0.4rem' }}>📂</div>
+            <div style={{ fontSize: '0.95rem', fontWeight: 600, color: 'var(--text)' }}>Solta para enviar</div>
+            <div style={{ fontSize: '0.78rem', color: 'var(--muted)', marginTop: '0.2rem' }}>Múltiplos ficheiros são enviados em sequência</div>
+          </div>
+        </div>
+      )}
       {/* Header */}
       <div style={S.header}>
         <ContactAvatar
@@ -906,6 +963,7 @@ export default function ChatWindow({ conversation: convProp, socket, onClose, on
         <div style={{ flex: 1, minWidth: 0 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flexWrap: 'wrap' }}>
             <strong style={{ fontSize: '0.9rem', color: 'var(--text)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: '40vw' }}>{conversation.contact_name || conversation.phone}</strong>
+            {!!conversation.is_muted && <span title="Notificações silenciadas" style={{ fontSize: '0.85rem' }}>🔇</span>}
             <button onClick={openContactEdit} title="Editar contacto" style={{ background: 'none', border: 'none', cursor: 'pointer', padding: '0 2px', fontSize: '0.8rem', opacity: 0.5, lineHeight: 1 }}>✏️</button>
             {conversation.department_name && (
               <span title="Departamento" style={{ background: (conversation.department_color || '#6b7280') + '18', border: `1px solid ${(conversation.department_color || '#6b7280')}55`, color: conversation.department_color || '#6b7280', borderRadius: '999px', padding: '0.1rem 0.55rem', fontSize: '0.7rem', fontWeight: 600, display: 'inline-flex', alignItems: 'center', gap: '0.25rem' }}>
@@ -964,6 +1022,24 @@ export default function ChatWindow({ conversation: convProp, socket, onClose, on
                   onMouseEnter={e => e.currentTarget.style.background = 'var(--bg)'}
                   onMouseLeave={e => e.currentTarget.style.background = 'none'}>
                   📊 Histórico contacto
+                </div>
+
+                <div onClick={async () => {
+                    setShowOverflow(false);
+                    try {
+                      if (conversation.is_muted) {
+                        await api.delete(`/conversations/${conversation.id}/mute`);
+                        setConversation(p => ({ ...p, is_muted: 0 }));
+                      } else {
+                        await api.post(`/conversations/${conversation.id}/mute`);
+                        setConversation(p => ({ ...p, is_muted: 1 }));
+                      }
+                    } catch (err) { setWarning(err.response?.data?.error || 'Erro ao alterar mute'); }
+                  }}
+                  style={{ padding: '0.4rem 0.65rem', cursor: 'pointer', fontSize: '0.83rem', borderRadius: 'var(--r-sm)', display: 'flex', alignItems: 'center', gap: '0.5rem' }}
+                  onMouseEnter={e => e.currentTarget.style.background = 'var(--bg)'}
+                  onMouseLeave={e => e.currentTarget.style.background = 'none'}>
+                  {conversation.is_muted ? '🔔 Reactivar notificações' : '🔇 Silenciar notificações'}
                 </div>
 
                 <div onClick={() => { setShowTagPicker(v => !v); setShowOverflow(false); }}

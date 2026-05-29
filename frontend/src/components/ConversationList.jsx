@@ -573,6 +573,7 @@ export default function ConversationList({ socket, selected, onSelect }) {
                           <span title={conv.department_name || ''} style={{ width: 8, height: 8, borderRadius: '50%', background: conv.department_color, flexShrink: 0 }} />
                         )}
                         <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{conv.contact_name || conv.phone}</span>
+                        {!!conv.is_muted && <span title="Silenciada" style={{ fontSize: '0.75rem', opacity: 0.7 }}>🔇</span>}
                       </span>
                       <span style={{ ...S.badge, background: STATUS_BG[conv.status], color: STATUS_COLOR[conv.status] }}>
                         {STATUS_LABEL[conv.status]}

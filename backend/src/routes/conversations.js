@@ -20,13 +20,19 @@ const storage = multer.diskStorage({
 });
 const upload = multer({ storage, limits: { fileSize: 32 * 1024 * 1024 } });
 
-function conversationQuery(extraWhere = '') {
+function conversationQuery(extraWhere = '', currentUserId = null) {
+  // is_muted é per-user — se userId não passado, omite o flag (queries gerais
+  // como notes/edit não precisam).
+  const mutedSelect = currentUserId
+    ? `, EXISTS (SELECT 1 FROM conversation_mutes m WHERE m.user_id = ${parseInt(currentUserId, 10)} AND m.conversation_id = conv.id) as is_muted`
+    : '';
   return `
     SELECT conv.*, con.phone, con.wa_id, con.id as contact_id, con.name as contact_name, con.email as contact_email, con.notes as contact_notes, u.name as attendant_name,
       d.name as department_name, d.color as department_color,
       l.name as line_name, l.color as line_color,
       (SELECT COUNT(*) FROM messages WHERE conversation_id = conv.id AND from_me = 0 AND read = 0) as unread_count,
       (SELECT MAX(timestamp) FROM messages WHERE conversation_id = conv.id AND from_me = 0) as last_client_at
+      ${mutedSelect}
     FROM conversations conv
     JOIN contacts con ON con.id = conv.contact_id
     LEFT JOIN users u ON u.id = conv.assigned_to
@@ -89,7 +95,7 @@ router.get('/', authMiddleware, (req, res) => {
   }
 
   const where = conditions.length ? 'WHERE ' + conditions.join(' AND ') : '';
-  const conversations = db.prepare(conversationQuery(where)).all(...params);
+  const conversations = db.prepare(conversationQuery(where, req.user.id)).all(...params);
   res.json(conversations);
 });
 
@@ -324,6 +330,7 @@ router.post('/:id/notes', authMiddleware, (req, res) => {
         body: `${conv.contact_name || conv.phone}: ${body.slice(0, 140)}`,
         tag: `mention-${conv.id}`,
         url: `/?conv=${conv.id}`,
+        urgent: true, // menções furam quiet hours
       });
     }
   }
@@ -559,6 +566,21 @@ router.patch('/:id/priority', authMiddleware, (req, res) => {
   const updated = db.prepare(conversationQuery('WHERE conv.id = ?')).get(req.params.id);
   ioInstance.get()?.emit('conversation:updated', updated);
   res.json(updated);
+});
+
+// POST /conversations/:id/mute — silencia notificações desta conversa para
+// o utilizador actual (não afecta outros utilizadores).
+router.post('/:id/mute', authMiddleware, (req, res) => {
+  const conv = db.prepare('SELECT id FROM conversations WHERE id = ?').get(req.params.id);
+  if (!conv) return res.status(404).json({ error: 'Conversa não encontrada' });
+  db.prepare('INSERT OR IGNORE INTO conversation_mutes (user_id, conversation_id) VALUES (?, ?)').run(req.user.id, req.params.id);
+  res.json({ ok: true, muted: true });
+});
+
+// DELETE /conversations/:id/mute — remove o mute do utilizador actual.
+router.delete('/:id/mute', authMiddleware, (req, res) => {
+  db.prepare('DELETE FROM conversation_mutes WHERE user_id = ? AND conversation_id = ?').run(req.user.id, req.params.id);
+  res.json({ ok: true, muted: false });
 });
 
 // PATCH /conversations/:id/snooze

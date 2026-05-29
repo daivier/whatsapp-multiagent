@@ -45,8 +45,37 @@ function getPublicKey() { return _ready ? PUBLIC : null; }
  * @param {number} userId
  * @param {object} payload  {title, body, tag?, url?, icon?}
  */
+// Verifica se a hora actual cai na janela quiet hours do user. Suporta
+// janelas que atravessam meia-noite (ex: 22:00 → 08:00). Em PT-BR / UTC-3.
+function isInQuietHours(start, end) {
+  if (!start || !end) return false;
+  const now = new Date();
+  const hh = String(now.getHours()).padStart(2, '0');
+  const mm = String(now.getMinutes()).padStart(2, '0');
+  const cur = `${hh}:${mm}`;
+  if (start === end) return false;
+  // Mesma noite (ex: 13:00 → 14:00): start <= cur < end
+  if (start < end) return cur >= start && cur < end;
+  // Atravessa meia-noite (ex: 22:00 → 08:00): cur >= start OU cur < end
+  return cur >= start || cur < end;
+}
+
 async function sendToUser(userId, payload) {
   if (!_ready || !userId) return;
+
+  // Mute por conversa — se conversation_id está no payload e o user mutou-a, skip
+  if (payload?.conversation_id) {
+    const muted = db.prepare('SELECT 1 FROM conversation_mutes WHERE user_id = ? AND conversation_id = ?').get(userId, payload.conversation_id);
+    if (muted) return;
+  }
+
+  // Quiet hours — se o user definiu janela e a hora actual cai dentro, skip
+  // (excepto se for mention que tem flag urgent)
+  if (!payload?.urgent) {
+    const u = db.prepare('SELECT quiet_hours_start, quiet_hours_end FROM users WHERE id = ?').get(userId);
+    if (u && isInQuietHours(u.quiet_hours_start, u.quiet_hours_end)) return;
+  }
+
   const subs = db.prepare('SELECT id, endpoint, p256dh, auth FROM push_subscriptions WHERE user_id = ?').all(userId);
   if (subs.length === 0) return;
 

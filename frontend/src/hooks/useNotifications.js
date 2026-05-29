@@ -57,6 +57,8 @@ export function useNotifications(socket, selectedConv, user) {
       if (message?.from_me) return;
       if (conversation?.id === selectedConv?.id) return;
       if (user?.role === 'attendant' && conversation?.assigned_to !== user?.id) return;
+      // Conversa silenciada por este user — sem som nem desktop notification
+      if (conversation?.is_muted) return;
 
       // Som — sempre que chega mensagem noutras conversas
       playNotificationSound();
