@@ -1,0 +1,365 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>WhatsApp Multi-Atendente — Vários atendentes, um só número</title>
+  <meta name="description" content="Plataforma de atendimento multi-atendente para WhatsApp. Vários atendentes no mesmo número, departamentos, relatórios e bot — sem pagar por mensagem." />
+
+  <!-- Open Graph / partilha -->
+  <meta property="og:title" content="WhatsApp Multi-Atendente" />
+  <meta property="og:description" content="Vários atendentes, um só número de WhatsApp. Sem pagar por mensagem." />
+  <meta property="og:type" content="website" />
+
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: {
+            wa: { DEFAULT: '#25D366', dark: '#128C7E', deep: '#075E54' },
+            ink: '#0b141a',
+          },
+          fontFamily: { sans: ['Inter', 'system-ui', 'sans-serif'] },
+        },
+      },
+    };
+  </script>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet" />
+  <style>
+    html { scroll-behavior: smooth; }
+    .grad-hero { background: radial-gradient(1200px 600px at 80% -10%, rgba(37,211,102,0.18), transparent 60%), linear-gradient(180deg, #0b141a 0%, #0e1b22 100%); }
+    .card-hover { transition: transform .2s, box-shadow .2s; }
+    .card-hover:hover { transform: translateY(-4px); box-shadow: 0 12px 30px rgba(0,0,0,0.12); }
+  </style>
+</head>
+<body class="font-sans text-ink antialiased">
+
+  <!-- =========== CONFIG: troca este número pelo teu WhatsApp (formato 55DDDNUMERO) =========== -->
+  <script>
+    window.WA_NUMBER = '5585999999999'; // ⚠️ TROCAR pelo número real
+    window.waLink = (msg) => `https://wa.me/${window.WA_NUMBER}?text=${encodeURIComponent(msg || 'Olá! Quero testar o WhatsApp Multi-Atendente grátis por 1 mês.')}`;
+    document.addEventListener('DOMContentLoaded', () => {
+      document.querySelectorAll('[data-wa]').forEach(a => {
+        a.href = window.waLink(a.getAttribute('data-wa') || '');
+        a.target = '_blank'; a.rel = 'noopener';
+      });
+    });
+  </script>
+
+  <!-- ============ NAV ============ -->
+  <header class="sticky top-0 z-50 bg-white/90 backdrop-blur border-b border-slate-100">
+    <nav class="max-w-6xl mx-auto px-5 h-16 flex items-center justify-between">
+      <a href="#" class="flex items-center gap-2 font-extrabold text-lg">
+        <span class="text-2xl">💬</span> WhatsApp <span class="text-wa-dark">Multi-Atendente</span>
+      </a>
+      <div class="hidden md:flex items-center gap-7 text-sm font-medium text-slate-600">
+        <a href="#funcionalidades" class="hover:text-wa-dark">Funcionalidades</a>
+        <a href="#como-funciona" class="hover:text-wa-dark">Como funciona</a>
+        <a href="#planos" class="hover:text-wa-dark">Planos</a>
+        <a href="#faq" class="hover:text-wa-dark">FAQ</a>
+      </div>
+      <a data-wa class="bg-wa hover:bg-wa-dark text-white font-semibold text-sm px-4 py-2 rounded-lg transition">Testar grátis</a>
+    </nav>
+  </header>
+
+  <!-- ============ HERO ============ -->
+  <section class="grad-hero text-white">
+    <div class="max-w-6xl mx-auto px-5 py-20 md:py-28 grid md:grid-cols-2 gap-12 items-center">
+      <div>
+        <span class="inline-block bg-wa/15 text-wa border border-wa/30 text-xs font-semibold px-3 py-1 rounded-full mb-5">🚀 Sem pagar por mensagem à Meta</span>
+        <h1 class="text-4xl md:text-5xl font-extrabold leading-tight">
+          Vários atendentes,<br><span class="text-wa">um só número</span> de WhatsApp.
+        </h1>
+        <p class="mt-5 text-lg text-slate-300 leading-relaxed">
+          Sua equipe inteira atende pelo mesmo número, com conversas distribuídas automaticamente, departamentos, relatórios e bot. Tudo num painel web — sem instalar nada.
+        </p>
+        <div class="mt-8 flex flex-col sm:flex-row gap-3">
+          <a data-wa class="bg-wa hover:bg-wa-dark text-white font-bold px-7 py-3.5 rounded-xl text-center transition shadow-lg shadow-wa/20">
+            Testar 1 mês grátis →
+          </a>
+          <a href="#como-funciona" class="border border-white/20 hover:bg-white/5 text-white font-semibold px-7 py-3.5 rounded-xl text-center transition">
+            Ver como funciona
+          </a>
+        </div>
+        <p class="mt-4 text-sm text-slate-400">Sem cartão de crédito · Configuração em ~30 minutos · Suporte em português</p>
+      </div>
+      <div class="relative">
+        <div class="bg-white/5 border border-white/10 rounded-2xl p-3 shadow-2xl">
+          <div class="bg-[#0e1b22] rounded-xl overflow-hidden">
+            <div class="flex items-center gap-1.5 px-3 py-2.5 border-b border-white/5">
+              <span class="w-2.5 h-2.5 rounded-full bg-red-400"></span>
+              <span class="w-2.5 h-2.5 rounded-full bg-yellow-400"></span>
+              <span class="w-2.5 h-2.5 rounded-full bg-green-400"></span>
+              <span class="ml-3 text-xs text-slate-400">atendimento.suaempresa.com.br</span>
+            </div>
+            <!-- mock do painel -->
+            <div class="p-4 grid grid-cols-3 gap-2 text-[10px]">
+              <div class="col-span-1 space-y-2">
+                <div class="bg-wa/20 rounded p-2 text-wa font-semibold">💬 Conversas</div>
+                <div class="bg-white/5 rounded p-2 text-slate-300">👁️ Monitorização</div>
+                <div class="bg-white/5 rounded p-2 text-slate-300">📊 Relatórios</div>
+                <div class="bg-white/5 rounded p-2 text-slate-300">👥 Chat Interno</div>
+              </div>
+              <div class="col-span-2 space-y-2">
+                <div class="bg-white/5 rounded p-2 flex justify-between"><span class="text-slate-200">Maria Silva</span><span class="text-wa">●</span></div>
+                <div class="bg-white/5 rounded p-2 flex justify-between"><span class="text-slate-200">João Costa</span><span class="text-yellow-400">⏱ SLA</span></div>
+                <div class="bg-white/5 rounded p-2 flex justify-between"><span class="text-slate-200">Ana Souza</span><span class="text-red-400">😡</span></div>
+                <div class="bg-wa/10 rounded p-3 text-slate-300 leading-relaxed mt-2">
+                  "Bom dia! Gostaria de saber..." <span class="block text-right text-wa mt-1">✓✓</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ A DOR ============ -->
+  <section class="py-20 bg-slate-50">
+    <div class="max-w-5xl mx-auto px-5 text-center">
+      <h2 class="text-3xl font-extrabold">Atender no WhatsApp vira bagunça rápido</h2>
+      <p class="mt-3 text-slate-500 max-w-2xl mx-auto">Se a sua empresa cresce, o celular único não acompanha. Reconhece algum destes?</p>
+      <div class="mt-12 grid md:grid-cols-2 gap-5 text-left">
+        <div class="flex gap-4 bg-white p-5 rounded-xl border border-slate-100">
+          <span class="text-2xl">📱</span>
+          <div><strong>Um celular, vários atendentes</strong><p class="text-slate-500 text-sm mt-1">Todo mundo brigando pelo mesmo aparelho, mensagens se cruzando.</p></div>
+        </div>
+        <div class="flex gap-4 bg-white p-5 rounded-xl border border-slate-100">
+          <span class="text-2xl">🤯</span>
+          <div><strong>Cliente sem resposta</strong><p class="text-slate-500 text-sm mt-1">Mensagens se perdem, ninguém sabe quem responde o quê.</p></div>
+        </div>
+        <div class="flex gap-4 bg-white p-5 rounded-xl border border-slate-100">
+          <span class="text-2xl">🚪</span>
+          <div><strong>Atendente sai e leva os contatos</strong><p class="text-slate-500 text-sm mt-1">O histórico estava no celular dele. Você perdeu tudo.</p></div>
+        </div>
+        <div class="flex gap-4 bg-white p-5 rounded-xl border border-slate-100">
+          <span class="text-2xl">😤</span>
+          <div><strong>Cliente irritado e ninguém vê</strong><p class="text-slate-500 text-sm mt-1">Sem priorização, o cliente bravo espera igual aos outros.</p></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ COMO FUNCIONA ============ -->
+  <section id="como-funciona" class="py-20">
+    <div class="max-w-5xl mx-auto px-5 text-center">
+      <h2 class="text-3xl font-extrabold">Funcionando em 30 minutos</h2>
+      <div class="mt-12 grid md:grid-cols-3 gap-8">
+        <div>
+          <div class="w-14 h-14 mx-auto rounded-full bg-wa/10 text-wa text-2xl font-bold flex items-center justify-center">1</div>
+          <h3 class="font-bold mt-4">Conecte o WhatsApp</h3>
+          <p class="text-slate-500 text-sm mt-2">Escaneia um QR Code (igual ao WhatsApp Web). Usa o número que você já tem.</p>
+        </div>
+        <div>
+          <div class="w-14 h-14 mx-auto rounded-full bg-wa/10 text-wa text-2xl font-bold flex items-center justify-center">2</div>
+          <h3 class="font-bold mt-4">Cadastre a equipe</h3>
+          <p class="text-slate-500 text-sm mt-2">Crie os atendentes, organize por departamentos (Vendas, Suporte, Financeiro).</p>
+        </div>
+        <div>
+          <div class="w-14 h-14 mx-auto rounded-full bg-wa/10 text-wa text-2xl font-bold flex items-center justify-center">3</div>
+          <h3 class="font-bold mt-4">Atenda em equipe</h3>
+          <p class="text-slate-500 text-sm mt-2">As conversas são distribuídas automaticamente. Cada um vê só o que é dele.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ FUNCIONALIDADES ============ -->
+  <section id="funcionalidades" class="py-20 bg-slate-50">
+    <div class="max-w-6xl mx-auto px-5">
+      <div class="text-center">
+        <h2 class="text-3xl font-extrabold">Tudo o que sua operação precisa</h2>
+        <p class="mt-3 text-slate-500">Recursos pensados para equipes de atendimento que querem escalar.</p>
+      </div>
+      <div class="mt-12 grid sm:grid-cols-2 lg:grid-cols-3 gap-5">
+        <!-- card -->
+        <div class="bg-white p-6 rounded-xl border border-slate-100 card-hover">
+          <span class="text-3xl">👥</span>
+          <h3 class="font-bold mt-3">Multi-atendente</h3>
+          <p class="text-slate-500 text-sm mt-1">Toda a equipe no mesmo número, com distribuição automática por carga.</p>
+        </div>
+        <div class="bg-white p-6 rounded-xl border border-slate-100 card-hover">
+          <span class="text-3xl">📞</span>
+          <h3 class="font-bold mt-3">Múltiplas linhas</h3>
+          <p class="text-slate-500 text-sm mt-1">Vários números num só painel — Vendas, SAC, Financeiro separados.</p>
+        </div>
+        <div class="bg-white p-6 rounded-xl border border-slate-100 card-hover">
+          <span class="text-3xl">🏢</span>
+          <h3 class="font-bold mt-3">Departamentos & supervisores</h3>
+          <p class="text-slate-500 text-sm mt-1">Roteamento por setor e supervisores que veem só a sua equipe.</p>
+        </div>
+        <div class="bg-white p-6 rounded-xl border border-slate-100 card-hover">
+          <span class="text-3xl">🤖</span>
+          <h3 class="font-bold mt-3">Bot de FAQ</h3>
+          <p class="text-slate-500 text-sm mt-1">Responde perguntas comuns sozinho, antes de chegar a um humano.</p>
+        </div>
+        <div class="bg-white p-6 rounded-xl border border-slate-100 card-hover">
+          <span class="text-3xl">🎤</span>
+          <h3 class="font-bold mt-3">Transcrição de áudio</h3>
+          <p class="text-slate-500 text-sm mt-1">Áudio do cliente vira texto automaticamente. Leia em segundos.</p>
+        </div>
+        <div class="bg-white p-6 rounded-xl border border-slate-100 card-hover">
+          <span class="text-3xl">⭐</span>
+          <h3 class="font-bold mt-3">Avaliação 1-5</h3>
+          <p class="text-slate-500 text-sm mt-1">Pesquisa de satisfação automática ao fechar o atendimento.</p>
+        </div>
+        <div class="bg-white p-6 rounded-xl border border-slate-100 card-hover">
+          <span class="text-3xl">📊</span>
+          <h3 class="font-bold mt-3">Relatórios & SLA</h3>
+          <p class="text-slate-500 text-sm mt-1">Tempo de resposta, volume por hora, ranking de atendentes, alertas de SLA.</p>
+        </div>
+        <div class="bg-white p-6 rounded-xl border border-slate-100 card-hover">
+          <span class="text-3xl">😡</span>
+          <h3 class="font-bold mt-3">Detector de cliente irritado</h3>
+          <p class="text-slate-500 text-sm mt-1">Sinaliza conversas com tom negativo para você priorizar.</p>
+        </div>
+        <div class="bg-white p-6 rounded-xl border border-slate-100 card-hover">
+          <span class="text-3xl">🗨️</span>
+          <h3 class="font-bold mt-3">Chat interno</h3>
+          <p class="text-slate-500 text-sm mt-1">Equipe conversa entre si com @menções, sem sair do painel.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ DIFERENCIAL ============ -->
+  <section class="py-20 bg-wa-deep text-white">
+    <div class="max-w-5xl mx-auto px-5 grid md:grid-cols-2 gap-10 items-center">
+      <div>
+        <h2 class="text-3xl font-extrabold">Não pague por mensagem</h2>
+        <p class="mt-4 text-slate-200 leading-relaxed">
+          A maioria das soluções usa a <strong>API oficial paga da Meta</strong> — onde você paga por cada conversa iniciada. Nós usamos o WhatsApp como ele já é, no número que você já tem.
+        </p>
+        <p class="mt-3 text-slate-200">Para quem manda muita mensagem, a economia é grande.</p>
+      </div>
+      <div class="space-y-3">
+        <div class="flex items-center gap-3 bg-white/5 rounded-lg p-4"><span class="text-wa text-xl">✓</span> Sem custo por mensagem</div>
+        <div class="flex items-center gap-3 bg-white/5 rounded-lg p-4"><span class="text-wa text-xl">✓</span> Domínio próprio (atendimento.suaempresa.com.br)</div>
+        <div class="flex items-center gap-3 bg-white/5 rounded-lg p-4"><span class="text-wa text-xl">✓</span> 100% em português, suporte direto</div>
+        <div class="flex items-center gap-3 bg-white/5 rounded-lg p-4"><span class="text-wa text-xl">✓</span> Funciona no PC e no celular, sem instalar</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ PLANOS ============ -->
+  <section id="planos" class="py-20">
+    <div class="max-w-6xl mx-auto px-5">
+      <div class="text-center">
+        <h2 class="text-3xl font-extrabold">Planos simples, sem surpresa</h2>
+        <p class="mt-3 text-slate-500">Cobramos por linha e atendentes — nunca por mensagem. Cancela quando quiser.</p>
+      </div>
+      <div class="mt-12 grid md:grid-cols-3 gap-6 items-stretch">
+        <!-- Básico -->
+        <div class="bg-white p-7 rounded-2xl border border-slate-200 flex flex-col">
+          <h3 class="font-bold text-lg">Básico</h3>
+          <p class="text-slate-500 text-sm mt-1">Para quem está começando</p>
+          <div class="mt-5"><span class="text-4xl font-extrabold">R$ 197</span><span class="text-slate-400">/mês</span></div>
+          <ul class="mt-6 space-y-2.5 text-sm text-slate-600 flex-1">
+            <li>✅ 1 linha WhatsApp</li>
+            <li>✅ Até 3 atendentes</li>
+            <li>✅ 1 departamento</li>
+            <li>✅ Bot de boas-vindas</li>
+            <li>✅ Histórico de conversas</li>
+          </ul>
+          <a data-wa="Olá! Tenho interesse no plano Básico (R$197/mês). Quero testar grátis." class="mt-6 text-center border border-wa text-wa-dark font-semibold py-2.5 rounded-lg hover:bg-wa/5 transition">Começar</a>
+        </div>
+        <!-- Profissional (destaque) -->
+        <div class="bg-ink text-white p-7 rounded-2xl border-2 border-wa flex flex-col relative shadow-xl">
+          <span class="absolute -top-3 left-1/2 -translate-x-1/2 bg-wa text-white text-xs font-bold px-3 py-1 rounded-full">MAIS POPULAR</span>
+          <h3 class="font-bold text-lg">Profissional</h3>
+          <p class="text-slate-300 text-sm mt-1">Para equipes organizadas</p>
+          <div class="mt-5"><span class="text-4xl font-extrabold">R$ 397</span><span class="text-slate-400">/mês</span></div>
+          <ul class="mt-6 space-y-2.5 text-sm text-slate-200 flex-1">
+            <li>✅ Até 2 linhas WhatsApp</li>
+            <li>✅ Até 10 atendentes</li>
+            <li>✅ Até 3 departamentos</li>
+            <li>✅ Agendamento de mensagens</li>
+            <li>✅ Etiquetas, prioridades, transferências</li>
+            <li>✅ Avaliação 1-5 + respostas rápidas</li>
+            <li>✅ Relatórios + export CSV + SLA</li>
+          </ul>
+          <a data-wa="Olá! Tenho interesse no plano Profissional (R$397/mês). Quero testar grátis." class="mt-6 text-center bg-wa hover:bg-wa-dark text-white font-bold py-2.5 rounded-lg transition">Testar 1 mês grátis</a>
+        </div>
+        <!-- Empresarial -->
+        <div class="bg-white p-7 rounded-2xl border border-slate-200 flex flex-col">
+          <h3 class="font-bold text-lg">Empresarial</h3>
+          <p class="text-slate-500 text-sm mt-1">Para operações maiores</p>
+          <div class="mt-5"><span class="text-4xl font-extrabold">R$ 797</span><span class="text-slate-400">/mês</span></div>
+          <ul class="mt-6 space-y-2.5 text-sm text-slate-600 flex-1">
+            <li>✅ Linhas ilimitadas</li>
+            <li>✅ Atendentes ilimitados</li>
+            <li>✅ Departamentos ilimitados</li>
+            <li>✅ Operações em massa</li>
+            <li>✅ Logs de transferência</li>
+            <li>✅ Suporte prioritário</li>
+          </ul>
+          <a data-wa="Olá! Tenho interesse no plano Empresarial (R$797/mês). Quero falar com vocês." class="mt-6 text-center border border-wa text-wa-dark font-semibold py-2.5 rounded-lg hover:bg-wa/5 transition">Falar com vendas</a>
+        </div>
+      </div>
+      <p class="text-center text-slate-400 text-sm mt-8">💡 Pagamento anual: <strong>2 meses grátis</strong>. Add-ons: linha extra R$ 79/mês · atendente extra R$ 29/mês · setup R$ 297.</p>
+    </div>
+  </section>
+
+  <!-- ============ FAQ ============ -->
+  <section id="faq" class="py-20 bg-slate-50">
+    <div class="max-w-3xl mx-auto px-5">
+      <h2 class="text-3xl font-extrabold text-center">Perguntas frequentes</h2>
+      <div class="mt-10 space-y-3">
+        <details class="bg-white rounded-xl border border-slate-100 p-5 group" open>
+          <summary class="font-semibold cursor-pointer list-none flex justify-between items-center">Preciso instalar alguma coisa? <span class="text-wa group-open:rotate-45 transition">+</span></summary>
+          <p class="text-slate-500 text-sm mt-3">Não. É um painel web — funciona no navegador do PC ou celular. Você só escaneia um QR Code uma vez para conectar o WhatsApp.</p>
+        </details>
+        <details class="bg-white rounded-xl border border-slate-100 p-5 group">
+          <summary class="font-semibold cursor-pointer list-none flex justify-between items-center">Uso o número que já tenho? <span class="text-wa group-open:rotate-45 transition">+</span></summary>
+          <p class="text-slate-500 text-sm mt-3">Sim. Conecta o número de WhatsApp que a sua empresa já usa. Não precisa de chip novo nem número novo.</p>
+        </details>
+        <details class="bg-white rounded-xl border border-slate-100 p-5 group">
+          <summary class="font-semibold cursor-pointer list-none flex justify-between items-center">Meu número pode ser banido? <span class="text-wa group-open:rotate-45 transition">+</span></summary>
+          <p class="text-slate-500 text-sm mt-3">O sistema usa uma conexão não oficial (como o WhatsApp Web). Banimentos são raros quando se respeita o uso normal (sem spam em massa), mas é uma possibilidade que orientamos a mitigar. Falamos sobre isso na configuração.</p>
+        </details>
+        <details class="bg-white rounded-xl border border-slate-100 p-5 group">
+          <summary class="font-semibold cursor-pointer list-none flex justify-between items-center">Os dados ficam seguros? <span class="text-wa group-open:rotate-45 transition">+</span></summary>
+          <p class="text-slate-500 text-sm mt-3">Cada cliente tem o seu ambiente isolado, com a sua própria base de dados. As conversas ficam guardadas no servidor — se um atendente sair, o histórico permanece com você.</p>
+        </details>
+        <details class="bg-white rounded-xl border border-slate-100 p-5 group">
+          <summary class="font-semibold cursor-pointer list-none flex justify-between items-center">Como funciona o teste grátis? <span class="text-wa group-open:rotate-45 transition">+</span></summary>
+          <p class="text-slate-500 text-sm mt-3">1 mês completo, sem cartão de crédito e sem compromisso. A gente configura tudo para você. Se não servir, é só desligar.</p>
+        </details>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ CTA FINAL ============ -->
+  <section class="py-20 bg-wa-deep text-white text-center">
+    <div class="max-w-2xl mx-auto px-5">
+      <h2 class="text-3xl md:text-4xl font-extrabold">Pronto para organizar o seu atendimento?</h2>
+      <p class="mt-4 text-slate-200">Teste 1 mês grátis. A gente configura tudo e você vê funcionando com o seu próprio número.</p>
+      <a data-wa class="inline-block mt-8 bg-wa hover:bg-white hover:text-wa-deep text-white font-bold px-10 py-4 rounded-xl text-lg transition shadow-lg">
+        Falar no WhatsApp →
+      </a>
+      <p class="mt-4 text-sm text-slate-300">Resposta rápida · Sem compromisso</p>
+    </div>
+  </section>
+
+  <!-- ============ FOOTER ============ -->
+  <footer class="bg-ink text-slate-400 py-10">
+    <div class="max-w-6xl mx-auto px-5 flex flex-col md:flex-row justify-between items-center gap-4 text-sm">
+      <div class="flex items-center gap-2 font-bold text-white"><span>💬</span> WhatsApp Multi-Atendente</div>
+      <div class="flex gap-6">
+        <a href="#funcionalidades" class="hover:text-white">Funcionalidades</a>
+        <a href="#planos" class="hover:text-white">Planos</a>
+        <a data-wa class="hover:text-white">Contacto</a>
+      </div>
+      <div>© <span id="year"></span> · Feito com 💚</div>
+    </div>
+  </footer>
+
+  <!-- Botão flutuante WhatsApp -->
+  <a data-wa class="fixed bottom-5 right-5 z-50 bg-wa hover:bg-wa-dark text-white w-14 h-14 rounded-full flex items-center justify-center text-2xl shadow-lg shadow-wa/30 transition" title="Falar no WhatsApp">💬</a>
+
+  <script>document.getElementById('year').textContent = new Date().getFullYear();</script>
+</body>
+</html>
