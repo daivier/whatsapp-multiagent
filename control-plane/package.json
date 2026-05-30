@@ -1,0 +1,15 @@
+{
+  "name": "wa-control-plane",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Control plane: signup + pagamento (Mercado Pago) + provisionamento de tenants",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "better-sqlite3": "^11.0.0",
+    "dotenv": "^16.4.5",
+    "express": "^4.19.2"
+  }
+}

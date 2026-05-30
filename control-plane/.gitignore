@@ -1,0 +1,5 @@
+.env
+node_modules/
+signups.sqlite
+signups.sqlite-shm
+signups.sqlite-wal
