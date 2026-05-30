@@ -18,7 +18,7 @@
   }
   *{box-sizing:border-box}
   html{scroll-behavior:smooth}
-  body{margin:0;font-family:Inter,system-ui,-apple-system,Segoe UI,sans-serif;color:var(--dark);background:var(--bg)}
+  body{margin:0;font-family:Inter,system-ui,-apple-system,Segoe UI,sans-serif;color:var(--dark);background:var(--bg);overflow-x:hidden}
   a{text-decoration:none;color:inherit}
 
   /* ---------- TOP NAV ---------- */
@@ -150,8 +150,14 @@
     .scrim{position:fixed;inset:70px 0 0;background:rgba(15,23,42,.4);z-index:57;opacity:0;pointer-events:none;transition:.26s}
     .scrim.show{opacity:1;pointer-events:auto}
   }
-  @media(max-width:560px){
+  @media(max-width:680px){
     .nav .nav-label{display:none}
+    .nav{padding:0 14px;gap:10px}
+    .nav-actions{gap:8px}
+    .nav-actions .btn-ghost{display:none}
+    #topCta{padding:10px 14px;font-size:13px}
+  }
+  @media(max-width:560px){
     .pager{flex-direction:column}
   }
 </style>
