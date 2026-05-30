@@ -56,6 +56,7 @@ async function mpCreatePix(amount, description, email) {
       description,
       payment_method_id: 'pix',
       payer: { email: email || FALLBACK_EMAIL },
+      notification_url: process.env.WEBHOOK_URL || undefined,
     }),
   });
   return res.json();
@@ -103,10 +104,27 @@ app.post('/signup', async (req, res) => {
   }
 });
 
-// GET /signup/:id/status — a landing faz polling até "approved"
+// GET /signup/:id/status — a landing faz polling até "approved".
+// Consulta o Mercado Pago em tempo real (não depende só do webhook) e
+// atualiza a BD quando o estado muda.
 app.get('/signup/:paymentId/status', async (req, res) => {
-  const row = db.prepare('SELECT status FROM signups WHERE mp_payment_id = ?').get(req.params.paymentId);
-  res.json({ status: row ? row.status : 'unknown' });
+  const pid = req.params.paymentId;
+  const row = db.prepare('SELECT * FROM signups WHERE mp_payment_id = ?').get(pid);
+  let status = row ? row.status : 'unknown';
+  try {
+    const pay = await mpGetPayment(pid);
+    if (pay && pay.status) {
+      status = pay.status;
+      if (row && pay.status !== row.status) {
+        const paidStamp = pay.status === 'approved' ? 'CURRENT_TIMESTAMP' : 'paid_at';
+        db.prepare(`UPDATE signups SET status = ?, paid_at = ${paidStamp} WHERE id = ?`).run(pay.status, row.id);
+        if (pay.status === 'approved' && !row.provisioned) {
+          console.log(`[signup] PAGO ✅ #${row.id} ${row.empresa} — plano ${row.plano} (R$${row.preco}). Provisionar tenant.`);
+        }
+      }
+    }
+  } catch (_) { /* mantém o status da BD se o MP falhar */ }
+  res.json({ status });
 });
 
 // POST /webhook — Mercado Pago notifica alterações de pagamento.
