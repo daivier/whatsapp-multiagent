@@ -1,6 +1,6 @@
 ---
 name: project-known-issues
-description: "Bugs conhecidos em produção (tenant supermercados) que apareceram em logs durante incidentes — não causados por trabalho recente, ainda por resolver."
+description: "Bugs conhecidos em produção (tenant supermercados). #1 reopen e #2 delete RESOLVIDOS (verificado 2026-05-30). Resta #3 sessão Baileys instável (ambiental)."
 metadata: 
   node_type: memory
   type: project
@@ -13,9 +13,9 @@ Detetados durante incidente do spam de assinatura (2026-05-28). **Não** foram c
 
 **How to apply:** Se um deles começar a causar instabilidade ou queixa de cliente, atacar separadamente — não tentar incluir num PR que tenha outro foco.
 
-1. **`PATCH /conversations/:id/reopen` rebenta com UNIQUE constraint** quando já há outra conversa não-fechada para o mesmo `(contact_id, line_id)`. O `client.js` no inbound já tem try/catch para isso, mas a rota `/reopen` não. Vira 500 para o utilizador. Fix simples: envolver o UPDATE em try/catch e devolver 409 com o id da conversa existente.
+1. ✅ **RESOLVIDO (verificado 2026-05-30).** `PATCH /conversations/:id/reopen` já tem pré-verificação de conversa aberta existente (→409 com `existing_id`) E try/catch a apanhar `SQLITE_CONSTRAINT_UNIQUE` (→409). Ver [conversations.js:574-592](backend/src/routes/conversations.js#L574). Já não dá 500.
 
-2. **`DELETE /conversations/:id` rebenta com FOREIGN KEY constraint failed** em [conversations.js:701](backend/src/routes/conversations.js#L701). Alguma child table referencia conversations sem `ON DELETE CASCADE`. Candidatos: `ratings`, `transfer_logs`. Verificar `PRAGMA foreign_key_list(table)` para todas e adicionar CASCADE onde falta (via migration ALTER ou recriar tabela).
+2. ✅ **RESOLVIDO (verificado 2026-05-30).** `DELETE /conversations/:id` ([conversations.js:838](backend/src/routes/conversations.js#L838)) apaga à mão as filhas SEM cascade (`messages`, `scheduled_messages`) antes da conversa; as restantes (`ratings`, `transfer_logs`, `conversation_tags`, `conversation_mutes`) têm `ON DELETE CASCADE` — confirmado via `PRAGMA foreign_key_list` nas BDs reais de supermercados (clone) E diaadia (antiga). Já não dá 500.
 
 3. **Sessão Baileys instável — `Closing open session in favor of incoming prekey bundle`** dezenas de vezes por hora em wa-supermercados. Indica colisão de sessão WhatsApp: o número está conectado em vários dispositivos a competir, ou foi re-pareado externamente. Antes de [[retry-pending-loop]] estar corrigido, isto causava spam de mensagens (cada reconnect → re-envio do pendingQueue). Agora só gera ruído de logs, mas é a causa raíz de mensagens entregues fora de ordem ou perdidas. Solução: cliente tem de garantir que só o servidor Baileys tem a sessão activa.
 
