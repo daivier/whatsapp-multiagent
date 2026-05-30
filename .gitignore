@@ -14,3 +14,7 @@ uploads/
 secrets.local.js
 *.sqlite
 database-backup-*.sqlite
+
+# Claude Code: versiona config compartilhada (.claude/) e memoria (.claude/memory/),
+# mas ignora settings por-maquina (cada maquina tem o seu, ex. autoMemoryDirectory absoluto)
+.claude/settings.local.json

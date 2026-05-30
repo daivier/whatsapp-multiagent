@@ -1,0 +1,2 @@
+- [Arquitetura atual vs CLAUDE.md](project-arch-evolution.md) — multi-linha, departamentos, supervisor, chat interno, push, transcrição
+- [Bugs conhecidos por fixar](project-known-issues.md) — reopen UNIQUE, delete FK, sessão Baileys instável (tenant supermercados)
