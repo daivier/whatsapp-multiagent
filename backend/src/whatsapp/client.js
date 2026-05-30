@@ -963,9 +963,14 @@ async function getProfilePictureUrl(lineId, phoneOrJid) {
       }
     } catch (err) {
       const code = err?.output?.statusCode;
-      if (code && code !== 401 && code !== 404) {
+      // 401 sem permissão, 404 sem foto, 408 timeout transitório (sob carga) —
+      // todos esperados e não-acionáveis; não poluir o log de erros com eles.
+      if (code && code !== 401 && code !== 404 && code !== 408) {
         console.error(`[avatar] linha ${state.lineId} jid ${jid} type ${type}: ${err.message} (status ${code})`);
       }
+      // Se o 'preview' deu timeout, o 'image' (mesma rede) vai falhar também —
+      // não desperdiçar outros 8s; cai direto para cache-null.
+      if (code === 408) break;
     }
   }
   avatarCache.set(key, { url: null, ts: Date.now() });
