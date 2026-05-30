@@ -219,6 +219,8 @@ const settingsDefaults = [
   ['signature_enabled', '0'],
   ['signature_message', 'Olá! 😊 Meu nome é *{{nome}}* e estou aqui para ajudá-lo. Como posso ser útil?'],
   ['reopen_window_days', '1'],
+  ['auto_close_enabled', '0'],
+  ['auto_close_hours', '24'],
 ];
 const insertSetting = db.prepare(`INSERT OR IGNORE INTO settings (key, value) VALUES (?, ?)`);
 for (const [key, value] of settingsDefaults) insertSetting.run(key, value);

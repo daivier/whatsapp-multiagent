@@ -182,6 +182,7 @@ export default function AdminPanel({ socket }) {
   const [settings, setSettings] = useState({
     bot_enabled: '0', bot_message: '', rating_enabled: '0', rating_message: '',
     signature_enabled: '0', signature_message: '', reopen_window_days: '1',
+    auto_close_enabled: '0', auto_close_hours: '24',
     hours_0: 'closed', hours_1: '08:00-18:00', hours_2: '08:00-18:00',
     hours_3: '08:00-18:00', hours_4: '08:00-18:00', hours_5: '08:00-18:00',
     hours_6: '09:00-13:00',
@@ -1998,6 +1999,35 @@ export default function AdminPanel({ socket }) {
                 <option value="7">7 dias</option>
                 <option value="30">30 dias</option>
                 <option value="9999">Sempre reabrir</option>
+              </select>
+              <button style={S.addBtn} onClick={saveSettings}>
+                {settingsSaved ? '✓ Guardado' : 'Guardar'}
+              </button>
+            </div>
+
+            {/* --- Fecho automático de conversas inativas --- */}
+            <h3 style={{ ...S.subTitle, marginTop: '2rem' }}>🕓 Fecho Automático</h3>
+            <p style={{ color: 'var(--muted)', fontSize: '0.85rem', marginBottom: '1rem' }}>
+              Fecha automaticamente conversas em que já respondemos e o cliente não voltou a escrever dentro do tempo definido.
+              Conversas à espera da equipa (última mensagem do cliente) nunca são fechadas. Se a Avaliação estiver ativa, o pedido de avaliação é enviado ao fechar.
+            </p>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', flexWrap: 'wrap' }}>
+              <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', fontSize: '0.85rem', color: 'var(--text)', fontWeight: 500 }}>
+                <input type="checkbox" checked={settings.auto_close_enabled === '1'}
+                  onChange={e => setSettings(s => ({ ...s, auto_close_enabled: e.target.checked ? '1' : '0' }))} />
+                Ativar fecho automático
+              </label>
+              <label style={{ fontSize: '0.85rem', color: 'var(--text)', fontWeight: 500 }}>Após:</label>
+              <select style={{ ...S.select, fontSize: '0.85rem' }}
+                value={settings.auto_close_hours || '24'}
+                onChange={e => setSettings(s => ({ ...s, auto_close_hours: e.target.value }))}>
+                <option value="1">1 hora</option>
+                <option value="3">3 horas</option>
+                <option value="6">6 horas</option>
+                <option value="12">12 horas</option>
+                <option value="24">24 horas</option>
+                <option value="48">48 horas</option>
+                <option value="72">72 horas</option>
               </select>
               <button style={S.addBtn} onClick={saveSettings}>
                 {settingsSaved ? '✓ Guardado' : 'Guardar'}

@@ -89,6 +89,71 @@ function startScheduledMessagesCron(io) {
       for (const o of owners) push.sendToUser(o.id, pushPayload);
     }
 
+    // --- Auto-fecho de conversas inativas ---
+    // Fecha conversas abertas em que a ÚLTIMA mensagem (não-interna) é nossa
+    // (respondemos e o cliente não voltou) e já passou > X horas. Conversas em
+    // que o cliente está à espera de nós (última msg dele) NÃO são fechadas.
+    const autoCloseEnabled = db.prepare("SELECT value FROM settings WHERE key = 'auto_close_enabled'").get()?.value === '1';
+    const autoCloseHours = parseInt(db.prepare("SELECT value FROM settings WHERE key = 'auto_close_hours'").get()?.value || '24', 10);
+    if (autoCloseEnabled && autoCloseHours > 0) {
+      const stale = db.prepare(`
+        SELECT conv.id, conv.line_id, con.wa_id, con.phone
+        FROM conversations conv
+        JOIN contacts con ON con.id = conv.contact_id
+        WHERE conv.status = 'open'
+          AND conv.awaiting_rating = 0
+          AND (conv.snoozed_until IS NULL OR conv.snoozed_until <= CURRENT_TIMESTAMP)
+          AND (
+            SELECT m.from_me FROM messages m
+            WHERE m.conversation_id = conv.id AND m.is_internal = 0
+            ORDER BY m.id DESC LIMIT 1
+          ) = 1
+          AND (
+            SELECT MAX(m.timestamp) FROM messages m
+            WHERE m.conversation_id = conv.id AND m.is_internal = 0
+          ) <= datetime('now', '-' || ? || ' hours')
+      `).all(autoCloseHours);
+
+      if (stale.length) {
+        const ratingEnabled = db.prepare("SELECT value FROM settings WHERE key = 'rating_enabled'").get()?.value === '1';
+        const ratingMsg = db.prepare("SELECT value FROM settings WHERE key = 'rating_message'").get()?.value
+          || 'Como avaliaria o nosso atendimento? Responda com 1 (Muito mau) a 5 (Excelente).';
+
+        for (const c of stale) {
+          try {
+            db.prepare(`UPDATE conversations SET status = 'closed', updated_at = CURRENT_TIMESTAMP WHERE id = ?`).run(c.id);
+
+            // CSAT opcional — mesmo fluxo do fecho manual (PATCH /:id/close)
+            if (ratingEnabled) {
+              const dest = c.wa_id || c.phone;
+              if (dest) {
+                const waMessageId = await sendMessage(c.line_id, dest, ratingMsg).catch(() => null);
+                db.prepare('INSERT INTO messages (conversation_id, from_me, body, wa_message_id) VALUES (?, 1, ?, ?)')
+                  .run(c.id, ratingMsg, waMessageId || null);
+                db.prepare('UPDATE conversations SET awaiting_rating = 1 WHERE id = ?').run(c.id);
+              }
+            }
+
+            const conv = db.prepare(`
+              SELECT conv.*, con.phone, con.name as contact_name, u.name as attendant_name
+              FROM conversations conv
+              JOIN contacts con ON con.id = conv.contact_id
+              LEFT JOIN users u ON u.id = conv.assigned_to
+              WHERE conv.id = ?
+            `).get(c.id);
+            io.emit('conversation:updated', conv);
+            if (ratingEnabled) {
+              const ratingRow = db.prepare("SELECT * FROM messages WHERE conversation_id = ? ORDER BY id DESC LIMIT 1").get(c.id);
+              if (ratingRow && ratingRow.from_me === 1) io.emit('message:new', { message: ratingRow, conversation: conv });
+            }
+            console.log(`[cron] Conversa ${c.id} auto-fechada (inativa > ${autoCloseHours}h)`);
+          } catch (err) {
+            console.error(`[cron] Erro ao auto-fechar conversa ${c.id}:`, err.message);
+          }
+        }
+      }
+    }
+
     const now = new Date().toISOString().slice(0, 16); // "YYYY-MM-DDTHH:MM"
     const pending = db.prepare(`
       SELECT * FROM scheduled_messages
