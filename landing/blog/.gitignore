@@ -1,0 +1,9 @@
+# Dependencias
+node_modules/
+
+# HTML gerado pelo build (node build.mjs) — regenerado no deploy
+index.html
+sitemap.xml
+categoria/
+# artigos gerados (qualquer .html na raiz do blog que nao seja versionado)
+/*.html
