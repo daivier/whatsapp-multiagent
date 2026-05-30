@@ -29,20 +29,21 @@ export default function NewConversationModal({ onClose, onCreated }) {
       api.get('/departments'),
     ]).then(([linesRes, deptsRes]) => {
       const allLines = Array.isArray(linesRes.data) ? linesRes.data : [];
-      const myDeptIds = new Set(
-        (Array.isArray(deptsRes.data) ? deptsRes.data : [])
-          .filter(d => d.is_mine)
-          .map(d => d.id)
-      );
+      const allDepts = Array.isArray(deptsRes.data) ? deptsRes.data : [];
+      const myDeptIds = new Set(allDepts.filter(d => d.is_mine).map(d => d.id));
+      // Tenant usa departamentos? Se não há nenhum, a linha sem dept é geral
+      // (aberta a todos) — não há SAC/Financeiro interno a proteger.
+      const tenantUsesDepts = allDepts.length > 0;
       // Owner: vê todas. Supervisor: linhas dos seus depts + sem dept (linha
-      // global aberta a todos). Atendente: APENAS linhas dos depts a que
-      // pertence — linha sem dept é considerada não-configurada e fica
-      // invisível para atendentes (evita vazar números de SAC interno, etc.).
+      // global aberta a todos). Atendente: linhas dos depts a que pertence; a
+      // linha sem dept só é escondida quando o tenant USA departamentos (evita
+      // vazar SAC interno) — em tenant simples fica visível, senão o atendente
+      // não consegue iniciar conversa nenhuma (regressão do fix 175a4c3).
       const allowed = user.role === 'owner'
         ? allLines
         : user.role === 'supervisor'
           ? allLines.filter(l => !l.department_id || myDeptIds.has(l.department_id))
-          : allLines.filter(l => l.department_id && myDeptIds.has(l.department_id));
+          : allLines.filter(l => l.department_id ? myDeptIds.has(l.department_id) : !tenantUsesDepts);
       setLines(allowed);
       const def = allowed.find(l => l.is_default) || allowed[0];
       if (def) setLineId(String(def.id));

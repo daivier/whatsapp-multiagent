@@ -122,10 +122,18 @@ router.post('/outbound', authMiddleware, async (req, res) => {
   if (req.user.role === 'attendant') {
     const line = db.prepare('SELECT department_id FROM lines WHERE id = ?').get(lineId);
     if (!line?.department_id) {
-      return res.status(403).json({ error: 'Esta linha não está atribuída a um departamento. Peça ao Dono para configurar.' });
+      // Linha sem departamento só é "administrativa"/inacessível quando o tenant
+      // USA departamentos. Tenant simples (zero departamentos, ex: plano básico)
+      // tem linha geral aberta a todos os atendentes — senão nenhum atendente
+      // consegue iniciar conversa (regressão do fix de segurança 175a4c3).
+      const deptCount = db.prepare('SELECT COUNT(*) AS c FROM departments WHERE active = 1').get().c;
+      if (deptCount > 0) {
+        return res.status(403).json({ error: 'Esta linha não está atribuída a um departamento. Peça ao Dono para configurar.' });
+      }
+    } else {
+      const isMember = db.prepare('SELECT 1 FROM user_departments WHERE department_id = ? AND user_id = ?').get(line.department_id, req.user.id);
+      if (!isMember) return res.status(403).json({ error: 'Não tens permissão para usar esta linha.' });
     }
-    const isMember = db.prepare('SELECT 1 FROM user_departments WHERE department_id = ? AND user_id = ?').get(line.department_id, req.user.id);
-    if (!isMember) return res.status(403).json({ error: 'Não tens permissão para usar esta linha.' });
   } else if (req.user.role === 'supervisor') {
     // Supervisor: mesma lógica do frontend — linha sem dept OK (administrativa),
     // linha com dept exige ser membro.
