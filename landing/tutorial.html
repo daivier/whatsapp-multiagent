@@ -581,6 +581,7 @@
       <p>Se o cliente responder a uma conversa já fechada, o sistema pode <b>reabri-la sozinho</b> dentro de uma janela configurada pelo Proprietário em <a data-goto="keywords" style="color:var(--primary);font-weight:800">Automação</a> (ex.: até 7 dias). Se o atendente anterior estiver disponível, a conversa volta para ele; senão, vai para a fila.</p>
 
       <div class="callout tip"><span class="ic">🧹</span><div>Manter as conversas fechadas em dia deixa a lista limpa e os relatórios de tempo de atendimento mais precisos.</div></div>
+      <div class="callout info"><span class="ic">🕓</span><div>Não quer fechar tudo na mão? O <a data-goto="keywords" style="color:#1e40af;font-weight:800">Fecho automático</a> encerra sozinho as conversas em que você já respondeu e o cliente não voltou — com pedido de avaliação opcional.</div></div>
 
       <div class="pager"><a data-goto="atalhos"><small>Anterior</small><b><span class="gradient-text">←</span> Respostas rápidas</b></a><a class="next" data-goto="organizar"><small>Próximo</small><b>Prioridade, notas e snooze <span class="gradient-text">→</span></b></a></div>
     </article>
@@ -795,9 +796,22 @@
         <li><h4>Ative</h4><p>Use o botão <b>Ativa / Inativa</b> para ligar ou desligar uma regra sem apagá-la.</p></li>
       </ol>
 
+      <h2>🕓 Fecho automático de conversas inativas</h2>
+      <p>Cansado de conversas que ficam abertas para sempre porque o cliente respondeu “ok, obrigado” e sumiu? O fecho automático <b>limpa a fila sozinho</b>: encerra as conversas em que <b>você já respondeu</b> e o cliente não voltou a escrever dentro do tempo que você definir.</p>
+      <ol class="steps">
+        <li><h4>Abra <span class="uimenu">🤖 Automação</span> e vá até <b>🕓 Fecho Automático</b></h4><p>Fica na mesma tela das regras de palavra-chave e do SLA.</p></li>
+        <li><h4>Ative a opção</h4><p>Marque <b>Ativar fecho automático</b>.</p></li>
+        <li><h4>Escolha o tempo de inatividade</h4><p>No campo <b>Após:</b>, selecione quanto tempo sem resposta do cliente até fechar: <b>1, 3, 6, 12, 24, 48 ou 72 horas</b> (padrão: 24h). Clique em <span class="uibtn">Guardar</span>.</p></li>
+      </ol>
+
+      <div class="callout info"><span class="ic">🛡️</span><div><b>Nunca fecha quem está esperando você.</b> Só são encerradas as conversas em que a <b>última mensagem foi sua</b> (você respondeu e o cliente não retornou). Se a última mensagem é do cliente — ou seja, ele está aguardando a equipe — a conversa <b>nunca</b> é fechada automaticamente.</div></div>
+      <div class="callout tip"><span class="ic">⭐</span><div><b>CSAT opcional no fecho:</b> se a <a data-goto="assinatura" style="color:#065f46;font-weight:800">Avaliação de atendimento</a> estiver ativa, o pedido de nota (1–5) é enviado ao cliente automaticamente no momento do fecho — você limpa a fila e ainda mede a satisfação.</div></div>
+      <div class="callout tip"><span class="ic">📈</span><div>Além de organizar a fila, isso deixa as <a data-goto="relatorios" style="color:#065f46;font-weight:800">métricas de tempo</a> mais reais: conversas “zumbis” deixam de inflar a duração média dos atendimentos. E se o cliente voltar depois, a <b>Reabertura inteligente</b> traz a conversa de volta.</div></div>
+
       <h2>Outros ajustes em Automação</h2>
       <ul class="bullets">
         <li><b>🔔 Alerta de SLA</b> — toque sonoro e notificação quando uma conversa passa de X minutos sem resposta.</li>
+        <li><b>🕓 Fecho automático</b> — encerra conversas inativas após o tempo definido, com CSAT opcional (detalhado acima).</li>
         <li><b>🔁 Reabertura inteligente</b> — janela em que uma conversa fechada reabre se o cliente responder (1, 3, 7, 30 dias, sempre ou nunca).</li>
         <li><b>📋 Turnos dos atendentes</b> — colocar/retirar alguém do turno manualmente.</li>
       </ul>
