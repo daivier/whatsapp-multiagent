@@ -2,3 +2,4 @@
 - [Bugs conhecidos](project-known-issues.md) — reopen UNIQUE e delete FK RESOLVIDOS (2026-05-30); resta sessão Baileys instável (ambiental) no tenant supermercados
 - [Domínio SaaS + subdomínios](project-saas-domain-subdomains.md) — atendize.com, tenants em <slug>.atendize.com via wildcard DNS + cert Cloudflare
 - [Layout dos tenants na VM](project-vm-tenant-layout.md) — mapa nome PM2 vs domínio (diaadia=sucataodejeova), divergência PLAN ecosystem VM vs repo
+- [Marca: Atendize](project-brand.md) — marca oficial é Atendize (não MultiAtendente); landing/blog rebrandados; app/email ainda por fazer
