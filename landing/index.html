@@ -640,7 +640,31 @@
       poll=setInterval(suCheck,4000);
     }catch(_){$('su-error').textContent='Falha de ligação. Tenta novamente.';btn.disabled=false;btn.textContent=old;}
   });
-  async function suCheck(){if(!paymentId)return;try{var r=await fetch('/api/signup/'+paymentId+'/status');var d=await r.json();if(d.status==='approved'){clearInterval(poll);poll=null;var s=$('su-status');s.innerHTML='✅ Pagamento confirmado! Vamos ativar a sua conta e entrar em contacto em breve.';s.style.color='#16a34a';}}catch(_){}}
+  async function suCheck(){
+    if(!paymentId)return;
+    try{
+      var r=await fetch('/api/signup/'+paymentId+'/status');
+      var d=await r.json();
+      var s=$('su-status');
+      if(d.provisioned&&d.url){
+        clearInterval(poll);poll=null;
+        s.style.color='#16a34a';
+        s.innerHTML='✅ <b>Conta criada e pronta!</b>'
+          +'<br>Acesso: <a href="'+d.url+'" target="_blank" rel="noopener">'+d.url+'</a>'
+          +'<br>Login: <b>'+d.email+'</b>'
+          +'<br>Senha: <b>'+d.senha+'</b>'
+          +'<br><small>Guarde a senha — pode alterá-la depois de entrar.</small>'
+          +'<br><a class="su-copy" style="display:inline-block;margin-top:12px;text-decoration:none" href="'+d.url+'" target="_blank" rel="noopener">Acessar agora →</a>';
+      }else if(d.provision_status==='error'){
+        clearInterval(poll);poll=null;
+        s.style.color='#16a34a';
+        s.innerHTML='✅ Pagamento confirmado! A sua conta será ativada em instantes — entraremos em contacto se necessário.';
+      }else if(d.status==='approved'){
+        s.style.color='#16a34a';
+        s.innerHTML='✅ Pagamento confirmado! ⏳ A preparar a sua conta… isto pode levar alguns minutos. <b>Não feche esta página.</b>';
+      }
+    }catch(_){}
+  }
 })();
 </script>
 </body>

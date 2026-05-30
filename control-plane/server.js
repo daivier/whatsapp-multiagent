@@ -1,23 +1,39 @@
 /**
- * Control plane — signup + pagamento (Mercado Pago Pix) + (futuro) provisionamento.
+ * Control plane — signup + pagamento (Mercado Pago Pix) + provisionamento.
  *
  * Fase 3a: recebe o formulário da landing, cria um pagamento Pix no Mercado Pago,
- * regista o signup, e ao receber o webhook "approved" marca como pago e notifica
- * o operador (o provisionamento automático é a Fase 3b).
+ * regista o signup, e ao receber o webhook "approved" marca como pago.
+ *
+ * Fase 3b: ao aprovar, provisiona o tenant SOZINHO — gera slug + porta livre +
+ * senha, dispara o new-tenant.sh em background (clone + build + PM2 + Nginx com
+ * cert wildcard *.atendize.com) e, quando termina, expõe URL+login+senha no
+ * /status (a landing mostra ao cliente). O operador também recebe tudo no log e
+ * na lista /signups.
  *
  * Segredos vêm de .env (NUNCA no git): MP_ACCESS_TOKEN, MP_FALLBACK_PAYER_EMAIL,
- * ADMIN_KEY, PORT, DB_PATH.
+ * ADMIN_KEY, PORT, DB_PATH. Provisionamento: REPO_DIR, TENANTS_DIR, ZONE,
+ * PORT_BASE, AUTO_PROVISION (=0 para desligar).
  */
 require('dotenv').config();
 const express = require('express');
 const Database = require('better-sqlite3');
 const crypto = require('crypto');
 const path = require('path');
+const fs = require('fs');
+const net = require('net');
+const { spawn } = require('child_process');
 
 const PORT = parseInt(process.env.PORT || '4500', 10);
 const MP_TOKEN = process.env.MP_ACCESS_TOKEN;
 const FALLBACK_EMAIL = process.env.MP_FALLBACK_PAYER_EMAIL || 'no-reply@example.com';
 const ADMIN_KEY = process.env.ADMIN_KEY || '';
+
+// --- Provisionamento automático (Fase 3b) ---
+const REPO_DIR = process.env.REPO_DIR || '/home/daivier/whatsapp-multiagent';
+const TENANTS_DIR = process.env.TENANTS_DIR || '/home/daivier/whatsapp-tenants';
+const ZONE = process.env.ZONE || 'atendize.com';
+const PORT_BASE = parseInt(process.env.PORT_BASE || '3031', 10);
+const AUTO_PROVISION = process.env.AUTO_PROVISION !== '0'; // ligado por default
 
 // Planos e preços (devem espelhar plan.js do backend)
 const PLANS = {
@@ -43,6 +59,19 @@ db.exec(`CREATE TABLE IF NOT EXISTS signups (
   paid_at DATETIME
 )`);
 
+// Migrações (Fase 3b): dados do tenant provisionado. Append-only — não editar o CREATE.
+for (const col of [
+  'slug TEXT',
+  'port INTEGER',
+  'owner_password TEXT',
+  'url TEXT',
+  'provision_status TEXT',   // null | provisioning | done | error
+  'provision_error TEXT',
+  'provisioned_at DATETIME',
+]) {
+  try { db.exec(`ALTER TABLE signups ADD COLUMN ${col}`); } catch (_) { /* já existe */ }
+}
+
 async function mpCreatePix(amount, description, email) {
   const res = await fetch('https://api.mercadopago.com/v1/payments', {
     method: 'POST',
@@ -67,6 +96,132 @@ async function mpGetPayment(id) {
     headers: { Authorization: `Bearer ${MP_TOKEN}` },
   });
   return res.json();
+}
+
+// ─── Provisionamento (Fase 3b) ──────────────────────────────────────────────
+
+// empresa -> slug seguro (só [a-z0-9-]); evita injeção ao passar ao shell.
+function slugify(s) {
+  return String(s || '')
+    .normalize('NFD').replace(/\p{Diacritic}/gu, '') // remove acentos
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+    .slice(0, 30) || 'cliente';
+}
+
+function slugTaken(slug) {
+  if (fs.existsSync(path.join(TENANTS_DIR, slug))) return true;
+  return !!db.prepare('SELECT 1 FROM signups WHERE slug = ?').get(slug);
+}
+
+function uniqueSlug(base) {
+  let s = base, n = 1;
+  while (slugTaken(s)) { n++; s = `${base}-${n}`; }
+  return s;
+}
+
+function portFree(p) {
+  return new Promise((resolve) => {
+    const srv = net.createServer();
+    srv.once('error', () => resolve(false));
+    srv.once('listening', () => srv.close(() => resolve(true)));
+    srv.listen(p, '127.0.0.1');
+  });
+}
+
+async function findFreePort() {
+  const used = new Set(
+    db.prepare('SELECT port FROM signups WHERE port IS NOT NULL').all().map((r) => r.port)
+  );
+  for (let p = PORT_BASE; p < PORT_BASE + 500; p++) {
+    if (used.has(p)) continue;
+    if (await portFree(p)) return p;
+  }
+  throw new Error('sem portas livres no intervalo');
+}
+
+function genPassword() {
+  // 10 chars sem caracteres ambíguos (sem 0/O/1/l/I)
+  const alphabet = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789';
+  const buf = crypto.randomBytes(10);
+  let out = '';
+  for (let i = 0; i < 10; i++) out += alphabet[buf[i] % alphabet.length];
+  return out;
+}
+
+// Dispara o new-tenant.sh em background. Idempotente: só um provisionamento por
+// signup (lock via UPDATE atómico). Fire-and-forget — não bloqueia a resposta HTTP.
+async function provisionTenant(id) {
+  // Reivindica o signup: só avança se ainda não provisionado e não em curso.
+  const claim = db.prepare(
+    `UPDATE signups SET provision_status = 'provisioning'
+     WHERE id = ? AND provisioned = 0 AND (provision_status IS NULL OR provision_status = 'error')`
+  ).run(id);
+  if (claim.changes !== 1) return; // já em curso ou concluído
+
+  const row = db.prepare('SELECT * FROM signups WHERE id = ?').get(id);
+  if (!row) return;
+
+  try {
+    const slug = uniqueSlug(slugify(row.empresa));
+    const port = await findFreePort();
+    const password = genPassword();
+    const plano = PLANS[row.plano] ? row.plano : 'basico';
+
+    // Grava já slug/porta/senha — a página mostra-os quando o provisionamento terminar.
+    db.prepare('UPDATE signups SET slug = ?, port = ?, owner_password = ? WHERE id = ?')
+      .run(slug, port, password, id);
+
+    console.log(`[provision] #${id} ${row.empresa} -> ${slug}.${ZONE} (porta ${port}, plano ${plano})`);
+
+    const script = path.join(REPO_DIR, 'new-tenant.sh');
+    const logPath = path.join(__dirname, `provision-${id}.log`);
+    const logFd = fs.openSync(logPath, 'a');
+
+    // Args via array (não passa por shell) — nome com espaços é seguro.
+    const child = spawn(
+      'bash',
+      [script, slug, String(port), row.empresa, row.email, password, plano],
+      {
+        cwd: REPO_DIR,
+        stdio: ['ignore', logFd, logFd],
+        // PATH explícito: o daemon PM2 pode não herdar node/npm/pm2/nginx/sudo.
+        env: {
+          ...process.env,
+          PATH: `/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:${process.env.PATH || ''}`,
+        },
+      }
+    );
+
+    child.on('close', (code) => {
+      try { fs.closeSync(logFd); } catch (_) {}
+      if (code === 0) {
+        const url = `https://${slug}.${ZONE}`;
+        db.prepare(
+          `UPDATE signups SET provisioned = 1, provision_status = 'done', url = ?, provisioned_at = CURRENT_TIMESTAMP WHERE id = ?`
+        ).run(url, id);
+        console.log(`[provision] ✅ #${id} PRONTO: ${url}  login ${row.email}  senha ${password}`);
+      } else {
+        let tail = '';
+        try { tail = fs.readFileSync(logPath, 'utf8').slice(-600); } catch (_) {}
+        db.prepare(`UPDATE signups SET provision_status = 'error', provision_error = ? WHERE id = ?`)
+          .run(`exit ${code}\n${tail}`, id);
+        console.error(`[provision] ❌ #${id} FALHOU (exit ${code}). Ver ${logPath} — provisionar manualmente.`);
+      }
+    });
+
+    child.on('error', (e) => {
+      try { fs.closeSync(logFd); } catch (_) {}
+      db.prepare(`UPDATE signups SET provision_status = 'error', provision_error = ? WHERE id = ?`)
+        .run(String(e.message), id);
+      console.error(`[provision] ❌ #${id} erro ao lançar new-tenant.sh:`, e.message);
+    });
+  } catch (e) {
+    db.prepare(`UPDATE signups SET provision_status = 'error', provision_error = ? WHERE id = ?`)
+      .run(String(e.message), id);
+    console.error(`[provision] ❌ #${id} erro:`, e.message);
+  }
 }
 
 const app = express();
@@ -104,27 +259,49 @@ app.post('/signup', async (req, res) => {
   }
 });
 
-// GET /signup/:id/status — a landing faz polling até "approved".
-// Consulta o Mercado Pago em tempo real (não depende só do webhook) e
-// atualiza a BD quando o estado muda.
+// GET /signup/:id/status — a landing faz polling até "approved" e depois até o
+// tenant ficar provisionado. Consulta o Mercado Pago em tempo real (não depende
+// só do webhook), atualiza a BD, dispara o provisionamento e, quando pronto,
+// devolve URL+login+senha para a landing mostrar ao cliente.
 app.get('/signup/:paymentId/status', async (req, res) => {
   const pid = req.params.paymentId;
-  const row = db.prepare('SELECT * FROM signups WHERE mp_payment_id = ?').get(pid);
+  let row = db.prepare('SELECT * FROM signups WHERE mp_payment_id = ?').get(pid);
   let status = row ? row.status : 'unknown';
-  try {
-    const pay = await mpGetPayment(pid);
-    if (pay && pay.status) {
-      status = pay.status;
-      if (row && pay.status !== row.status) {
-        const paidStamp = pay.status === 'approved' ? 'CURRENT_TIMESTAMP' : 'paid_at';
-        db.prepare(`UPDATE signups SET status = ?, paid_at = ${paidStamp} WHERE id = ?`).run(pay.status, row.id);
-        if (pay.status === 'approved' && !row.provisioned) {
-          console.log(`[signup] PAGO ✅ #${row.id} ${row.empresa} — plano ${row.plano} (R$${row.preco}). Provisionar tenant.`);
+
+  // Consulta o MP só enquanto ainda não está aprovado — evita roundtrips a cada
+  // poll durante os minutos de provisionamento.
+  if (row && row.status !== 'approved') {
+    try {
+      const pay = await mpGetPayment(pid);
+      if (pay && pay.status) {
+        status = pay.status;
+        if (pay.status !== row.status) {
+          const paidStamp = pay.status === 'approved' ? 'CURRENT_TIMESTAMP' : 'paid_at';
+          db.prepare(`UPDATE signups SET status = ?, paid_at = ${paidStamp} WHERE id = ?`).run(pay.status, row.id);
+          row = db.prepare('SELECT * FROM signups WHERE id = ?').get(row.id);
         }
       }
+    } catch (_) { /* mantém o status da BD se o MP falhar */ }
+  }
+
+  if (row && row.status === 'approved' && AUTO_PROVISION) provisionTenant(row.id);
+
+  // Resposta enriquecida com o estado do provisionamento.
+  const resp = { status };
+  if (row) {
+    const fresh = db.prepare(
+      'SELECT provisioned, provision_status, url, email, owner_password, plano FROM signups WHERE id = ?'
+    ).get(row.id);
+    resp.provisioned = !!fresh.provisioned;
+    resp.provision_status = fresh.provision_status || null;
+    if (fresh.provisioned && fresh.url) {
+      resp.url = fresh.url;
+      resp.email = fresh.email;
+      resp.senha = fresh.owner_password;
+      resp.plano = fresh.plano;
     }
-  } catch (_) { /* mantém o status da BD se o MP falhar */ }
-  res.json({ status });
+  }
+  res.json(resp);
 });
 
 // POST /webhook — Mercado Pago notifica alterações de pagamento.
@@ -142,11 +319,8 @@ app.post('/webhook', async (req, res) => {
       const paidStamp = pay.status === 'approved' ? "CURRENT_TIMESTAMP" : "paid_at";
       db.prepare(`UPDATE signups SET status = ?, paid_at = ${paidStamp} WHERE id = ?`).run(pay.status, row.id);
     }
-    if (pay.status === 'approved' && !row.provisioned) {
-      // FASE 3b: aqui dispara o worker de provisionamento do tenant.
-      // Por agora (3a): regista e notifica o operador para provisionar.
-      console.log(`[signup] PAGO ✅ #${row.id} ${row.empresa} — plano ${row.plano} (R$${row.preco}). Provisionar tenant.`);
-      // TODO: notifyOperator(row)  (WhatsApp/email)
+    if (pay.status === 'approved' && !row.provisioned && AUTO_PROVISION) {
+      provisionTenant(row.id); // provisiona o tenant em background
     }
   } catch (e) {
     console.error('[webhook]', e.message);
@@ -159,6 +333,6 @@ app.get('/signups', (req, res) => {
   res.json(db.prepare('SELECT * FROM signups ORDER BY id DESC LIMIT 200').all());
 });
 
-app.get('/health', (req, res) => res.json({ ok: true, mp: !!MP_TOKEN }));
+app.get('/health', (req, res) => res.json({ ok: true, mp: !!MP_TOKEN, auto_provision: AUTO_PROVISION }));
 
-app.listen(PORT, () => console.log(`[control-plane] a ouvir na porta ${PORT}`));
+app.listen(PORT, () => console.log(`[control-plane] a ouvir na porta ${PORT} (auto-provision: ${AUTO_PROVISION})`));
