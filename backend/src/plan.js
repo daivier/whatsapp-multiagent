@@ -13,15 +13,22 @@
  * reações, histórico, distribuição automática) é base e está sempre disponível.
  */
 
+// Básico (table-stakes): handoff entre atendentes, painel de resumo e chat
+// interno da equipa. Tudo o resto é upgrade.
+const BASIC_FEATURES = [
+  'transferencia',   // transferir conversas entre atendentes
+  'dashboard',       // painel de resumo (cards + atendentes em tempo real)
+  'chat_interno',    // chat interno da equipa
+];
+
 const PRO_FEATURES = [
+  ...BASIC_FEATURES,
   'departamentos',   // departments + routing by department
   'roteamento',      // keyword_rules
   'bot',             // FAQ bot
   'agendamento',     // scheduled-messages
   'broadcast',       // envio em massa
-  'chat_interno',    // internal-chat
-  'relatorios',      // reports / dashboard / ratings / export
-  'transferencia',   // transferir conversas
+  'relatorios',      // relatórios detalhados / export / ratings / SLA
   'csat',            // avaliação de atendimento
   'transcricao',     // transcrição de áudios
 ];
@@ -39,7 +46,7 @@ const ENTERPRISE_FEATURES = [
 ];
 
 const PLANS = {
-  basico:       { label: 'Básico',       maxLinhas: 1,        maxAtendentes: 3,        features: [] },
+  basico:       { label: 'Básico',       maxLinhas: 1,        maxAtendentes: 3,        features: BASIC_FEATURES },
   profissional: { label: 'Profissional', maxLinhas: 2,        maxAtendentes: 10,       features: PRO_FEATURES },
   empresarial:  { label: 'Empresarial',  maxLinhas: Infinity, maxAtendentes: Infinity, features: ENTERPRISE_FEATURES },
 };

@@ -890,7 +890,7 @@ export default function AdminPanel({ socket }) {
   // Gating por plano: cada aba pode exigir uma funcionalidade. Abas sem
   // funcionalidade associada são base (sempre visíveis).
   const TAB_FEATURE = {
-    dashboard: 'relatorios', reports: 'relatorios', transfers: 'relatorios',
+    dashboard: 'dashboard', reports: 'relatorios', transfers: 'relatorios',
     departments: 'departamentos', scheduled: 'agendamento', broadcast: 'broadcast',
     bot: 'bot', faq: 'bot', audit: 'auditoria', metrics: 'metricas', health: 'metricas',
     blacklist: 'blacklist', chat: 'chat_interno', rating: 'csat',

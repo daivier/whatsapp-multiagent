@@ -854,7 +854,7 @@ router.delete('/:id', authMiddleware, ownerOnly, (req, res) => {
 // GET /conversations/dashboard — dados ao vivo para o dashboard principal
 // Supervisor: vê apenas dados dos departamentos a que pertence.
 // Owner: vê tudo.
-router.get('/dashboard', authMiddleware, requireFeature('relatorios'), supervisorOrOwner, (req, res) => {
+router.get('/dashboard', authMiddleware, requireFeature('dashboard'), supervisorOrOwner, (req, res) => {
   const slaMinutes = parseInt(db.prepare("SELECT value FROM settings WHERE key = 'sla_minutes'").get()?.value || '30', 10);
 
   // Filtro condicional por departamento (só para supervisor). Helpers para
