@@ -4,7 +4,7 @@
 export const SITE = {
   baseUrl: 'https://atendize.com',
   blogBase: '/blog',
-  name: 'MultiAtendente',
+  name: 'Atendize',
   brandTagline: 'Atendimento profissional para WhatsApp',
   waNumber: '5596981373574',
 };
@@ -61,7 +61,7 @@ export function head({ title, description, canonical, image, type = 'website', j
 
 export function nav() {
   return `<header class="nav"><div class="container nav-inner">
-  <a href="/" class="brand"><span class="brand-mark">&#9742;</span><span>Multi<span class="gradient-text">Atendente</span></span></a>
+  <a href="/" class="brand"><span class="brand-mark">&#9742;</span><span>Atend<span class="gradient-text">ize</span></span></a>
   <nav class="navlinks" id="navlinks">
     <a href="/#solucao">Como funciona</a>
     <a href="/#recursos">Recursos</a>
@@ -84,7 +84,7 @@ export function footer() {
 <a class="wa-float" data-wa title="Falar no WhatsApp">&#9742;</a>
 <script>
   window.WA_NUMBER = '${SITE.waNumber}';
-  window.waLink = function(msg){ return 'https://wa.me/' + window.WA_NUMBER + '?text=' + encodeURIComponent(msg || 'Ol\\u00e1! Quero testar o WhatsApp Multi-Atendente.'); };
+  window.waLink = function(msg){ return 'https://wa.me/' + window.WA_NUMBER + '?text=' + encodeURIComponent(msg || 'Ol\\u00e1! Quero testar o Atendize.'); };
   document.addEventListener('DOMContentLoaded', function(){
     document.querySelectorAll('[data-wa]').forEach(function(a){ a.href = window.waLink(a.dataset.wa || ''); a.target = '_blank'; a.rel = 'noopener'; });
     var y = document.getElementById('year'); if (y) y.textContent = new Date().getFullYear();
@@ -101,6 +101,6 @@ export function ctaBox() {
   return `<aside class="cta-box">
   <h2>Pronto para organizar o atendimento da sua empresa?</h2>
   <p>Coloque v&aacute;rios atendentes no mesmo WhatsApp, com departamentos, relat&oacute;rios e hist&oacute;rico centralizado. Teste gr&aacute;tis, sem cart&atilde;o.</p>
-  <a class="btn btn-primary" data-wa="Ol&aacute;! Quero testar o WhatsApp Multi-Atendente gr&aacute;tis.">Come&ccedil;ar teste gr&aacute;tis &rarr;</a>
+  <a class="btn btn-primary" data-wa="Ol&aacute;! Quero testar o Atendize gr&aacute;tis.">Come&ccedil;ar teste gr&aacute;tis &rarr;</a>
 </aside>`;
 }

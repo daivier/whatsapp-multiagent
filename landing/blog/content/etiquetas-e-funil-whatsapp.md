@@ -5,7 +5,7 @@ slug: etiquetas-e-funil-whatsapp
 category: Vendas
 tags: [etiquetas, funil, vendas]
 date: 2026-05-15
-author: Equipe MultiAtendente
+author: Equipe Atendize
 image: https://images.unsplash.com/photo-1551288049-bebda4e38f71?auto=format&fit=crop&w=1200&q=70
 imageAlt: "Painel com gráficos de desempenho em uma tela"
 imageCredit: Luke Chesser

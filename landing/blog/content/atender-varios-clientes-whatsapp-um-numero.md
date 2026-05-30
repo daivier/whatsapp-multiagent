@@ -5,7 +5,7 @@ slug: atender-varios-clientes-whatsapp-um-numero
 category: Atendimento
 tags: [whatsapp, atendimento, equipe]
 date: 2026-05-28
-author: Equipe MultiAtendente
+author: Equipe Atendize
 image: https://images.unsplash.com/photo-1560264280-88b68371db39?auto=format&fit=crop&w=1200&q=70
 imageAlt: "Atendente sorrindo usando headset em frente ao computador"
 imageCredit: Arlington Research

@@ -5,7 +5,7 @@ slug: mensagens-agendadas-boas-praticas
 category: Produtividade
 tags: [disparos, automacao, whatsapp]
 date: 2026-05-02
-author: Equipe MultiAtendente
+author: Equipe Atendize
 image: https://images.unsplash.com/photo-1587573578181-f3342274f4c7?auto=format&fit=crop&w=1200&q=70
 imageAlt: "Calendário e planejamento sobre uma mesa de trabalho"
 imageCredit: Mika Baumeister

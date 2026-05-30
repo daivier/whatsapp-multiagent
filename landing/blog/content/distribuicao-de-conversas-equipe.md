@@ -5,7 +5,7 @@ slug: distribuicao-de-conversas-equipe
 category: Gestão de Equipes
 tags: [distribuicao, equipe, gestao]
 date: 2026-05-12
-author: Equipe MultiAtendente
+author: Equipe Atendize
 image: https://images.unsplash.com/photo-1521791136064-7986c2920216?auto=format&fit=crop&w=1200&q=70
 imageAlt: "Aperto de mãos entre dois profissionais em ambiente de trabalho"
 imageCredit: Cytonn Photography

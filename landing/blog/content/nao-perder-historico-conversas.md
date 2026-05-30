@@ -5,7 +5,7 @@ slug: nao-perder-historico-conversas
 category: Gestão de Equipes
 tags: [historico, gestao, atendimento]
 date: 2026-05-18
-author: Equipe MultiAtendente
+author: Equipe Atendize
 image: https://images.unsplash.com/photo-1606857521015-7f9fcf423740?auto=format&fit=crop&w=1200&q=70
 imageAlt: "Dois colegas analisando informações em frente a um notebook"
 imageCredit: Israel Andrade

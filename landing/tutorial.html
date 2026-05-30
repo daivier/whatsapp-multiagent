@@ -3,8 +3,8 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<title>Tutorial — WhatsApp Multi-Atendente · Guia passo a passo</title>
-<meta name="description" content="Aprenda a usar o WhatsApp Multi-Atendente do zero: conectar o número, criar equipe, atender, automatizar e acompanhar relatórios. Guia completo dividido em capítulos." />
+<title>Tutorial — Atendize · Guia passo a passo</title>
+<meta name="description" content="Aprenda a usar o Atendize do zero: conectar o número, criar equipe, atender, automatizar e acompanhar relatórios. Guia completo dividido em capítulos." />
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
@@ -167,7 +167,7 @@
 <header class="nav">
   <div style="display:flex;align-items:center;gap:12px">
     <button class="menu-toggle" id="menuToggle" aria-label="Abrir menu">☰</button>
-    <a href="index.html" class="brand"><span class="brand-mark">☎</span><span class="nav-label">Multi<span class="gradient-text">Atendente</span></span></a>
+    <a href="index.html" class="brand"><span class="brand-mark">☎</span><span class="nav-label">Atend<span class="gradient-text">ize</span></span></a>
   </div>
   <div class="nav-actions">
     <a href="index.html" class="btn btn-ghost">← Voltar ao site</a>
@@ -257,7 +257,7 @@
     <!-- ===== BEM-VINDO ===== -->
     <article class="chapter" data-ch="inicio">
       <div class="crumb">Tutorial <span>›</span> <b>Bem-vindo</b></div>
-      <h1 class="ch-title">Bem-vindo ao <span class="gradient-text">Multi-Atendente</span> 👋</h1>
+      <h1 class="ch-title">Bem-vindo ao <span class="gradient-text">Atendize</span> 👋</h1>
       <p class="lead">Este guia ensina, passo a passo, a transformar o WhatsApp da sua empresa numa central de atendimento profissional — do primeiro login até relatórios e automações. Escolha um capítulo na barra lateral ou siga a ordem sugerida abaixo.</p>
 
       <div class="callout tip"><span class="ic">💡</span><div>Se você está configurando o sistema pela primeira vez, siga os capítulos <b>em ordem</b>. Cada um termina com um botão <b>“Próximo”</b> que leva ao passo seguinte.</div></div>
@@ -988,7 +988,7 @@
 <script>
   // ---- WhatsApp CTA (mesma config da landing) ----
   window.WA_NUMBER = '5596981373574';
-  var waLink = function(msg){ return 'https://wa.me/'+window.WA_NUMBER+'?text='+encodeURIComponent(msg||'Olá! Quero testar o WhatsApp Multi-Atendente.'); };
+  var waLink = function(msg){ return 'https://wa.me/'+window.WA_NUMBER+'?text='+encodeURIComponent(msg||'Olá! Quero testar o Atendize.'); };
   var cta = document.getElementById('topCta');
   cta.href = waLink('Olá! Estou vendo o tutorial e quero testar o sistema.');
   cta.target = '_blank'; cta.rel = 'noopener';

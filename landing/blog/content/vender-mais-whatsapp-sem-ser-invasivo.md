@@ -5,7 +5,7 @@ slug: vender-mais-whatsapp-sem-ser-invasivo
 category: Vendas
 tags: [vendas, whatsapp, relacionamento]
 date: 2026-05-06
-author: Equipe MultiAtendente
+author: Equipe Atendize
 image: https://images.unsplash.com/photo-1541746972996-4e0b0f43e02a?auto=format&fit=crop&w=1200&q=70
 imageAlt: "Profissional sorrindo durante reunião de trabalho"
 imageCredit: Mario Gogh

@@ -5,7 +5,7 @@ slug: sla-de-atendimento-whatsapp
 category: Métricas & SLA
 tags: [sla, metricas, atendimento]
 date: 2026-05-22
-author: Equipe MultiAtendente
+author: Equipe Atendize
 image: https://images.unsplash.com/photo-1460925895917-afdab827c52f?auto=format&fit=crop&w=1200&q=70
 imageAlt: "Painel de gráficos e métricas em um laptop"
 imageCredit: Carlos Muza

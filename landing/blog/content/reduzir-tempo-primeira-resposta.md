@@ -5,7 +5,7 @@ slug: reduzir-tempo-primeira-resposta
 category: Atendimento
 tags: [atendimento, produtividade, sla]
 date: 2026-05-25
-author: Equipe MultiAtendente
+author: Equipe Atendize
 image: https://images.unsplash.com/photo-1504384308090-c894fdcc538d?auto=format&fit=crop&w=1200&q=70
 imageAlt: "Equipe trabalhando em computadores em escritório claro"
 imageCredit: Alex Kotliarskyi

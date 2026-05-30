@@ -5,7 +5,7 @@ slug: respostas-rapidas-whatsapp
 category: Produtividade
 tags: [respostas-rapidas, produtividade, atendimento]
 date: 2026-05-23
-author: Equipe MultiAtendente
+author: Equipe Atendize
 image: https://images.unsplash.com/photo-1556745753-b2904692b3cd?auto=format&fit=crop&w=1200&q=70
 imageAlt: "Pessoa digitando mensagem no celular"
 imageCredit: Patrick Tomasso

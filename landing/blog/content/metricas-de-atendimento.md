@@ -5,7 +5,7 @@ slug: metricas-de-atendimento
 category: Métricas & SLA
 tags: [metricas, gestao, relatorios]
 date: 2026-05-09
-author: Equipe MultiAtendente
+author: Equipe Atendize
 image: https://images.unsplash.com/photo-1504868584819-f8e8b4b6d7e3?auto=format&fit=crop&w=1200&q=70
 imageAlt: "Relatórios e gráficos impressos sobre uma mesa"
 imageCredit: Lukas Blazek

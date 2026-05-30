@@ -5,7 +5,7 @@ slug: organizar-departamentos-whatsapp
 category: Gestão de Equipes
 tags: [departamentos, gestao, whatsapp]
 date: 2026-05-26
-author: Equipe MultiAtendente
+author: Equipe Atendize
 image: https://images.unsplash.com/photo-1522071820081-009f0129c71c?auto=format&fit=crop&w=1200&q=70
 imageAlt: "Equipe reunida trabalhando em mesa de escritório"
 imageCredit: Annie Spratt

@@ -5,7 +5,7 @@ slug: sinais-que-precisa-central-atendimento-whatsapp
 category: WhatsApp para Empresas
 tags: [whatsapp, atendimento, gestao]
 date: 2026-05-27
-author: Equipe MultiAtendente
+author: Equipe Atendize
 image: https://images.unsplash.com/photo-1610548822783-33fb5cb0e3a8?auto=format&fit=crop&w=1200&q=70
 imageAlt: "Mão segurando celular com ícone de notificação do WhatsApp"
 imageCredit: Dimitri Karastelev

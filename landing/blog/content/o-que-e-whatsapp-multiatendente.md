@@ -5,7 +5,7 @@ slug: o-que-e-whatsapp-multiatendente
 category: WhatsApp para Empresas
 tags: [whatsapp, multiatendente, atendimento]
 date: 2026-05-29
-author: Equipe MultiAtendente
+author: Equipe Atendize
 image: https://images.unsplash.com/photo-1633354931133-27ac1ee5d853?auto=format&fit=crop&w=1200&q=70
 imageAlt: "Pessoa segurando smartphone com o WhatsApp aberto"
 imageCredit: Eyestetix Studio

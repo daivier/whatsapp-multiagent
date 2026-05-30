@@ -5,7 +5,7 @@ slug: bot-vs-atendimento-humano
 category: Produtividade
 tags: [bot, automacao, atendimento]
 date: 2026-05-20
-author: Equipe MultiAtendente
+author: Equipe Atendize
 image: https://images.unsplash.com/photo-1553877522-43269d4ea984?auto=format&fit=crop&w=1200&q=70
 imageAlt: "Pessoa interagindo com aplicativo de mensagens no celular"
 imageCredit: charlesdeluvio

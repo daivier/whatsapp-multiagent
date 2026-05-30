@@ -5,7 +5,7 @@ slug: lgpd-no-atendimento-whatsapp
 category: Atendimento
 tags: [lgpd, privacidade, atendimento]
 date: 2026-04-28
-author: Equipe MultiAtendente
+author: Equipe Atendize
 image: https://images.unsplash.com/photo-1600880292089-90a7e086ee0c?auto=format&fit=crop&w=1200&q=70
 imageAlt: "Duas pessoas conversando sobre documentos em uma mesa"
 imageCredit: krakenimages
