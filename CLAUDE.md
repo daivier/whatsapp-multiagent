@@ -27,6 +27,7 @@ npm run dev                    # `npm run build` for production bundle
 Production / multi-tenant (Linux VM scripts in repo root, bash):
 - `bash deploy/setup-vm.sh` — first-time VM provisioning (Node, PM2, Chrome, Nginx, single-tenant install)
 - `bash deploy/update.sh` — pull + rebuild + `pm2 restart whatsapp-backend` for the single-tenant install
+- `bash deploy/update-landing.sh` — git pull + rebuild do blog estático; atualiza a landing de `atendize.com` (servida do repo principal). **Correr sempre que mudar a landing ou os artigos do blog** — o HTML do blog é gitignored e tem de ser regenerado na VM
 - `./new-tenant.sh <slug> <port> "<name>" <owner-email> <owner-password>` — provisions a new tenant under `/home/daivier/whatsapp-tenants/<slug>` with its own `.env`, frontend build, PM2 entry, and Nginx vhost
 - `./update-tenant.sh <slug>` — git pull + frontend rebuild + `pm2 restart wa-<slug>` for one tenant
 - `bash deploy-frontend.sh` — rebuilds the frontend once per tenant with the correct `VITE_API_URL` baked in, copying to `/home/daivier/clientes/<slug>/dist/`
