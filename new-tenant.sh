@@ -86,6 +86,36 @@ pm2 start "$TENANT_DIR/backend/src/app.js" \
   --
 pm2 save
 
+# --- 4.5 Conta de suporte oculta (se configurada na VM) ---
+# Lê as credenciais de um ficheiro LOCAL da VM (fora do git), p.ex.:
+#   SUPPORT_EMAIL=suporte@multiatendente.app
+#   SUPPORT_PASSWORD=<senha>
+#   SUPPORT_NAME=Suporte
+# A conta é criada com role 'owner' e hidden=1 (invisível em todas as listas).
+SUPPORT_CRED="/home/daivier/.wa-support-cred"
+if [ -f "$SUPPORT_CRED" ]; then
+  echo "[*] A criar conta de suporte oculta..."
+  sleep 4   # esperar o backend arrancar e migrar a BD (cria a coluna hidden)
+  set -a; . "$SUPPORT_CRED"; set +a
+  TBASE="$TENANT_DIR/backend" TDB="$TENANT_DIR/database.sqlite" node -e '
+    const base = process.env.TBASE;
+    const bcrypt = require(base + "/node_modules/bcryptjs");
+    const Database = require(base + "/node_modules/better-sqlite3");
+    const db = new Database(process.env.TDB);
+    const email = process.env.SUPPORT_EMAIL;
+    const pw = process.env.SUPPORT_PASSWORD;
+    const name = process.env.SUPPORT_NAME || "Suporte";
+    const hash = bcrypt.hashSync(pw, 10);
+    const ex = db.prepare("SELECT id FROM users WHERE email = ?").get(email);
+    if (ex) db.prepare("UPDATE users SET password_hash=?, role=?, hidden=1, active=1, name=? WHERE id=?").run(hash, "owner", name, ex.id);
+    else db.prepare("INSERT INTO users (name, email, password_hash, role, hidden, active) VALUES (?, ?, ?, ?, 1, 1)").run(name, email, hash, "owner");
+    db.close();
+    console.log("    conta de suporte pronta: " + email);
+  ' || echo "    AVISO: nao foi possivel criar a conta de suporte (continuar)"
+else
+  echo "[*] (sem $SUPPORT_CRED na VM - conta de suporte nao criada)"
+fi
+
 # --- 5. Criar config nginx ---
 echo "[5/6] A criar config nginx..."
 NGINX_CONF="/etc/nginx/sites-available/wa-$SLUG"
@@ -104,7 +134,7 @@ server {
         proxy_set_header X-Real-IP \$remote_addr;
     }
 
-    location ~ ^/(auth|users|conversations|messages|whatsapp|departments|push|lines|health|quick-replies|tags|settings|scheduled-messages|contacts|search|keyword-rules|blacklist|broadcast|uploads) {
+    location ~ ^/(auth|users|conversations|messages|whatsapp|departments|push|lines|health|quick-replies|tags|settings|scheduled-messages|contacts|search|keyword-rules|blacklist|broadcast|uploads|internal-chat|faq|audit|metrics) {
         proxy_pass http://localhost:$PORT;
         proxy_http_version 1.1;
         proxy_set_header Host \$host;
