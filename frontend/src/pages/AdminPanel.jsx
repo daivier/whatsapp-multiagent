@@ -548,6 +548,7 @@ export default function AdminPanel({ socket }) {
     setSettingsSaved(true); setTimeout(() => setSettingsSaved(false), 2000);
   }
   async function loadKeywordRules() {
+    if (!hasFeature('roteamento')) { setKeywordRules([]); return; } // gated — evita 403/toast
     const { data } = await api.get('/keyword-rules');
     setKeywordRules(Array.isArray(data) ? data : []);
   }
@@ -774,6 +775,7 @@ export default function AdminPanel({ socket }) {
 
   // --- Departamentos ---
   async function loadDepartments() {
+    if (!hasFeature('departamentos')) { setDepartments([]); return; } // gated — evita 403/toast em planos sem departamentos
     const { data } = await api.get('/departments');
     setDepartments(Array.isArray(data) ? data : []);
   }

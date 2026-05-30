@@ -3,7 +3,7 @@ import api from '../api';
 import { useAuth } from '../context/AuthContext';
 
 export default function NewConversationModal({ onClose, onCreated }) {
-  const { user } = useAuth();
+  const { user, hasFeature } = useAuth();
   const [phone, setPhone] = useState('');
   const [message, setMessage] = useState('');
   const [sending, setSending] = useState(false);
@@ -24,9 +24,11 @@ export default function NewConversationModal({ onClose, onCreated }) {
 
   useEffect(() => {
     searchRef.current?.focus();
+    // /departments é gated (feature 'departamentos'); em planos sem ela não
+    // chamamos (evita 403/toast) e tratamos como tenant sem departamentos.
     Promise.all([
       api.get('/lines'),
-      api.get('/departments'),
+      hasFeature('departamentos') ? api.get('/departments') : Promise.resolve({ data: [] }),
     ]).then(([linesRes, deptsRes]) => {
       const allLines = Array.isArray(linesRes.data) ? linesRes.data : [];
       const allDepts = Array.isArray(deptsRes.data) ? deptsRes.data : [];
