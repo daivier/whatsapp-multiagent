@@ -3,7 +3,7 @@
 set -e
 
 echo "=== A atualizar ==="
-git pull origin main
+git pull origin master
 
 echo "=== Backend ==="
 cd backend && npm install --production && cd ..
