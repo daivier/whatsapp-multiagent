@@ -74,6 +74,25 @@ function requireFeature(name) {
   };
 }
 
+/**
+ * Como requireFeature, mas só bloqueia ESCRITAS (POST/PATCH/PUT/DELETE).
+ * GET/HEAD passam sempre — para endpoints de leitura usados em filtros e
+ * dropdowns (ex.: /departments) que num plano sem a feature apenas devolvem
+ * lista vazia e NÃO devem dar 403/toast. A gestão (criar/editar/apagar) fica
+ * bloqueada na mesma.
+ */
+function requireFeatureForWrites(name) {
+  const SAFE = ['GET', 'HEAD', 'OPTIONS'];
+  return (req, res, next) => {
+    if (SAFE.includes(req.method) || hasFeature(name)) return next();
+    return res.status(403).json({
+      error: `Recurso indisponível no plano ${currentPlan().label}.`,
+      feature: name,
+      upgrade: true,
+    });
+  };
+}
+
 /** Info do plano para o frontend (GET /plan). null = ilimitado. */
 function planInfo() {
   const p = currentPlan();
@@ -88,4 +107,4 @@ function planInfo() {
   };
 }
 
-module.exports = { PLANS, currentPlanKey, currentPlan, hasFeature, getLimit, requireFeature, planInfo };
+module.exports = { PLANS, currentPlanKey, currentPlan, hasFeature, getLimit, requireFeature, requireFeatureForWrites, planInfo };

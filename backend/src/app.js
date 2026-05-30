@@ -103,7 +103,7 @@ if (linesCount === 0) {
 }
 
 // Planos comerciais — enforcement server-side de funcionalidades e limites
-const { requireFeature, planInfo } = require('./plan');
+const { requireFeature, requireFeatureForWrites, planInfo } = require('./plan');
 
 // Rotas
 app.use('/auth/login', loginLimiter);
@@ -120,7 +120,7 @@ app.use('/search', searchRoutes);
 app.use('/keyword-rules', requireFeature('roteamento'), keywordRulesRoutes);
 app.use('/blacklist', requireFeature('blacklist'), blacklistRoutes);
 app.use('/broadcast', authMiddleware, requireFeature('broadcast'), broadcastLimiter, broadcastRoutes);
-app.use('/departments', requireFeature('departamentos'), departmentsRoutes);
+app.use('/departments', requireFeatureForWrites('departamentos'), departmentsRoutes);
 app.use('/push', pushRoutes);
 app.use('/lines', linesRoutes);
 app.use('/internal-chat', requireFeature('chat_interno'), internalChatRoutes);
