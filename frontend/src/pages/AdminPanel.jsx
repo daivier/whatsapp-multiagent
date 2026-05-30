@@ -198,7 +198,7 @@ export default function AdminPanel({ socket }) {
     if (tab === 'scheduled') loadScheduled();
     if (tab === 'contacts') loadContacts();
     if (tab === 'transfers') loadTransferLogs();
-    if (tab === 'automation') { loadKeywordRules(); loadAttendants(); loadDepartments(); loadTags(); }
+    if (tab === 'automation') { loadAttendants(); loadTags(); if (hasFeature('roteamento')) { loadKeywordRules(); loadDepartments(); } }
     if (tab === 'tags') { loadTags(); loadDepartments(); }
     if (tab === 'blacklist') loadBlacklist();
     if (tab === 'broadcast') { loadBroadcastContacts(); loadBroadcastLogs(); }
@@ -1887,7 +1887,8 @@ export default function AdminPanel({ socket }) {
           <div style={S.section}>
             <h2 style={S.sectionTitle}>Automação</h2>
 
-            {/* --- Bot por palavra-chave --- */}
+            {/* --- Regras por palavra-chave (roteamento — Profissional+) --- */}
+            {hasFeature('roteamento') && (<>
             <h3 style={S.subTitle}>🤖 Regras por palavra-chave</h3>
             <p style={{ color: 'var(--muted)', fontSize: '0.85rem', marginBottom: '1rem' }}>
               Quando uma mensagem nova contém a palavra-chave, a regra pode (1) responder automaticamente, (2) rotear a conversa para um departamento, ou ambos.
@@ -1972,6 +1973,7 @@ export default function AdminPanel({ socket }) {
                 {keywordRules.length === 0 && <tr><td colSpan={7} style={{ color: 'var(--hint)', textAlign: 'center', padding: '1rem' }}>Sem regras criadas</td></tr>}
               </tbody>
             </table>
+            </>)}
 
             {/* --- Turnos --- */}
             <h3 style={{ ...S.subTitle, marginTop: '2rem' }}>📋 Turnos dos atendentes</h3>
