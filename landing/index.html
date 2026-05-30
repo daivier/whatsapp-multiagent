@@ -169,6 +169,20 @@
     .pricing-modern .price-note{color:#94a3b8;font-size:12px;margin-top:10px}
     @media(max-width:980px){.pricing-modern .featured-plan,.pricing-modern .featured-plan:hover{transform:none}.pricing-modern .price-card{min-height:auto}}
 
+  /* Modal de contratação (signup + Pix) */
+  .su-overlay{position:fixed;inset:0;background:rgba(15,23,42,.55);display:none;align-items:center;justify-content:center;z-index:1000;padding:16px}
+  .su-box{background:#fff;border-radius:20px;max-width:430px;width:100%;padding:28px;position:relative;box-shadow:0 30px 80px rgba(0,0,0,.3);max-height:92vh;overflow:auto}
+  .su-close{position:absolute;top:12px;right:16px;background:none;border:0;font-size:20px;cursor:pointer;color:#64748b;line-height:1}
+  .su-title{margin:0 0 6px;font-size:20px;font-weight:800;color:#0f172a}
+  .su-sub{margin:0 0 16px;color:#64748b;font-size:14px;line-height:1.5}
+  .su-box input{width:100%;padding:11px 13px;border:1px solid #e2e8f0;border-radius:10px;margin-bottom:10px;font-size:14px;box-sizing:border-box}
+  .su-box input:focus{outline:none;border-color:#5b5cf6}
+  .su-submit{width:100%;padding:13px;border:0;border-radius:10px;background:linear-gradient(135deg,#5b5cf6,#7c3aed);color:#fff;font-weight:800;font-size:15px;cursor:pointer;margin-top:4px}
+  .su-submit:disabled{opacity:.6;cursor:default}
+  .su-error{color:#ef4444;font-size:13px;margin-top:8px;min-height:16px}
+  .su-qr{display:block;width:220px;height:220px;margin:0 auto 14px;border:1px solid #e2e8f0;border-radius:12px;object-fit:contain}
+  .su-copy{width:100%;padding:11px;border:1px solid #5b5cf6;border-radius:10px;background:#eef2ff;color:#5b5cf6;font-weight:700;cursor:pointer;font-size:14px}
+  .su-status{text-align:center;margin-top:14px;color:#64748b;font-weight:600;font-size:14px;line-height:1.4}
   </style>
 </head>
 <body>
@@ -339,7 +353,7 @@
           <div class="price">R$197<span>/mês</span></div>
           <div class="annual">ou R$ 1.970 / ano</div>
           <div class="plan-buttons">
-            <a class="plan-btn primary-plan-btn" data-wa="Olá! Quero contratar o plano Básico mensal do WhatsApp Multi-Atendente.">Básico - Mensal</a>
+            <a class="plan-btn primary-plan-btn" href="#planos" data-plano="basico">Básico - Mensal</a>
             <a class="plan-btn secondary-plan-btn" data-wa="Olá! Quero contratar o plano Básico anual do WhatsApp Multi-Atendente.">Básico - Anual</a>
             <a class="plan-btn trial-plan-btn" data-wa="Olá! Quero testar 7 dias grátis o WhatsApp Multi-Atendente.">Testar 7 dias grátis</a>
           </div>
@@ -372,7 +386,7 @@
           <div class="price">R$397<span>/mês</span></div>
           <div class="annual">ou R$ 3.970 / ano</div>
           <div class="plan-buttons">
-            <a class="plan-btn primary-plan-btn" data-wa="Olá! Quero contratar o plano Profissional mensal do WhatsApp Multi-Atendente.">Profissional - Mensal</a>
+            <a class="plan-btn primary-plan-btn" href="#planos" data-plano="profissional">Profissional - Mensal</a>
             <a class="plan-btn secondary-plan-btn" data-wa="Olá! Quero contratar o plano Profissional anual do WhatsApp Multi-Atendente.">Profissional - Anual</a>
             <a class="plan-btn trial-plan-btn" data-wa="Olá! Quero testar 7 dias grátis o plano Profissional.">Testar 7 dias grátis</a>
           </div>
@@ -404,7 +418,7 @@
           <div class="price">R$797<span>/mês</span></div>
           <div class="annual">ou R$ 7.970 / ano</div>
           <div class="plan-buttons">
-            <a class="plan-btn primary-plan-btn" data-wa="Olá! Quero contratar o plano Empresarial do WhatsApp Multi-Atendente.">Empresarial - Mensal</a>
+            <a class="plan-btn primary-plan-btn" href="#planos" data-plano="empresarial">Empresarial - Mensal</a>
             <a class="plan-btn secondary-plan-btn" data-wa="Olá! Tenho uma operação grande e quero falar com vendas.">Falar com vendas</a>
             <a class="plan-btn trial-plan-btn" data-wa="Olá! Quero testar 7 dias grátis o WhatsApp Multi-Atendente.">Testar 7 dias grátis</a>
           </div>
@@ -576,5 +590,58 @@
   menu.addEventListener('click',function(e){if(e.target.tagName==='A')setOpen(false);});
   document.addEventListener('click',function(e){if(menu.classList.contains('open')&&!menu.contains(e.target)&&e.target!==btn)setOpen(false);});
 })();</script>
+<!-- Modal de contratação (signup + Pix) -->
+<div id="su-modal" class="su-overlay">
+  <div class="su-box">
+    <button class="su-close" onclick="suClose()" aria-label="Fechar">&times;</button>
+    <div id="su-form-view">
+      <h3 class="su-title">Contratar <span id="su-nome"></span></h3>
+      <p class="su-sub">Preencha os dados e pague por Pix. A ativação é feita logo após a confirmação do pagamento.</p>
+      <form id="su-form">
+        <input name="empresa" placeholder="Nome da empresa" required>
+        <input name="responsavel" placeholder="Seu nome">
+        <input name="email" type="email" placeholder="Email" required>
+        <input name="whatsapp" placeholder="WhatsApp (com DDD)">
+        <button type="submit" class="su-submit" id="su-submit">Gerar Pix <span id="su-valor"></span></button>
+        <div id="su-error" class="su-error"></div>
+      </form>
+    </div>
+    <div id="su-pix-view" style="display:none">
+      <h3 class="su-title">Pague por Pix</h3>
+      <p class="su-sub">Escaneie o QR no app do seu banco ou copie o código. A conta é ativada automaticamente após o pagamento.</p>
+      <img id="su-qr" class="su-qr" alt="QR Code Pix">
+      <button class="su-copy" id="su-copy" onclick="suCopy()">Copiar código Pix</button>
+      <div id="su-status" class="su-status">⏳ Aguardando pagamento…</div>
+    </div>
+  </div>
+</div>
+<script>
+(function(){
+  var NAMES={basico:'Básico',profissional:'Profissional',empresarial:'Empresarial'};
+  var PRICES={basico:'R$197',profissional:'R$397',empresarial:'R$797'};
+  var plano=null, paymentId=null, poll=null;
+  function $(id){return document.getElementById(id);}
+  window.suOpen=function(p){plano=p;$('su-nome').textContent=NAMES[p]||'';$('su-valor').textContent=PRICES[p]||'';$('su-form-view').style.display='';$('su-pix-view').style.display='none';$('su-error').textContent='';$('su-form').reset();$('su-modal').style.display='flex';};
+  window.suClose=function(){$('su-modal').style.display='none';if(poll){clearInterval(poll);poll=null;}};
+  window.suCopy=function(){var t=$('su-qr').dataset.code||'';if(navigator.clipboard)navigator.clipboard.writeText(t);var b=$('su-copy');b.textContent='Copiado ✓';setTimeout(function(){b.textContent='Copiar código Pix';},1500);};
+  document.querySelectorAll('[data-plano]').forEach(function(el){el.addEventListener('click',function(e){e.preventDefault();suOpen(el.dataset.plano);});});
+  $('su-modal').addEventListener('click',function(e){if(e.target.id==='su-modal')suClose();});
+  $('su-form').addEventListener('submit',async function(e){
+    e.preventDefault();
+    var btn=$('su-submit'),old=btn.textContent;btn.disabled=true;btn.textContent='A gerar Pix…';$('su-error').textContent='';
+    var fd=Object.fromEntries(new FormData(e.target).entries());fd.plano=plano;
+    try{
+      var r=await fetch('/api/signup',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(fd)});
+      var d=await r.json();
+      if(!r.ok||!d.qr_code_base64){$('su-error').textContent=d.error||'Não foi possível gerar o Pix.';btn.disabled=false;btn.textContent=old;return;}
+      paymentId=d.payment_id;
+      var qr=$('su-qr');qr.src='data:image/png;base64,'+d.qr_code_base64;qr.dataset.code=d.qr_code||'';
+      $('su-form-view').style.display='none';$('su-pix-view').style.display='';
+      poll=setInterval(suCheck,4000);
+    }catch(_){$('su-error').textContent='Falha de ligação. Tenta novamente.';btn.disabled=false;btn.textContent=old;}
+  });
+  async function suCheck(){if(!paymentId)return;try{var r=await fetch('/api/signup/'+paymentId+'/status');var d=await r.json();if(d.status==='approved'){clearInterval(poll);poll=null;var s=$('su-status');s.innerHTML='✅ Pagamento confirmado! Vamos ativar a sua conta e entrar em contacto em breve.';s.style.color='#16a34a';}}catch(_){}}
+})();
+</script>
 </body>
 </html>
