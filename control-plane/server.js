@@ -35,6 +35,15 @@ const ZONE = process.env.ZONE || 'atendize.com';
 const PORT_BASE = parseInt(process.env.PORT_BASE || '3031', 10);
 const AUTO_PROVISION = process.env.AUTO_PROVISION !== '0'; // ligado por default
 
+// --- Email de boas-vindas (Gmail SMTP por default; tudo configurável por env) ---
+const SMTP_HOST = process.env.SMTP_HOST || 'smtp.gmail.com';
+const SMTP_PORT = parseInt(process.env.SMTP_PORT || '465', 10);
+const SMTP_USER = process.env.SMTP_USER || '';
+const SMTP_PASS = process.env.SMTP_PASS || '';
+const MAIL_FROM = process.env.MAIL_FROM || (SMTP_USER ? `Atendize <${SMTP_USER}>` : '');
+let nodemailer = null;
+try { nodemailer = require('nodemailer'); } catch (_) { /* instalar com: npm i nodemailer */ }
+
 // Planos e preços (devem espelhar plan.js do backend)
 const PLANS = {
   basico:       { label: 'Básico',       preco: 197 },
@@ -68,6 +77,9 @@ for (const col of [
   'provision_status TEXT',   // null | provisioning | done | error
   'provision_error TEXT',
   'provisioned_at DATETIME',
+  'wa_link TEXT',
+  'email_sent INTEGER NOT NULL DEFAULT 0',
+  'email_error TEXT',
 ]) {
   try { db.exec(`ALTER TABLE signups ADD COLUMN ${col}`); } catch (_) { /* já existe */ }
 }
@@ -150,6 +162,82 @@ function genPassword() {
   return out;
 }
 
+// ─── Notificação ao cliente (email + link wa.me) ───────────────────────────
+
+// Link wa.me pré-preenchido para o OPERADOR enviar o boas-vindas com 1 clique.
+function waLink(phone, text) {
+  const digits = String(phone || '').replace(/\D/g, '');
+  if (!digits) return null;
+  // BR: garantir o código de país 55 quando parece número local (10-11 dígitos).
+  const num = digits.length <= 11 ? `55${digits}` : digits;
+  return `https://wa.me/${num}?text=${encodeURIComponent(text)}`;
+}
+
+let _mailer;
+function getMailer() {
+  if (!nodemailer || !SMTP_USER || !SMTP_PASS) return null;
+  if (!_mailer) {
+    _mailer = nodemailer.createTransport({
+      host: SMTP_HOST,
+      port: SMTP_PORT,
+      secure: SMTP_PORT === 465,
+      auth: { user: SMTP_USER, pass: SMTP_PASS },
+    });
+  }
+  return _mailer;
+}
+
+async function sendWelcomeEmail(to, url, login, senha) {
+  const t = getMailer();
+  if (!t) return { skipped: true };
+  const html =
+    `<div style="font-family:system-ui,Segoe UI,Arial,sans-serif;max-width:520px;margin:auto;color:#111827">
+      <h2 style="color:#25D366">A sua conta Atendize está pronta 🎉</h2>
+      <p>Bem-vindo! Já pode entrar no seu painel de atendimento:</p>
+      <table style="border-collapse:collapse;margin:16px 0">
+        <tr><td style="padding:4px 12px 4px 0;color:#6b7280">Acesso</td><td><a href="${url}">${url}</a></td></tr>
+        <tr><td style="padding:4px 12px 4px 0;color:#6b7280">Login</td><td><b>${login}</b></td></tr>
+        <tr><td style="padding:4px 12px 4px 0;color:#6b7280">Senha</td><td><b>${senha}</b></td></tr>
+      </table>
+      <p style="color:#6b7280;font-size:14px">Recomendamos alterar a senha após o primeiro acesso. Próximo passo: entrar e ligar o WhatsApp escaneando o QR Code.</p>
+    </div>`;
+  await t.sendMail({
+    from: MAIL_FROM,
+    to,
+    subject: 'A sua conta Atendize está pronta 🎉',
+    text: `A sua conta no Atendize está pronta.\n\nAcesso: ${url}\nLogin: ${login}\nSenha: ${senha}\n\nRecomendamos alterar a senha após o primeiro acesso.`,
+    html,
+  });
+  return { ok: true };
+}
+
+// Best-effort: nunca rebenta o provisionamento. Grava wa_link e estado do email.
+async function notifyCustomer(id, url, password) {
+  const row = db.prepare('SELECT * FROM signups WHERE id = ?').get(id);
+  if (!row) return;
+
+  const text =
+    `Olá! A sua conta no Atendize está pronta. 🎉\n\n` +
+    `Acesso: ${url}\nLogin: ${row.email}\nSenha: ${password}\n\n` +
+    `Recomendamos alterar a senha após o primeiro acesso.`;
+  const link = waLink(row.whatsapp, text);
+  db.prepare('UPDATE signups SET wa_link = ? WHERE id = ?').run(link, id);
+  if (link) console.log(`[notify] #${id} WhatsApp boas-vindas (1 clique): ${link}`);
+
+  try {
+    const r = await sendWelcomeEmail(row.email, url, row.email, password);
+    if (r.skipped) {
+      console.log(`[notify] #${id} email não configurado (SMTP_USER/PASS ausentes) — usar o link wa.me`);
+    } else {
+      db.prepare('UPDATE signups SET email_sent = 1, email_error = NULL WHERE id = ?').run(id);
+      console.log(`[notify] #${id} email enviado para ${row.email}`);
+    }
+  } catch (e) {
+    db.prepare('UPDATE signups SET email_error = ? WHERE id = ?').run(String(e.message), id);
+    console.error(`[notify] #${id} email FALHOU: ${e.message} (usar o link wa.me)`);
+  }
+}
+
 // Dispara o new-tenant.sh em background. Idempotente: só um provisionamento por
 // signup (lock via UPDATE atómico). Fire-and-forget — não bloqueia a resposta HTTP.
 async function provisionTenant(id) {
@@ -202,6 +290,7 @@ async function provisionTenant(id) {
           `UPDATE signups SET provisioned = 1, provision_status = 'done', url = ?, provisioned_at = CURRENT_TIMESTAMP WHERE id = ?`
         ).run(url, id);
         console.log(`[provision] ✅ #${id} PRONTO: ${url}  login ${row.email}  senha ${password}`);
+        notifyCustomer(id, url, password); // email de boas-vindas + link wa.me (best-effort)
       } else {
         let tail = '';
         try { tail = fs.readFileSync(logPath, 'utf8').slice(-600); } catch (_) {}
