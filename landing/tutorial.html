@@ -1,0 +1,1038 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Tutorial — WhatsApp Multi-Atendente · Guia passo a passo</title>
+<meta name="description" content="Aprenda a usar o WhatsApp Multi-Atendente do zero: conectar o número, criar equipe, atender, automatizar e acompanhar relatórios. Guia completo dividido em capítulos." />
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --primary:#5b5cf6;--primary-2:#7c3aed;--accent:#22c55e;--cyan:#06b6d4;
+    --orange:#f59e0b;--pink:#ec4899;--red:#ef4444;
+    --dark:#111827;--muted:#64748b;--line:#e8edf5;--bg:#f7f9ff;--card:#ffffff;
+    --shadow:0 24px 70px rgba(30,41,59,.12);--shadow-soft:0 14px 35px rgba(30,41,59,.08);
+    --radius:22px;--sidebar-w:312px;
+  }
+  *{box-sizing:border-box}
+  html{scroll-behavior:smooth}
+  body{margin:0;font-family:Inter,system-ui,-apple-system,Segoe UI,sans-serif;color:var(--dark);background:var(--bg)}
+  a{text-decoration:none;color:inherit}
+
+  /* ---------- TOP NAV ---------- */
+  .nav{height:70px;display:flex;align-items:center;justify-content:space-between;gap:18px;position:sticky;top:0;z-index:60;background:rgba(247,249,255,.86);backdrop-filter:blur(18px);border-bottom:1px solid rgba(226,232,240,.7);padding:0 22px}
+  .brand{display:flex;align-items:center;gap:11px;font-weight:900;letter-spacing:-.04em;font-size:18px}
+  .brand-mark{width:38px;height:38px;border-radius:13px;background:linear-gradient(135deg,var(--primary),var(--cyan));display:grid;place-items:center;color:#fff;box-shadow:0 12px 30px rgba(91,92,246,.28)}
+  .gradient-text{background:linear-gradient(135deg,var(--primary),var(--cyan));-webkit-background-clip:text;background-clip:text;color:transparent}
+  .nav-actions{display:flex;align-items:center;gap:12px}
+  .btn{display:inline-flex;align-items:center;gap:9px;border-radius:999px;padding:11px 18px;font-weight:800;font-size:13px;transition:.2s ease;cursor:pointer;border:0;white-space:nowrap}
+  .btn-primary{background:linear-gradient(135deg,var(--primary),var(--primary-2));color:#fff;box-shadow:0 14px 32px rgba(91,92,246,.25)}
+  .btn-primary:hover{transform:translateY(-2px)}
+  .btn-ghost{background:#eef2ff;color:var(--primary);border:1px solid #dbe4ff}
+  .btn-ghost:hover{background:#e2e8ff}
+  .menu-toggle{display:none;background:#fff;border:1px solid var(--line);border-radius:12px;width:42px;height:42px;font-size:20px;cursor:pointer;align-items:center;justify-content:center}
+
+  /* progress bar under nav */
+  .progress-track{position:fixed;top:70px;left:0;right:0;height:3px;background:transparent;z-index:55}
+  .progress-fill{height:100%;width:0;background:linear-gradient(90deg,var(--primary),var(--cyan));transition:width .3s ease}
+
+  /* ---------- LAYOUT ---------- */
+  .shell{display:grid;grid-template-columns:var(--sidebar-w) 1fr;max-width:1320px;margin:0 auto;align-items:start}
+
+  /* ---------- SIDEBAR ---------- */
+  .sidebar{position:sticky;top:70px;height:calc(100vh - 70px);overflow-y:auto;padding:24px 16px 60px;border-right:1px solid var(--line)}
+  .search-box{display:flex;align-items:center;gap:8px;background:#fff;border:1px solid var(--line);border-radius:13px;padding:10px 13px;margin-bottom:18px;box-shadow:var(--shadow-soft)}
+  .search-box input{border:0;outline:0;font:inherit;font-size:14px;width:100%;background:transparent;color:var(--dark)}
+  .nav-group{margin-bottom:18px}
+  .nav-group-title{font-size:11px;font-weight:900;text-transform:uppercase;letter-spacing:.13em;color:#94a3b8;padding:0 12px;margin-bottom:8px;display:flex;align-items:center;gap:8px}
+  .toc{list-style:none;margin:0;padding:0;display:grid;gap:3px}
+  .toc a{display:flex;align-items:center;gap:11px;padding:9px 12px;border-radius:11px;font-size:13.5px;font-weight:700;color:#52637a;transition:.16s ease;line-height:1.3}
+  .toc a:hover{background:#eef2ff;color:var(--primary)}
+  .toc a.active{background:linear-gradient(135deg,var(--primary),var(--primary-2));color:#fff;box-shadow:0 10px 22px rgba(91,92,246,.26)}
+  .toc a .ch-ico{width:26px;height:26px;flex:0 0 26px;border-radius:8px;display:grid;place-items:center;background:#eef2ff;font-size:14px}
+  .toc a.active .ch-ico{background:rgba(255,255,255,.2)}
+  .toc a.hidden{display:none}
+  .nav-group.empty{display:none}
+
+  /* ---------- CONTENT ---------- */
+  .content{padding:38px 52px 96px;min-width:0}
+  .chapter{display:none;animation:fade .35s ease}
+  .chapter.active{display:block}
+  @keyframes fade{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
+  .crumb{font-size:13px;font-weight:800;color:#94a3b8;margin-bottom:14px;display:flex;align-items:center;gap:8px}
+  .crumb b{color:var(--primary)}
+  .roles{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:16px}
+  .role{display:inline-flex;align-items:center;gap:6px;border-radius:999px;padding:6px 12px;font-size:12px;font-weight:900}
+  .role.owner{background:#ede9fe;color:#6d28d9}
+  .role.sup{background:#e0f2fe;color:#0369a1}
+  .role.att{background:#dcfce7;color:#15803d}
+  .role.all{background:#fef3c7;color:#b45309}
+  h1.ch-title{font-size:clamp(30px,4vw,46px);line-height:1.04;letter-spacing:-.05em;margin:0 0 16px;font-weight:900}
+  .lead{font-size:18px;line-height:1.7;color:#52637a;margin:0 0 30px;max-width:760px}
+  .content h2{font-size:24px;letter-spacing:-.03em;margin:38px 0 14px;font-weight:900}
+  .content h3{font-size:18px;letter-spacing:-.02em;margin:26px 0 10px;font-weight:800}
+  .content p{font-size:15.5px;line-height:1.75;color:#475569;margin:0 0 14px;max-width:780px}
+
+  /* numbered steps */
+  .steps{list-style:none;counter-reset:step;padding:0;margin:18px 0;display:grid;gap:14px;max-width:820px}
+  .steps>li{counter-increment:step;position:relative;background:#fff;border:1px solid var(--line);border-radius:18px;padding:18px 20px 18px 64px;box-shadow:0 8px 22px rgba(30,41,59,.05)}
+  .steps>li:before{content:counter(step);position:absolute;left:16px;top:16px;width:34px;height:34px;border-radius:11px;background:linear-gradient(135deg,var(--primary),var(--primary-2));color:#fff;font-weight:900;display:grid;place-items:center;font-size:15px;box-shadow:0 8px 18px rgba(91,92,246,.3)}
+  .steps>li h4{margin:0 0 6px;font-size:16px;letter-spacing:-.01em;font-weight:800}
+  .steps>li p{margin:0;font-size:14.5px;line-height:1.65;color:#52637a}
+  .steps>li p+p{margin-top:8px}
+
+  /* feature cards grid (hub) */
+  .cards{display:grid;grid-template-columns:repeat(2,1fr);gap:16px;margin:24px 0}
+  .nav-card{display:block;background:#fff;border:1px solid var(--line);border-radius:20px;padding:22px;box-shadow:0 8px 22px rgba(30,41,59,.05);transition:.2s ease;cursor:pointer}
+  .nav-card:hover{transform:translateY(-4px);box-shadow:var(--shadow-soft);border-color:#cfd8ea}
+  .nav-card .nc-ico{width:48px;height:48px;border-radius:14px;display:grid;place-items:center;font-size:24px;background:#eef2ff;margin-bottom:14px}
+  .nav-card h3{margin:0 0 6px;font-size:17px;letter-spacing:-.02em}
+  .nav-card p{margin:0;font-size:13.5px;color:#64748b;line-height:1.55}
+
+  /* callouts */
+  .callout{display:flex;gap:13px;border-radius:16px;padding:16px 18px;margin:18px 0;max-width:820px;font-size:14.5px;line-height:1.65;border:1px solid}
+  .callout .ic{font-size:20px;flex:0 0 auto;line-height:1.3}
+  .callout.tip{background:#ecfdf5;border-color:#a7f3d0;color:#065f46}
+  .callout.info{background:#eff6ff;border-color:#bfdbfe;color:#1e40af}
+  .callout.warn{background:#fff7ed;border-color:#fed7aa;color:#9a3412}
+  .callout.danger{background:#fef2f2;border-color:#fecaca;color:#991b1b}
+  .callout b{font-weight:900}
+
+  /* UI chips / kbd / path */
+  code,.uikey{font-family:"SFMono-Regular",ui-monospace,Menlo,Consolas,monospace;font-size:13px;background:#f1f5f9;border:1px solid #e2e8f0;border-radius:7px;padding:2px 7px;color:#334155;font-weight:600}
+  .uibtn{display:inline-flex;align-items:center;gap:5px;background:linear-gradient(135deg,var(--primary),var(--primary-2));color:#fff;border-radius:8px;padding:3px 10px;font-size:13px;font-weight:800;white-space:nowrap}
+  .uimenu{display:inline-flex;align-items:center;gap:6px;background:#fff;border:1px solid var(--line);border-radius:8px;padding:3px 10px;font-size:13px;font-weight:800;box-shadow:0 4px 10px rgba(30,41,59,.05)}
+  .path{display:inline-flex;align-items:center;gap:6px;flex-wrap:wrap;font-weight:800;font-size:13.5px;color:#475569}
+  .path .sep{color:#cbd5e1}
+
+  ul.bullets{margin:14px 0;padding-left:0;list-style:none;display:grid;gap:9px;max-width:800px}
+  ul.bullets li{position:relative;padding-left:28px;font-size:15px;line-height:1.6;color:#475569}
+  ul.bullets li:before{content:"";position:absolute;left:4px;top:9px;width:8px;height:8px;border-radius:50%;background:linear-gradient(135deg,var(--primary),var(--cyan))}
+  ul.bullets li b{color:var(--dark)}
+
+  /* mini mock UI panel */
+  .mock{background:#fff;border:1px solid var(--line);border-radius:18px;box-shadow:0 12px 30px rgba(30,41,59,.07);overflow:hidden;margin:20px 0;max-width:820px}
+  .mock-top{display:flex;align-items:center;gap:8px;padding:11px 15px;background:#f8fafc;border-bottom:1px solid var(--line)}
+  .mock-dot{width:11px;height:11px;border-radius:50%}.mock-dot.r{background:#ef4444}.mock-dot.y{background:#f59e0b}.mock-dot.g{background:#22c55e}
+  .mock-title{margin-left:8px;font-size:12.5px;font-weight:800;color:#64748b}
+  .mock-body{padding:18px}
+  .bubble{max-width:78%;font-size:13.5px;line-height:1.5;border-radius:15px;padding:10px 13px;margin:8px 0}
+  .bubble.in{background:#f1f5f9;color:#334155;border-top-left-radius:4px}
+  .bubble.out{background:linear-gradient(135deg,var(--primary),var(--primary-2));color:#fff;margin-left:auto;border-top-right-radius:4px}
+
+  /* table */
+  table.t{width:100%;max-width:820px;border-collapse:collapse;margin:18px 0;font-size:14px;background:#fff;border:1px solid var(--line);border-radius:14px;overflow:hidden}
+  table.t th,table.t td{text-align:left;padding:11px 14px;border-bottom:1px solid var(--line)}
+  table.t th{background:#f8fafc;font-weight:900;font-size:12.5px;color:#475569}
+  table.t tr:last-child td{border-bottom:0}
+
+  /* pager */
+  .pager{display:flex;gap:14px;justify-content:space-between;margin:46px 0 0;max-width:820px}
+  .pager a{flex:1;display:flex;flex-direction:column;gap:4px;background:#fff;border:1px solid var(--line);border-radius:16px;padding:15px 18px;transition:.2s ease;box-shadow:0 8px 20px rgba(30,41,59,.05)}
+  .pager a:hover{transform:translateY(-3px);border-color:#cfd8ea}
+  .pager a.next{text-align:right;align-items:flex-end}
+  .pager a.disabled{opacity:.4;pointer-events:none}
+  .pager small{font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:.1em;color:#94a3b8}
+  .pager b{font-size:15px;letter-spacing:-.02em}
+  .pager b .gradient-text{font-weight:900}
+
+  .no-results{display:none;text-align:center;padding:30px;color:#94a3b8;font-weight:700;font-size:13px}
+
+  @media(max-width:1080px){
+    .shell{grid-template-columns:1fr}
+    .menu-toggle{display:inline-flex}
+    .sidebar{position:fixed;top:70px;left:0;width:min(340px,86vw);background:var(--bg);z-index:58;transform:translateX(-104%);transition:transform .26s ease;box-shadow:var(--shadow);height:calc(100vh - 70px)}
+    .sidebar.open{transform:none}
+    .content{padding:30px 22px 90px}
+    .cards{grid-template-columns:1fr}
+    .scrim{position:fixed;inset:70px 0 0;background:rgba(15,23,42,.4);z-index:57;opacity:0;pointer-events:none;transition:.26s}
+    .scrim.show{opacity:1;pointer-events:auto}
+  }
+  @media(max-width:560px){
+    .nav .nav-label{display:none}
+    .pager{flex-direction:column}
+  }
+</style>
+</head>
+<body>
+
+<header class="nav">
+  <div style="display:flex;align-items:center;gap:12px">
+    <button class="menu-toggle" id="menuToggle" aria-label="Abrir menu">☰</button>
+    <a href="index.html" class="brand"><span class="brand-mark">☎</span><span class="nav-label">Multi<span class="gradient-text">Atendente</span></span></a>
+  </div>
+  <div class="nav-actions">
+    <a href="index.html" class="btn btn-ghost">← Voltar ao site</a>
+    <a class="btn btn-primary" id="topCta">Falar no WhatsApp</a>
+  </div>
+</header>
+<div class="progress-track"><div class="progress-fill" id="progressFill"></div></div>
+
+<div class="scrim" id="scrim"></div>
+
+<div class="shell">
+  <!-- ============ SIDEBAR ============ -->
+  <aside class="sidebar" id="sidebar">
+    <div class="search-box">
+      <span>🔍</span>
+      <input type="text" id="tocSearch" placeholder="Buscar no tutorial..." />
+    </div>
+
+    <nav id="toc">
+      <div class="nav-group">
+        <div class="nav-group-title">🚀 Primeiros passos</div>
+        <ul class="toc">
+          <li><a data-ch="inicio"><span class="ch-ico">👋</span> Bem-vindo</a></li>
+          <li><a data-ch="perfis"><span class="ch-ico">🎭</span> Os 3 perfis de acesso</a></li>
+          <li><a data-ch="login"><span class="ch-ico">🔑</span> Entrar no sistema</a></li>
+          <li><a data-ch="painel"><span class="ch-ico">🧭</span> Conhecer o painel</a></li>
+        </ul>
+      </div>
+
+      <div class="nav-group">
+        <div class="nav-group-title">⚙️ Configuração inicial</div>
+        <ul class="toc">
+          <li><a data-ch="conectar"><span class="ch-ico">📱</span> Conectar o WhatsApp (QR)</a></li>
+          <li><a data-ch="linhas"><span class="ch-ico">🔌</span> Linhas WhatsApp</a></li>
+          <li><a data-ch="atendentes"><span class="ch-ico">👥</span> Criar atendentes</a></li>
+          <li><a data-ch="departamentos"><span class="ch-ico">🏢</span> Departamentos</a></li>
+          <li><a data-ch="etiquetas"><span class="ch-ico">🏷️</span> Etiquetas</a></li>
+        </ul>
+      </div>
+
+      <div class="nav-group">
+        <div class="nav-group-title">💬 Atendimento do dia a dia</div>
+        <ul class="toc">
+          <li><a data-ch="conversas"><span class="ch-ico">📨</span> Receber e responder</a></li>
+          <li><a data-ch="ferramentas"><span class="ch-ico">🧰</span> Ferramentas da lista</a></li>
+          <li><a data-ch="atalhos"><span class="ch-ico">⚡</span> Respostas rápidas</a></li>
+          <li><a data-ch="transferir"><span class="ch-ico">🔄</span> Transferir e fechar</a></li>
+          <li><a data-ch="organizar"><span class="ch-ico">📌</span> Prioridade, notas e snooze</a></li>
+          <li><a data-ch="midia"><span class="ch-ico">🎤</span> Anexos e áudios</a></li>
+          <li><a data-ch="exportar"><span class="ch-ico">📥</span> Exportar conversas</a></li>
+          <li><a data-ch="contactos"><span class="ch-ico">📇</span> Contactos e histórico</a></li>
+          <li><a data-ch="chatinterno"><span class="ch-ico">🗨️</span> Chat interno</a></li>
+          <li><a data-ch="agendamentos"><span class="ch-ico">⏱️</span> Agendar mensagens</a></li>
+          <li><a data-ch="estado"><span class="ch-ico">🟢</span> Estado e turno</a></li>
+        </ul>
+      </div>
+
+      <div class="nav-group">
+        <div class="nav-group-title">🤖 Automação</div>
+        <ul class="toc">
+          <li><a data-ch="bot"><span class="ch-ico">🌙</span> Bot fora de horário</a></li>
+          <li><a data-ch="faqbot"><span class="ch-ico">❓</span> FAQ Bot</a></li>
+          <li><a data-ch="keywords"><span class="ch-ico">🎯</span> Regras por palavra-chave</a></li>
+          <li><a data-ch="assinatura"><span class="ch-ico">✍️</span> Assinatura e avaliação</a></li>
+          <li><a data-ch="blacklist"><span class="ch-ico">🚫</span> Blacklist</a></li>
+        </ul>
+      </div>
+
+      <div class="nav-group">
+        <div class="nav-group-title">📊 Gestão e ferramentas</div>
+        <ul class="toc">
+          <li><a data-ch="massa"><span class="ch-ico">📣</span> Envio em massa</a></li>
+          <li><a data-ch="relatorios"><span class="ch-ico">📈</span> Relatórios e SLA</a></li>
+          <li><a data-ch="supervisor"><span class="ch-ico">🛡️</span> Painel do supervisor</a></li>
+          <li><a data-ch="sistema"><span class="ch-ico">❤️</span> Auditoria, métricas e saúde</a></li>
+          <li><a data-ch="perfil"><span class="ch-ico">🔔</span> Perfil e notificações</a></li>
+        </ul>
+      </div>
+    </nav>
+    <div class="no-results" id="noResults">Nenhum capítulo encontrado.</div>
+  </aside>
+
+  <!-- ============ CONTENT ============ -->
+  <main class="content" id="content">
+
+    <!-- ===== BEM-VINDO ===== -->
+    <article class="chapter" data-ch="inicio">
+      <div class="crumb">Tutorial <span>›</span> <b>Bem-vindo</b></div>
+      <h1 class="ch-title">Bem-vindo ao <span class="gradient-text">Multi-Atendente</span> 👋</h1>
+      <p class="lead">Este guia ensina, passo a passo, a transformar o WhatsApp da sua empresa numa central de atendimento profissional — do primeiro login até relatórios e automações. Escolha um capítulo na barra lateral ou siga a ordem sugerida abaixo.</p>
+
+      <div class="callout tip"><span class="ic">💡</span><div>Se você está configurando o sistema pela primeira vez, siga os capítulos <b>em ordem</b>. Cada um termina com um botão <b>“Próximo”</b> que leva ao passo seguinte.</div></div>
+
+      <h2>O caminho recomendado</h2>
+      <div class="cards">
+        <a class="nav-card" data-goto="conectar"><div class="nc-ico">📱</div><h3>1. Conectar o WhatsApp</h3><p>Escaneie o QR Code uma vez e o número da empresa fica online no painel.</p></a>
+        <a class="nav-card" data-goto="atendentes"><div class="nc-ico">👥</div><h3>2. Montar a equipe</h3><p>Crie logins para cada atendente e organize departamentos.</p></a>
+        <a class="nav-card" data-goto="conversas"><div class="nc-ico">💬</div><h3>3. Atender clientes</h3><p>Responda, transfira, use respostas rápidas e mantenha tudo organizado.</p></a>
+        <a class="nav-card" data-goto="bot"><div class="nc-ico">🤖</div><h3>4. Automatizar</h3><p>Bot fora de horário, FAQ, roteamento por palavra-chave e avaliações.</p></a>
+        <a class="nav-card" data-goto="relatorios"><div class="nc-ico">📈</div><h3>5. Acompanhar</h3><p>Relatórios, SLA, produtividade da equipe e saúde do sistema.</p></a>
+        <a class="nav-card" data-goto="perfis"><div class="nc-ico">🎭</div><h3>Antes de tudo</h3><p>Entenda os 3 perfis de acesso: Proprietário, Supervisor e Atendente.</p></a>
+      </div>
+
+      <div class="callout info"><span class="ic">📌</span><div>Ao longo do guia você verá etiquetas como <span class="role owner">👑 Proprietário</span> <span class="role sup">🛡️ Supervisor</span> <span class="role att">💬 Atendente</span> indicando <b>quem</b> tem acesso a cada tela.</div></div>
+
+      <div class="pager"><a class="disabled"></a><a class="next" data-goto="perfis"><small>Próximo</small><b>Os 3 perfis de acesso <span class="gradient-text">→</span></b></a></div>
+    </article>
+
+    <!-- ===== PERFIS ===== -->
+    <article class="chapter" data-ch="perfis">
+      <div class="crumb">Primeiros passos <span>›</span> <b>Os 3 perfis</b></div>
+      <h1 class="ch-title">Os 3 perfis de acesso</h1>
+      <p class="lead">O sistema separa o que cada pessoa pode ver e fazer através de <b>funções</b>. Entender isso evita confusão sobre “por que não vejo determinada tela”.</p>
+
+      <table class="t">
+        <tr><th>Perfil</th><th>O que faz</th><th>Vê configurações?</th></tr>
+        <tr><td><span class="role owner">👑 Proprietário</span></td><td>Acesso total: equipe, departamentos, automações, relatórios, conexão do WhatsApp e todas as conversas.</td><td>Sim, tudo</td></tr>
+        <tr><td><span class="role sup">🛡️ Supervisor</span></td><td>Monitora a operação em tempo real e vê relatórios. Atende conversas dos seus departamentos.</td><td>Não — só monitoramento</td></tr>
+        <tr><td><span class="role att">💬 Atendente</span></td><td>Atende as conversas atribuídas a ele, usa respostas rápidas pessoais, agenda mensagens e usa o chat interno.</td><td>Não</td></tr>
+      </table>
+
+      <div class="callout info"><span class="ic">🔁</span><div>Após o login, cada perfil é levado automaticamente para a tela certa: o <b>Proprietário</b> abre o Painel Administrativo, o <b>Supervisor</b> abre o Monitor e o <b>Atendente</b> abre a sua caixa de conversas.</div></div>
+
+      <h2>Como mudar a função de alguém</h2>
+      <p>O Proprietário define a função ao editar um usuário (capítulo <a data-goto="atendentes" style="color:var(--primary);font-weight:800">Criar atendentes</a>), escolhendo entre <span class="uimenu">👤 Atendente</span>, <span class="uimenu">🛡️ Supervisor</span> ou <span class="uimenu">👑 Owner</span>.</p>
+
+      <div class="pager"><a data-goto="inicio"><small>Anterior</small><b><span class="gradient-text">←</span> Bem-vindo</b></a><a class="next" data-goto="login"><small>Próximo</small><b>Entrar no sistema <span class="gradient-text">→</span></b></a></div>
+    </article>
+
+    <!-- ===== LOGIN ===== -->
+    <article class="chapter" data-ch="login">
+      <div class="crumb">Primeiros passos <span>›</span> <b>Entrar no sistema</b></div>
+      <div class="roles"><span class="role all">Todos os perfis</span></div>
+      <h1 class="ch-title">Entrar no sistema</h1>
+      <p class="lead">O painel é acessado pelo navegador, no computador ou no celular. Você recebe um endereço do tipo <code>https://atendimento.suaempresa.com</code>.</p>
+
+      <ol class="steps">
+        <li><h4>Abra o endereço do painel</h4><p>Digite o link no navegador. Recomendamos salvar nos favoritos para acesso rápido.</p></li>
+        <li><h4>Informe seu e-mail e senha</h4><p>Preencha os campos <code>email@empresa.com</code> e a senha que você recebeu, depois clique em <span class="uibtn">Entrar</span>.</p></li>
+        <li><h4>Pronto!</h4><p>O sistema reconhece sua função e abre a tela correspondente automaticamente.</p></li>
+      </ol>
+
+      <div class="mock">
+        <div class="mock-top"><span class="mock-dot r"></span><span class="mock-dot y"></span><span class="mock-dot g"></span><span class="mock-title">Entrar na tua conta</span></div>
+        <div class="mock-body">
+          <p style="margin:0 0 6px;font-size:12px;font-weight:800;color:#64748b">E-mail</p>
+          <div style="border:1px solid var(--line);border-radius:10px;padding:11px;color:#94a3b8;font-size:14px;margin-bottom:12px">email@empresa.com</div>
+          <p style="margin:0 0 6px;font-size:12px;font-weight:800;color:#64748b">Senha</p>
+          <div style="border:1px solid var(--line);border-radius:10px;padding:11px;color:#94a3b8;font-size:14px;margin-bottom:16px">••••••••</div>
+          <div class="uibtn" style="justify-content:center;width:100%;padding:11px">Entrar</div>
+        </div>
+      </div>
+
+      <div class="callout warn"><span class="ic">⏰</span><div>Por segurança, a sessão expira após <b>12 horas</b>. Quando isso acontecer, basta entrar novamente.</div></div>
+      <div class="callout tip"><span class="ic">🔐</span><div>Esqueceu a senha? O Proprietário pode redefini-la em <b>Atendentes → Editar → Nova senha</b>. Você mesmo pode trocar a sua em <a data-goto="perfil" style="color:#065f46;font-weight:800">Perfil / Senha</a>.</div></div>
+
+      <div class="pager"><a data-goto="perfis"><small>Anterior</small><b><span class="gradient-text">←</span> Os 3 perfis</b></a><a class="next" data-goto="painel"><small>Próximo</small><b>Conhecer o painel <span class="gradient-text">→</span></b></a></div>
+    </article>
+
+    <!-- ===== PAINEL ===== -->
+    <article class="chapter" data-ch="painel">
+      <div class="crumb">Primeiros passos <span>›</span> <b>Conhecer o painel</b></div>
+      <div class="roles"><span class="role owner">👑 Proprietário</span></div>
+      <h1 class="ch-title">Conhecer o painel</h1>
+      <p class="lead">O Painel Administrativo tem um <b>menu lateral</b> com todas as áreas do sistema. Não se assuste com a quantidade — você vai usar cada uma no momento certo, e este guia segue exatamente essa ordem.</p>
+
+      <h2>Áreas do menu</h2>
+      <ul class="bullets">
+        <li><b>📊 Dashboard</b> — visão geral de conversas e da equipe em tempo real.</li>
+        <li><b>Conversas</b> — a caixa de entrada com todas as conversas.</li>
+        <li><b>Atendentes · 🏢 Departamentos · 📱 Linhas WhatsApp</b> — montagem da operação.</li>
+        <li><b>Contactos · Etiquetas · Respostas Rápidas</b> — organização do atendimento.</li>
+        <li><b>🤖 Automação · Bot · ❓ FAQ Bot · 🔔 Assinatura · ⭐ Avaliação</b> — automações.</li>
+        <li><b>Relatórios · Agendamentos · Transferências · 📣 Envio em Massa</b> — gestão.</li>
+        <li><b>🚫 Blacklist · 📋 Auditoria · 📊 Métricas · ❤️ Saúde</b> — controle e segurança.</li>
+        <li><b>👥 Chat Interno</b> — conversa entre a equipe, sem sair do painel.</li>
+      </ul>
+
+      <h2>Canto superior direito</h2>
+      <p>Em qualquer tela você encontra: alternância de tema <span class="uimenu">☀️ Modo claro</span> / <span class="uimenu">🌙 Modo escuro</span>, o botão <span class="uimenu">👤 Perfil / Senha</span>, o sino de notificações e o botão <span class="uimenu">Sair</span>.</p>
+
+      <div class="callout tip"><span class="ic">🔢</span><div>Os contadores vermelhos ao lado de <b>Conversas</b> e <b>Chat Interno</b> mostram itens <b>não lidos</b> — fique de olho neles.</div></div>
+
+      <div class="pager"><a data-goto="login"><small>Anterior</small><b><span class="gradient-text">←</span> Entrar no sistema</b></a><a class="next" data-goto="conectar"><small>Próximo</small><b>Conectar o WhatsApp <span class="gradient-text">→</span></b></a></div>
+    </article>
+
+    <!-- ===== CONECTAR ===== -->
+    <article class="chapter" data-ch="conectar">
+      <div class="crumb">Configuração <span>›</span> <b>Conectar o WhatsApp</b></div>
+      <div class="roles"><span class="role owner">👑 Proprietário</span></div>
+      <h1 class="ch-title">Conectar o WhatsApp (QR Code)</h1>
+      <p class="lead">Este é o passo que coloca o sistema “no ar”. A conexão funciona como o WhatsApp Web: você escaneia um QR Code <b>uma vez</b> com o celular do número da empresa.</p>
+
+      <div class="callout warn"><span class="ic">📵</span><div>Mantenha o celular do número <b>com internet</b>. Ele não precisa ficar com a tela ligada o tempo todo, mas precisa estar conectado à rede para o WhatsApp funcionar.</div></div>
+
+      <ol class="steps">
+        <li><h4>Abra a área de conexão</h4><p>No menu lateral, clique em <span class="uimenu">WhatsApp</span>. O sistema mostra o status atual e, se ainda não estiver conectado, exibe o QR Code.</p></li>
+        <li><h4>No celular, abra os aparelhos conectados</h4><p>No WhatsApp do número da empresa, vá em <span class="path">Definições <span class="sep">›</span> Aparelhos conectados <span class="sep">›</span> Conectar aparelho</span>.</p></li>
+        <li><h4>Aponte a câmera para o QR Code</h4><p>Escaneie o código que aparece na tela do painel. Em poucos segundos o status muda para <b>🟢 Conectado</b>.</p></li>
+        <li><h4>Confirme com uma mensagem de teste</h4><p>Peça para alguém enviar uma mensagem ao número — ela deve aparecer em <b>Conversas</b> quase imediatamente.</p></li>
+      </ol>
+
+      <div class="callout tip"><span class="ic">🔁</span><div>Se o QR Code expirar antes de você escanear, ele se renova sozinho. Basta aguardar o novo código aparecer.</div></div>
+      <div class="callout danger"><span class="ic">⚠️</span><div>O botão <span class="uimenu">Desligar</span> desconecta o número. Use apenas se for trocar de aparelho — você precisará escanear o QR novamente para voltar a atender.</div></div>
+
+      <div class="pager"><a data-goto="painel"><small>Anterior</small><b><span class="gradient-text">←</span> Conhecer o painel</b></a><a class="next" data-goto="linhas"><small>Próximo</small><b>Linhas WhatsApp <span class="gradient-text">→</span></b></a></div>
+    </article>
+
+    <!-- ===== LINHAS ===== -->
+    <article class="chapter" data-ch="linhas">
+      <div class="crumb">Configuração <span>›</span> <b>Linhas WhatsApp</b></div>
+      <div class="roles"><span class="role owner">👑 Proprietário</span></div>
+      <h1 class="ch-title">Linhas WhatsApp</h1>
+      <p class="lead">Uma <b>linha</b> é um número de WhatsApp conectado ao sistema. A maioria das empresas usa uma só, mas você pode adicionar várias (ex.: Vendas e Suporte com números diferentes) e rotear cada uma para um departamento.</p>
+
+      <ol class="steps">
+        <li><h4>Abra <span class="uimenu">📱 Linhas WhatsApp</span></h4><p>Você verá um cartão para cada linha com o status: <b>🟢 Conectada</b>, <b>🟠 QR pendente</b> ou <b>⚫ Desligada</b>.</p></li>
+        <li><h4>Crie uma nova linha</h4><p>Clique em <span class="uibtn">+ Nova linha</span>, dê um <b>Nome</b> (ex.: “Vendas”), escolha uma <b>cor</b> e, se quiser, defina um <b>Departamento</b> de roteamento automático.</p></li>
+        <li><h4>Escaneie o QR da linha</h4><p>Clique em <span class="uimenu">📱 QR</span> no cartão e escaneie com um número <b>diferente</b> dos das outras linhas.</p></li>
+        <li><h4>Defina a linha padrão</h4><p>Ao editar, marque <b>Linha padrão</b> — ela será usada em disparos e envios em massa quando nenhuma outra for escolhida.</p></li>
+      </ol>
+
+      <div class="callout info"><span class="ic">🧭</span><div>Se uma linha tiver um <b>departamento fixo</b>, <b>todas</b> as conversas dela vão direto para esse setor, ignorando as regras de palavra-chave.</div></div>
+      <div class="callout warn"><span class="ic">🗄️</span><div>Para <b>arquivar</b> uma linha que ainda tem conversas abertas, o sistema pede para escolher outra linha que receberá essas conversas. Não dá para arquivar a linha padrão sem antes eleger outra.</div></div>
+
+      <div class="pager"><a data-goto="conectar"><small>Anterior</small><b><span class="gradient-text">←</span> Conectar o WhatsApp</b></a><a class="next" data-goto="atendentes"><small>Próximo</small><b>Criar atendentes <span class="gradient-text">→</span></b></a></div>
+    </article>
+
+    <!-- ===== ATENDENTES ===== -->
+    <article class="chapter" data-ch="atendentes">
+      <div class="crumb">Configuração <span>›</span> <b>Criar atendentes</b></div>
+      <div class="roles"><span class="role owner">👑 Proprietário</span></div>
+      <h1 class="ch-title">Criar atendentes</h1>
+      <p class="lead">Cada pessoa da equipe tem o seu próprio login. Assim você sabe quem respondeu cada cliente e pode medir a produtividade individual.</p>
+
+      <ol class="steps">
+        <li><h4>Abra <span class="uimenu">Atendentes</span></h4><p>No menu lateral. Aparece uma lista de quem já existe e um formulário para adicionar.</p></li>
+        <li><h4>Preencha os dados</h4><p>Informe <b>Nome</b>, <b>Email</b> e uma <b>Password</b> (mínimo 6 caracteres) e clique em <span class="uibtn">Adicionar</span>.</p></li>
+        <li><h4>Defina a função (se necessário)</h4><p>Clique em <span class="uimenu">Editar</span> e escolha em <b>Função</b>: <span class="uimenu">👤 Atendente</span>, <span class="uimenu">🛡️ Supervisor</span> ou <span class="uimenu">👑 Owner</span>.</p></li>
+        <li><h4>Associe a departamentos</h4><p>Faça isso pelos <a data-goto="departamentos" style="color:var(--primary);font-weight:800">Departamentos</a> (botão <span class="uimenu">Membros</span>) — assim o atendente recebe as conversas do setor certo.</p></li>
+      </ol>
+
+      <div class="callout info"><span class="ic">📊</span><div>Na lista de atendentes você acompanha o <b>Estado</b> de cada um (online, ocupado, ausente, offline) e pode <span class="uimenu">Desativar</span> quem saiu da equipe — sem perder o histórico das conversas dele.</div></div>
+      <div class="callout tip"><span class="ic">🔑</span><div>Para trocar a senha de um atendente, edite-o e preencha <b>Nova senha</b>. Deixe em branco para manter a atual.</div></div>
+
+      <div class="pager"><a data-goto="linhas"><small>Anterior</small><b><span class="gradient-text">←</span> Linhas WhatsApp</b></a><a class="next" data-goto="departamentos"><small>Próximo</small><b>Departamentos <span class="gradient-text">→</span></b></a></div>
+    </article>
+
+    <!-- ===== DEPARTAMENTOS ===== -->
+    <article class="chapter" data-ch="departamentos">
+      <div class="crumb">Configuração <span>›</span> <b>Departamentos</b></div>
+      <div class="roles"><span class="role owner">👑 Proprietário</span></div>
+      <h1 class="ch-title">Departamentos</h1>
+      <p class="lead">Departamentos (ou setores) organizam as conversas por área — Vendas, Suporte, Financeiro — e direcionam cada cliente para a equipe certa.</p>
+
+      <ol class="steps">
+        <li><h4>Abra <span class="uimenu">🏢 Departamentos</span> e clique em <span class="uibtn">+ Novo departamento</span></h4><p>Dê um <b>Nome</b>, escolha uma <b>cor</b> para identificá-lo visualmente nas conversas.</p></li>
+        <li><h4>Marque o departamento padrão (opcional)</h4><p>Ative <b>Marcar como padrão</b> num deles. Ele recebe as conversas que não casam com nenhuma regra de palavra-chave. Só pode haver um padrão.</p></li>
+        <li><h4>Defina o SLA (opcional)</h4><p>No campo <b>SLA (minutos)</b>, informe o tempo limite para responder antes de disparar um alerta. Em branco = usa o valor global.</p></li>
+        <li><h4>Adicione membros</h4><p>No cartão do departamento, clique em <span class="uimenu">Membros</span> e marque os atendentes que farão parte dele.</p></li>
+      </ol>
+
+      <div class="callout info"><span class="ic">🔀</span><div>Quer arquivar um departamento com conversas abertas? O sistema pede para escolher outro setor que vai recebê-las, para nada ficar órfão.</div></div>
+
+      <div class="pager"><a data-goto="atendentes"><small>Anterior</small><b><span class="gradient-text">←</span> Criar atendentes</b></a><a class="next" data-goto="etiquetas"><small>Próximo</small><b>Etiquetas <span class="gradient-text">→</span></b></a></div>
+    </article>
+
+    <!-- ===== ETIQUETAS ===== -->
+    <article class="chapter" data-ch="etiquetas">
+      <div class="crumb">Configuração <span>›</span> <b>Etiquetas</b></div>
+      <div class="roles"><span class="role owner">👑 Proprietário</span></div>
+      <h1 class="ch-title">Etiquetas</h1>
+      <p class="lead">Etiquetas são marcadores coloridos que você cola nas conversas para classificá-las — “Orçamento”, “Resolvido”, “Cliente VIP”, “Urgente”. Elas facilitam filtrar e encontrar conversas depois.</p>
+
+      <ol class="steps">
+        <li><h4>Abra <span class="uimenu">Etiquetas</span></h4><p>No menu lateral.</p></li>
+        <li><h4>Crie uma etiqueta</h4><p>Digite o <b>Nome da etiqueta</b>, escolha uma <b>cor</b> e clique em <span class="uibtn">Adicionar</span>.</p></li>
+        <li><h4>Escolha o alcance</h4><p>No campo <b>Departamento</b>, deixe <b>🌐 Global</b> (aparece em todas as conversas) ou escolha um departamento (aparece só nas conversas dele).</p></li>
+      </ol>
+
+      <div class="callout tip"><span class="ic">🏷️</span><div>As etiquetas globais aparecem em todos os departamentos; as de departamento aparecem apenas nas conversas daquele setor — útil para não poluir a tela de equipes com marcadores que não usam.</div></div>
+      <p>Como aplicar etiquetas numa conversa você aprende no capítulo <a data-goto="organizar" style="color:var(--primary);font-weight:800">Prioridade, notas e snooze</a>.</p>
+
+      <div class="pager"><a data-goto="departamentos"><small>Anterior</small><b><span class="gradient-text">←</span> Departamentos</b></a><a class="next" data-goto="conversas"><small>Próximo</small><b>Receber e responder <span class="gradient-text">→</span></b></a></div>
+    </article>
+
+    <!-- ===== CONVERSAS ===== -->
+    <article class="chapter" data-ch="conversas">
+      <div class="crumb">Atendimento <span>›</span> <b>Receber e responder</b></div>
+      <div class="roles"><span class="role att">💬 Atendente</span><span class="role owner">👑 Proprietário</span></div>
+      <h1 class="ch-title">Receber e responder conversas</h1>
+      <p class="lead">Esta é a tela do dia a dia. À esquerda, a lista de conversas; à direita, a conversa aberta. Mensagens novas chegam em tempo real, sem precisar atualizar a página.</p>
+
+      <div class="mock">
+        <div class="mock-top"><span class="mock-dot r"></span><span class="mock-dot y"></span><span class="mock-dot g"></span><span class="mock-title">Conversas · Maria — Vendas</span></div>
+        <div class="mock-body">
+          <div class="bubble in">Olá! Vocês têm esse produto em estoque?</div>
+          <div class="bubble out">Olá! 😊 Sim, temos pronta entrega. Quer que eu envie o orçamento?</div>
+          <div class="bubble in">Pode enviar, por favor.</div>
+        </div>
+      </div>
+
+      <h2>Como funciona a distribuição</h2>
+      <ul class="bullets">
+        <li>Uma conversa nova é atribuída automaticamente ao atendente <b>online com menos conversas abertas</b>.</li>
+        <li>Se ninguém estiver online, ela fica em <b>Aguarda</b> (espera) até alguém assumir.</li>
+        <li>O <b>Atendente</b> vê apenas as conversas atribuídas a ele; o <b>Proprietário</b> vê todas.</li>
+      </ul>
+
+      <h2>Responder</h2>
+      <ol class="steps">
+        <li><h4>Selecione a conversa</h4><p>Clique nela na lista à esquerda. Use os filtros <span class="uimenu">open</span> / <span class="uimenu">closed</span> / <span class="uimenu">waiting</span> e a busca no topo para encontrar.</p></li>
+        <li><h4>Escreva e envie</h4><p>Digite na caixa de baixo e pressione <span class="uikey">Enter</span>. Para quebrar linha sem enviar, use <span class="uikey">Shift</span>+<span class="uikey">Enter</span>.</p></li>
+        <li><h4>Use os recursos da mensagem</h4><p>Passe o mouse sobre uma mensagem para <b>Responder</b>, <b>Editar</b>, <b>Apagar</b> ou <b>reagir</b> com emoji.</p></li>
+      </ol>
+
+      <div class="callout tip"><span class="ic">⌨️</span><div>Atalho útil: <span class="uikey">Ctrl</span>+<span class="uikey">J</span> pula direto para a próxima conversa <b>não lida</b> — ótimo para zerar a fila rápido.</div></div>
+      <div class="callout info"><span class="ic">✓✓</span><div>Os indicadores mostram o estado de cada mensagem: enviada (✓), entregue (✓✓) e lida (✓✓ azul). Você também vê quando o cliente está “a escrever…”.</div></div>
+
+      <div class="pager"><a data-goto="etiquetas"><small>Anterior</small><b><span class="gradient-text">←</span> Etiquetas</b></a><a class="next" data-goto="ferramentas"><small>Próximo</small><b>Ferramentas da lista <span class="gradient-text">→</span></b></a></div>
+    </article>
+
+    <!-- ===== FERRAMENTAS DA LISTA ===== -->
+    <article class="chapter" data-ch="ferramentas">
+      <div class="crumb">Atendimento <span>›</span> <b>Ferramentas da lista</b></div>
+      <div class="roles"><span class="role att">💬 Atendente</span><span class="role owner">👑 Proprietário</span></div>
+      <h1 class="ch-title">Ferramentas da lista de conversas</h1>
+      <p class="lead">Além de abrir e responder, a lista de conversas tem recursos que aceleram muito o dia a dia: iniciar uma conversa nova, filtrar com precisão e agir sobre várias conversas de uma só vez.</p>
+
+      <h2>✏️ Iniciar uma conversa nova</h2>
+      <p>Para falar com alguém que ainda não te escreveu (um lead, um cliente para follow-up), use o botão <span class="uimenu">✏️ Nova conversa</span> no topo da lista.</p>
+      <ol class="steps">
+        <li><h4>Escolha o contato ou digite o número</h4><p>Comece a escrever em <b>“Pesquisar contacto ou digitar número…”</b> — o sistema sugere contatos existentes. Ou digite o número direto, com código do país (ex.: <code>5585999990000</code>).</p></li>
+        <li><h4>Selecione a linha (se houver mais de uma)</h4><p>No campo <b>Linha (qual número usa)</b>, escolha por qual número WhatsApp a mensagem vai sair.</p></li>
+        <li><h4>Escreva a primeira mensagem e envie</h4><p>Preencha a mensagem e clique em <span class="uibtn">▶ Enviar</span>. Quer apenas guardar o contato sem mandar nada? Use <span class="uimenu">💾 Só guardar</span>.</p></li>
+      </ol>
+      <div class="callout info"><span class="ic">⚠️</span><div>Se já existir uma conversa aberta com aquele número, o sistema avisa (“Conversa já existe”) e oferece <b>Assumir e enviar</b> — evitando duas conversas duplicadas.</div></div>
+
+      <h2>🔎 Filtros avançados</h2>
+      <p>Clique no botão de <span class="uimenu">Filtros avançados</span> para combinar critérios e encontrar exatamente o que precisa:</p>
+      <ul class="bullets">
+        <li><b>Status</b> — abertas, fechadas ou em espera.</li>
+        <li><b>Prioridade</b> — 🔴 Urgente, 🟡 Normal, 🔵 Baixa.</li>
+        <li><b>Atendente</b> — conversas de uma pessoa específica.</li>
+        <li><b>Etiqueta</b>, <b>Departamento</b> e <b>Linha</b> — para recortar por contexto.</li>
+      </ul>
+      <p>A busca no topo (<i>“Pesquisar conversas e mensagens…”</i>) procura inclusive dentro do texto das mensagens.</p>
+
+      <h2>☑️ Seleção em massa</h2>
+      <p>Clique no botão <span class="uimenu">☑️</span> (“Selecionar várias”) para entrar no modo de seleção. Marque as conversas desejadas — ou use <span class="uimenu">Selecionar todas</span> — e aplique uma ação a todas de uma vez:</p>
+      <table class="t">
+        <tr><th>Ação em massa</th><th>O que faz</th></tr>
+        <tr><td>🔄 Transferir</td><td>Move as conversas selecionadas para um atendente.</td></tr>
+        <tr><td>🏷️ Aplicar etiqueta</td><td>Cola a mesma etiqueta em todas.</td></tr>
+        <tr><td>🏢 Mudar departamento</td><td>Reencaminha o lote para outro setor.</td></tr>
+        <tr><td>🗑️ Apagar</td><td>Remove as conversas selecionadas.</td></tr>
+      </table>
+      <div class="callout tip"><span class="ic">🚪</span><div>O contador <b>“X selecionada(s)”</b> mostra quantas estão marcadas. Para sair do modo, clique no <span class="uimenu">✕</span>.</div></div>
+      <div class="callout warn"><span class="ic">🔐</span><div>Ações em massa como <b>transferir</b> e <b>apagar</b> são típicas de quem coordena a operação (Proprietário). Apagar é irreversível — confirme a seleção antes.</div></div>
+
+      <div class="pager"><a data-goto="conversas"><small>Anterior</small><b><span class="gradient-text">←</span> Receber e responder</b></a><a class="next" data-goto="atalhos"><small>Próximo</small><b>Respostas rápidas <span class="gradient-text">→</span></b></a></div>
+    </article>
+
+    <!-- ===== ATALHOS ===== -->
+    <article class="chapter" data-ch="atalhos">
+      <div class="crumb">Atendimento <span>›</span> <b>Respostas rápidas</b></div>
+      <div class="roles"><span class="role att">💬 Atendente</span><span class="role owner">👑 Proprietário</span></div>
+      <h1 class="ch-title">Respostas rápidas</h1>
+      <p class="lead">Respostas rápidas são textos prontos acionados por um atalho (ex.: <code>/ola</code>). Elas eliminam a digitação repetitiva e padronizam o atendimento.</p>
+
+      <h2>Usar durante a conversa</h2>
+      <ol class="steps">
+        <li><h4>Digite a barra e o atalho</h4><p>Na caixa de mensagem, escreva <code>/</code> seguido do atalho. Uma lista de sugestões aparece.</p></li>
+        <li><h4>Escolha com o teclado</h4><p>Use as setas ↑ ↓ e <span class="uikey">Enter</span> para inserir o texto completo na hora.</p></li>
+      </ol>
+
+      <h2>Criar respostas rápidas</h2>
+      <p>O <b>Proprietário</b> cria respostas <b>globais</b> (toda a equipe usa) em <span class="uimenu">Respostas Rápidas</span>. Cada <b>Atendente</b> cria as suas <b>pessoais</b> em <span class="uimenu">⚡ Os meus atalhos</span>.</p>
+      <ol class="steps">
+        <li><h4>Defina o atalho e o texto</h4><p>Preencha <b>Atalho</b> (ex.: <code>/orcamento</code>), o <b>Texto da resposta</b> e, se quiser, uma <b>Categoria</b>. Clique em <span class="uibtn">Adicionar</span>.</p></li>
+        <li><h4>Marque “Pessoal” se for só sua</h4><p>Marcado = só você usa. Desmarcado (apenas o Proprietário) = global para a equipe.</p></li>
+      </ol>
+
+      <h2>Variáveis automáticas</h2>
+      <p>Inclua estas variáveis no texto — elas são trocadas pelos valores reais na hora do envio:</p>
+      <table class="t">
+        <tr><th>Variável</th><th>Vira…</th></tr>
+        <tr><td><code>{{primeiro_nome}}</code></td><td>Primeiro nome do contato</td></tr>
+        <tr><td><code>{{nome}}</code></td><td>Nome completo do contato</td></tr>
+        <tr><td><code>{{saudacao}}</code></td><td>Bom dia / Boa tarde / Boa noite</td></tr>
+        <tr><td><code>{{atendente}}</code></td><td>Nome do atendente</td></tr>
+        <tr><td><code>{{empresa}}</code></td><td>Nome da sua empresa</td></tr>
+      </table>
+      <div class="callout tip"><span class="ic">✨</span><div>Exemplo: <code>{{saudacao}}, {{primeiro_nome}}! Aqui é a {{empresa}}.</code> pode virar <i>“Boa tarde, Ana! Aqui é a Loja Modelo.”</i></div></div>
+
+      <div class="pager"><a data-goto="ferramentas"><small>Anterior</small><b><span class="gradient-text">←</span> Ferramentas da lista</b></a><a class="next" data-goto="transferir"><small>Próximo</small><b>Transferir e fechar <span class="gradient-text">→</span></b></a></div>
+    </article>
+
+    <!-- ===== TRANSFERIR ===== -->
+    <article class="chapter" data-ch="transferir">
+      <div class="crumb">Atendimento <span>›</span> <b>Transferir e fechar</b></div>
+      <div class="roles"><span class="role att">💬 Atendente</span><span class="role owner">👑 Proprietário</span></div>
+      <h1 class="ch-title">Transferir, fechar e reabrir</h1>
+      <p class="lead">Conversas mudam de mãos e de estado o tempo todo. Veja como passar um atendimento adiante e como encerrá-lo corretamente.</p>
+
+      <h2>Transferir para outro atendente ou setor</h2>
+      <ol class="steps">
+        <li><h4>Abra a conversa e clique em <span class="uimenu">Transferir</span></h4><p>No topo da conversa.</p></li>
+        <li><h4>Escolha o destino</h4><p>Selecione o atendente (o status de cada um aparece ao lado) ou o departamento e confirme em <span class="uibtn">Transferir</span>.</p></li>
+      </ol>
+      <div class="callout info"><span class="ic">📜</span><div>O histórico da conversa <b>vai junto</b> na transferência — quem recebe enxerga tudo o que já foi conversado. Toda transferência fica registrada em <b>Transferências</b>.</div></div>
+
+      <h2>Fechar uma conversa</h2>
+      <p>Quando o atendimento termina, feche a conversa para tirá-la da fila ativa. Ela continua guardada no histórico e nos relatórios. Use o estado <b>Fechada</b> (ou <b>Aguardando</b>, se ainda espera retorno do cliente).</p>
+
+      <h2>Reabertura automática</h2>
+      <p>Se o cliente responder a uma conversa já fechada, o sistema pode <b>reabri-la sozinho</b> dentro de uma janela configurada pelo Proprietário em <a data-goto="keywords" style="color:var(--primary);font-weight:800">Automação</a> (ex.: até 7 dias). Se o atendente anterior estiver disponível, a conversa volta para ele; senão, vai para a fila.</p>
+
+      <div class="callout tip"><span class="ic">🧹</span><div>Manter as conversas fechadas em dia deixa a lista limpa e os relatórios de tempo de atendimento mais precisos.</div></div>
+
+      <div class="pager"><a data-goto="atalhos"><small>Anterior</small><b><span class="gradient-text">←</span> Respostas rápidas</b></a><a class="next" data-goto="organizar"><small>Próximo</small><b>Prioridade, notas e snooze <span class="gradient-text">→</span></b></a></div>
+    </article>
+
+    <!-- ===== ORGANIZAR ===== -->
+    <article class="chapter" data-ch="organizar">
+      <div class="crumb">Atendimento <span>›</span> <b>Prioridade, notas e snooze</b></div>
+      <div class="roles"><span class="role att">💬 Atendente</span><span class="role owner">👑 Proprietário</span></div>
+      <h1 class="ch-title">Prioridade, etiquetas, notas e snooze</h1>
+      <p class="lead">Pequenos recursos que mantêm a operação organizada e impedem que clientes importantes fiquem esquecidos.</p>
+
+      <h2>Aplicar etiquetas</h2>
+      <p>Na conversa aberta, clique no botão de etiquetas, marque as desejadas e salve. Elas aparecem como chips coloridos no topo e servem para filtrar conversas na lista.</p>
+
+      <h2>Definir prioridade</h2>
+      <p>Marque uma conversa como <b>🔴 Urgente</b>, <b>🟡 Normal</b> ou <b>🔵 Baixa</b>. Depois use os <b>filtros avançados</b> da lista para ver primeiro o que é urgente.</p>
+
+      <h2>Notas internas</h2>
+      <p>Escreva observações que <b>só a equipe vê</b> — o cliente nunca recebe. Use <code>@nome</code> para mencionar um colega e chamar a atenção dele. Ótimo para registrar “cliente prefere contato à tarde” ou alinhar um caso.</p>
+
+      <h2>Snooze (adiar)</h2>
+      <p>O botão <b>Snooze</b> esconde temporariamente uma conversa (ex.: “lembrar em 4h”), tirando-a da sua frente até a hora certa — sem fechá-la.</p>
+
+      <div class="callout tip"><span class="ic">🎯</span><div>Combine <b>prioridade + etiqueta</b> para criar visões poderosas: filtre por “Urgente” + “Aguardando pagamento” e foque no que importa.</div></div>
+
+      <div class="pager"><a data-goto="transferir"><small>Anterior</small><b><span class="gradient-text">←</span> Transferir e fechar</b></a><a class="next" data-goto="midia"><small>Próximo</small><b>Anexos e áudios <span class="gradient-text">→</span></b></a></div>
+    </article>
+
+    <!-- ===== MIDIA ===== -->
+    <article class="chapter" data-ch="midia">
+      <div class="crumb">Atendimento <span>›</span> <b>Anexos e áudios</b></div>
+      <div class="roles"><span class="role att">💬 Atendente</span><span class="role owner">👑 Proprietário</span></div>
+      <h1 class="ch-title">Anexos, áudios e gravação</h1>
+      <p class="lead">Você envia e recebe os mesmos tipos de conteúdo do WhatsApp normal: imagens, vídeos, documentos, áudios e contatos.</p>
+
+      <ol class="steps">
+        <li><h4>Enviar arquivo</h4><p>Clique no <b>📎</b>, escolha a imagem, vídeo ou documento, adicione uma legenda (opcional) e envie.</p></li>
+        <li><h4>Gravar áudio</h4><p>Clique no <b>🎤</b> para começar a gravar (aparece um cronômetro). Pare, ouça a prévia e envie — ou descarte.</p></li>
+        <li><h4>Emojis</h4><p>Use o seletor 😊 para inserir emojis na mensagem.</p></li>
+      </ol>
+
+      <div class="callout info"><span class="ic">🎙️</span><div><b>Transcrição de áudio:</b> dependendo do plano, os áudios recebidos são convertidos automaticamente em texto, identificados com 🎤 — você lê em vez de precisar ouvir.</div></div>
+      <div class="callout warn"><span class="ic">📦</span><div>O tamanho máximo por arquivo é de <b>32 MB</b>. Para arquivos maiores, prefira enviar um link.</div></div>
+
+      <div class="pager"><a data-goto="organizar"><small>Anterior</small><b><span class="gradient-text">←</span> Prioridade e notas</b></a><a class="next" data-goto="exportar"><small>Próximo</small><b>Exportar conversas <span class="gradient-text">→</span></b></a></div>
+    </article>
+
+    <!-- ===== EXPORTAR ===== -->
+    <article class="chapter" data-ch="exportar">
+      <div class="crumb">Atendimento <span>›</span> <b>Exportar conversas</b></div>
+      <div class="roles"><span class="role att">💬 Atendente</span><span class="role owner">👑 Proprietário</span></div>
+      <h1 class="ch-title">Exportar conversas (CSV e PDF)</h1>
+      <p class="lead">Precisa guardar uma conversa fora do sistema — para um processo, um comprovativo ou um relatório? Você pode exportar o histórico completo de qualquer atendimento em dois formatos.</p>
+
+      <ol class="steps">
+        <li><h4>Abra a conversa</h4><p>Selecione o atendimento que deseja exportar.</p></li>
+        <li><h4>Abra o menu de exportação</h4><p>No menu de opções (⋯) da conversa, clique em <span class="uimenu">📥 Exportar histórico</span>.</p></li>
+        <li><h4>Escolha o formato</h4><p>Selecione <span class="uimenu">📊 Exportar CSV</span> (planilha, ótimo para análise) ou <span class="uimenu">🖨️ Imprimir / PDF</span> (documento pronto para arquivar ou enviar).</p></li>
+      </ol>
+
+      <table class="t">
+        <tr><th>Formato</th><th>Melhor para</th></tr>
+        <tr><td>📊 CSV</td><td>Abrir no Excel/Sheets, cruzar dados, auditoria em planilha.</td></tr>
+        <tr><td>🖨️ PDF</td><td>Comprovativo formatado, com data de exportação, pronto para imprimir ou anexar.</td></tr>
+      </table>
+
+      <div class="callout warn"><span class="ic">🖨️</span><div>A opção PDF abre a janela de impressão do navegador. Se nada aparecer, verifique se o navegador está <b>bloqueando pop-ups</b> para o painel e permita-os.</div></div>
+      <div class="callout info"><span class="ic">🔒</span><div>O conteúdo exportado contém dados do cliente. Trate o arquivo com o mesmo cuidado de qualquer informação confidencial da empresa.</div></div>
+
+      <div class="pager"><a data-goto="midia"><small>Anterior</small><b><span class="gradient-text">←</span> Anexos e áudios</b></a><a class="next" data-goto="contactos"><small>Próximo</small><b>Contactos e histórico <span class="gradient-text">→</span></b></a></div>
+    </article>
+
+    <!-- ===== CONTACTOS ===== -->
+    <article class="chapter" data-ch="contactos">
+      <div class="crumb">Atendimento <span>›</span> <b>Contactos e histórico</b></div>
+      <div class="roles"><span class="role owner">👑 Proprietário</span></div>
+      <h1 class="ch-title">Contactos e histórico</h1>
+      <p class="lead">Cada número que conversa com você vira um <b>contato</b>. Você pode dar nome, e-mail, notas e consultar todo o relacionamento já tido com a pessoa.</p>
+
+      <h2>Gerir contactos</h2>
+      <ol class="steps">
+        <li><h4>Abra <span class="uimenu">Contactos</span></h4><p>Use a busca por nome, número ou nota para encontrar alguém.</p></li>
+        <li><h4>Adicione manualmente</h4><p>Clique em <span class="uibtn">➕ Novo contacto</span>, informe o <b>número</b> (obrigatório) e o nome.</p></li>
+        <li><h4>Importe em lote</h4><p>Use <span class="uibtn">📥 Importar CSV</span> com um arquivo de colunas <b>nome</b> e <b>telefone</b>. O sistema mostra uma prévia antes de confirmar.</p></li>
+        <li><h4>Edite os detalhes</h4><p>Em <span class="uimenu">Editar</span>, preencha <b>Email</b> e <b>Notas internas</b> (ex.: “Cliente VIP, prefere contato à tarde”).</p></li>
+      </ol>
+
+      <h2>Ver o histórico</h2>
+      <p>Dentro de uma conversa, abra o <b>histórico</b> do contato para ver todas as conversas anteriores com aquela pessoa — útil para retomar o atendimento com contexto.</p>
+
+      <h2>👤 Contacto 360 — o perfil completo</h2>
+      <p>Ainda dentro da conversa, o <b>Contacto 360</b> mostra, num só lugar, tudo sobre quem está do outro lado:</p>
+      <ul class="bullets">
+        <li><b>Dados</b> — nome, telefone, e-mail e notas internas.</li>
+        <li><b>Quantidade de conversas</b> já tidas com aquele contato.</li>
+        <li><b>Data do último contato</b>, para saber há quanto tempo não falam.</li>
+      </ul>
+      <p>Dá para <b>editar</b> nome, e-mail e notas direto por ali, sem sair do atendimento — as mudanças valem em toda a plataforma.</p>
+
+      <div class="callout tip"><span class="ic">🧹</span><div>O botão <span class="uimenu">🧹 Limpar inválidos</span> remove contatos sem conversa que vieram de grupos, listas de transmissão e newsletters, mantendo sua agenda limpa.</div></div>
+
+      <div class="pager"><a data-goto="exportar"><small>Anterior</small><b><span class="gradient-text">←</span> Exportar conversas</b></a><a class="next" data-goto="chatinterno"><small>Próximo</small><b>Chat interno <span class="gradient-text">→</span></b></a></div>
+    </article>
+
+    <!-- ===== CHAT INTERNO ===== -->
+    <article class="chapter" data-ch="chatinterno">
+      <div class="crumb">Atendimento <span>›</span> <b>Chat interno</b></div>
+      <div class="roles"><span class="role all">Todos os perfis</span></div>
+      <h1 class="ch-title">Chat interno da equipe</h1>
+      <p class="lead">Um bate-papo entre a equipe <b>dentro do próprio painel</b>, sem precisar de WhatsApp à parte. Ideal para alinhar casos, pedir ajuda e dar avisos.</p>
+
+      <ol class="steps">
+        <li><h4>Abra <span class="uimenu">👥 Chat Interno</span></h4><p>À esquerda ficam as conversas internas; à direita, a conversa aberta.</p></li>
+        <li><h4>Converse com colegas</h4><p>Escreva normalmente. Você pode usar <b>negrito</b>, <i>itálico</i> e mencionar alguém com <code>@nome</code>.</p></li>
+        <li><h4>Fique de olho nas menções</h4><p>Quando alguém te menciona, você recebe destaque e notificação — mesmo em horário de “não incomodar”.</p></li>
+      </ol>
+
+      <div class="callout info"><span class="ic">🔢</span><div>O contador vermelho ao lado de <b>Chat Interno</b> mostra mensagens não lidas. Use-o para não perder pedidos de ajuda dos colegas.</div></div>
+
+      <div class="pager"><a data-goto="contactos"><small>Anterior</small><b><span class="gradient-text">←</span> Contactos e histórico</b></a><a class="next" data-goto="agendamentos"><small>Próximo</small><b>Agendar mensagens <span class="gradient-text">→</span></b></a></div>
+    </article>
+
+    <!-- ===== AGENDAMENTOS ===== -->
+    <article class="chapter" data-ch="agendamentos">
+      <div class="crumb">Atendimento <span>›</span> <b>Agendar mensagens</b></div>
+      <div class="roles"><span class="role att">💬 Atendente</span><span class="role owner">👑 Proprietário</span></div>
+      <h1 class="ch-title">Agendar mensagens</h1>
+      <p class="lead">Programe uma mensagem para sair automaticamente numa data e hora futuras — lembretes, follow-ups, avisos de pagamento.</p>
+
+      <ol class="steps">
+        <li><h4>Agende dentro da conversa</h4><p>Use o botão de <b>agendamento</b> na caixa de mensagem: escreva o texto e escolha a <b>data e hora</b>.</p></li>
+        <li><h4>Acompanhe em <span class="uimenu">Agendamentos</span></h4><p>Veja tudo o que está programado, quem agendou e o status (pendente, enviado, cancelado).</p></li>
+        <li><h4>Edite ou cancele</h4><p>Antes do envio você pode alterar o <b>texto</b> e a <b>data/hora</b>, ou clicar em <span class="uimenu">Cancelar</span>.</p></li>
+      </ol>
+
+      <div class="callout warn"><span class="ic">📅</span><div>A data/hora escolhida precisa estar <b>no futuro</b>. O envio acontece automaticamente, mesmo que ninguém esteja com o painel aberto.</div></div>
+
+      <div class="pager"><a data-goto="chatinterno"><small>Anterior</small><b><span class="gradient-text">←</span> Chat interno</b></a><a class="next" data-goto="estado"><small>Próximo</small><b>Estado e turno <span class="gradient-text">→</span></b></a></div>
+    </article>
+
+    <!-- ===== ESTADO ===== -->
+    <article class="chapter" data-ch="estado">
+      <div class="crumb">Atendimento <span>›</span> <b>Estado e turno</b></div>
+      <div class="roles"><span class="role att">💬 Atendente</span></div>
+      <h1 class="ch-title">Estado e turno do atendente</h1>
+      <p class="lead">Seu <b>estado</b> e seu <b>turno</b> dizem ao sistema se você está disponível para receber novas conversas. Manter isso correto é o que faz a distribuição automática funcionar bem.</p>
+
+      <h2>Mudar seu estado</h2>
+      <p>No topo do painel, escolha entre <span class="uimenu">🟢 Disponível</span>, <span class="uimenu">🟡 Ocupado</span> ou <span class="uimenu">🟠 Ausente</span>. Novas conversas vão prioritariamente para quem está disponível.</p>
+
+      <h2>Entrar e sair de turno</h2>
+      <p>Use o botão <span class="uimenu">🟢 Turno</span> / <span class="uimenu">⚪ Turno</span> para indicar que começou ou terminou o expediente. Quem está <b>em turno</b> recebe as novas conversas com prioridade.</p>
+
+      <div class="callout info"><span class="ic">🛡️</span><div>O Proprietário pode colocar ou retirar alguém do turno manualmente em <b>🤖 Automação → Turnos dos atendentes</b>.</div></div>
+      <div class="callout tip"><span class="ic">🔌</span><div>Ao reconectar, o sistema restaura o último estado que você escolheu (nunca volta como “offline” por engano).</div></div>
+
+      <div class="pager"><a data-goto="agendamentos"><small>Anterior</small><b><span class="gradient-text">←</span> Agendar mensagens</b></a><a class="next" data-goto="bot"><small>Próximo</small><b>Bot fora de horário <span class="gradient-text">→</span></b></a></div>
+    </article>
+
+    <!-- ===== BOT ===== -->
+    <article class="chapter" data-ch="bot">
+      <div class="crumb">Automação <span>›</span> <b>Bot fora de horário</b></div>
+      <div class="roles"><span class="role owner">👑 Proprietário</span></div>
+      <h1 class="ch-title">Bot fora de horário</h1>
+      <p class="lead">Configure uma resposta automática para quando ninguém está atendendo — finais de semana, madrugada, feriados. O cliente recebe um retorno imediato em vez de silêncio.</p>
+
+      <ol class="steps">
+        <li><h4>Abra <span class="uimenu">Bot</span> e escolha a linha</h4><p>Selecione a linha WhatsApp que vai usar o bot.</p></li>
+        <li><h4>Ative o bot</h4><p>Ligue o interruptor <b>Ativar bot nesta linha</b>.</p></li>
+        <li><h4>Defina o horário de atendimento</h4><p>Para cada dia da semana, marque se está aberto e informe o intervalo (ex.: 07:00 até 18:00). O bot responde <b>fora</b> desse horário. Dias marcados como “Fechado” = bot ativo o dia todo.</p></li>
+        <li><h4>Escreva a mensagem automática</h4><p>Ex.: <i>“Olá! Estamos fora do horário de atendimento. Voltaremos em breve.”</i> Clique em <span class="uibtn">Guardar</span>.</p></li>
+      </ol>
+
+      <div class="callout tip"><span class="ic">⏰</span><div>O horário é por <b>linha</b>: você pode ter Vendas atendendo das 9h às 18h e Suporte 24h, cada um com seu bot.</div></div>
+
+      <div class="pager"><a data-goto="estado"><small>Anterior</small><b><span class="gradient-text">←</span> Estado e turno</b></a><a class="next" data-goto="faqbot"><small>Próximo</small><b>FAQ Bot <span class="gradient-text">→</span></b></a></div>
+    </article>
+
+    <!-- ===== FAQ BOT ===== -->
+    <article class="chapter" data-ch="faqbot">
+      <div class="crumb">Automação <span>›</span> <b>FAQ Bot</b></div>
+      <div class="roles"><span class="role owner">👑 Proprietário</span></div>
+      <h1 class="ch-title">FAQ Bot — respostas automáticas a perguntas</h1>
+      <p class="lead">O FAQ Bot responde sozinho às dúvidas mais comuns. Quando o cliente faz uma pergunta, o sistema procura uma resposta cadastrada; se encontrar com confiança suficiente, responde na hora. Caso contrário, o atendimento humano segue normalmente.</p>
+
+      <ol class="steps">
+        <li><h4>Abra <span class="uimenu">❓ FAQ Bot</span></h4><p>No menu lateral.</p></li>
+        <li><h4>Cadastre a pergunta e a resposta</h4><p>Preencha a <b>Pergunta canónica</b> (ex.: “Quais são as formas de pagamento?”) e a <b>Resposta</b>.</p></li>
+        <li><h4>Adicione variações</h4><p>No campo <b>Variações</b>, escreva uma forma diferente por linha (ex.: “como pagar”, “posso parcelar”, “quais formas aceita”). Quanto mais variações, melhor o bot reconhece.</p></li>
+        <li><h4>Restrinja por departamento (opcional)</h4><p>Deixe em “Todos os departamentos” ou limite a um setor. Marque <b>Activo</b> e salve.</p></li>
+      </ol>
+
+      <div class="callout info"><span class="ic">🎯</span><div>Cada item mostra um contador de <b>acertos</b> (quantas vezes respondeu). Use isso para ver quais perguntas o bot mais ajuda e refinar as menos eficazes.</div></div>
+      <div class="callout tip"><span class="ic">⏸</span><div>Pode <b>pausar</b> um item temporariamente sem apagá-lo — útil enquanto você ajusta uma resposta.</div></div>
+
+      <div class="pager"><a data-goto="bot"><small>Anterior</small><b><span class="gradient-text">←</span> Bot fora de horário</b></a><a class="next" data-goto="keywords"><small>Próximo</small><b>Regras por palavra-chave <span class="gradient-text">→</span></b></a></div>
+    </article>
+
+    <!-- ===== KEYWORDS ===== -->
+    <article class="chapter" data-ch="keywords">
+      <div class="crumb">Automação <span>›</span> <b>Palavra-chave</b></div>
+      <div class="roles"><span class="role owner">👑 Proprietário</span></div>
+      <h1 class="ch-title">Regras por palavra-chave</h1>
+      <p class="lead">Roteie automaticamente as conversas com base no que o cliente escreve. Quando uma mensagem nova contém a palavra-chave, a regra pode responder, encaminhar para um departamento, aplicar uma etiqueta — ou tudo isso junto.</p>
+
+      <p>Tudo isso fica em <span class="uimenu">🤖 Automação</span>, que também concentra outros ajustes importantes.</p>
+
+      <ol class="steps">
+        <li><h4>Crie a regra</h4><p>Informe a <b>Palavra-chave</b> (ex.: “orçamento”, “defeito”, “segunda via”).</p></li>
+        <li><h4>Escolha as ações</h4><p>Preencha uma <b>Resposta automática</b> (opcional), <b>Rotear para</b> um departamento e/ou <b>Aplicar etiqueta</b>.</p></li>
+        <li><h4>Defina a prioridade</h4><p>Em empate entre regras, vence a de <b>número menor</b>. Padrão: 100.</p></li>
+        <li><h4>Ative</h4><p>Use o botão <b>Ativa / Inativa</b> para ligar ou desligar uma regra sem apagá-la.</p></li>
+      </ol>
+
+      <h2>Outros ajustes em Automação</h2>
+      <ul class="bullets">
+        <li><b>🔔 Alerta de SLA</b> — toque sonoro e notificação quando uma conversa passa de X minutos sem resposta.</li>
+        <li><b>🔁 Reabertura inteligente</b> — janela em que uma conversa fechada reabre se o cliente responder (1, 3, 7, 30 dias, sempre ou nunca).</li>
+        <li><b>📋 Turnos dos atendentes</b> — colocar/retirar alguém do turno manualmente.</li>
+      </ul>
+
+      <div class="callout info"><span class="ic">🧭</span><div>Conversas que não casam com nenhuma regra caem no <b>departamento padrão</b> (definido no capítulo <a data-goto="departamentos" style="color:#1e40af;font-weight:800">Departamentos</a>).</div></div>
+
+      <div class="pager"><a data-goto="faqbot"><small>Anterior</small><b><span class="gradient-text">←</span> FAQ Bot</b></a><a class="next" data-goto="assinatura"><small>Próximo</small><b>Assinatura e avaliação <span class="gradient-text">→</span></b></a></div>
+    </article>
+
+    <!-- ===== ASSINATURA ===== -->
+    <article class="chapter" data-ch="assinatura">
+      <div class="crumb">Automação <span>›</span> <b>Assinatura e avaliação</b></div>
+      <div class="roles"><span class="role owner">👑 Proprietário</span></div>
+      <h1 class="ch-title">Assinatura automática e avaliação</h1>
+      <p class="lead">Dois toques de profissionalismo no começo e no fim de cada atendimento.</p>
+
+      <h2>🔔 Assinatura automática</h2>
+      <p>Quando uma nova conversa é atribuída a um atendente, o sistema envia uma saudação automática com o nome dele. Em <span class="uimenu">🔔 Assinatura</span>, ative a opção e escreva a mensagem usando <code>{{nome}}</code>.</p>
+      <div class="callout info"><span class="ic">💬</span><div>Ex.: <i>“Olá! 😊 Meu nome é {{nome}} e estou aqui para ajudá-lo.”</i> — o cliente já sabe com quem está falando.</div></div>
+
+      <h2>⭐ Avaliação de atendimento</h2>
+      <p>Ao fechar uma conversa, o sistema pode pedir ao cliente uma nota de <b>1 a 5</b>. Em <span class="uimenu">⭐ Avaliação</span>, ative e personalize a mensagem. O cliente responde com o número e a nota é registrada automaticamente — você acompanha a média nos <a data-goto="relatorios" style="color:var(--primary);font-weight:800">Relatórios</a>.</p>
+
+      <div class="pager"><a data-goto="keywords"><small>Anterior</small><b><span class="gradient-text">←</span> Palavra-chave</b></a><a class="next" data-goto="blacklist"><small>Próximo</small><b>Blacklist <span class="gradient-text">→</span></b></a></div>
+    </article>
+
+    <!-- ===== BLACKLIST ===== -->
+    <article class="chapter" data-ch="blacklist">
+      <div class="crumb">Automação <span>›</span> <b>Blacklist</b></div>
+      <div class="roles"><span class="role owner">👑 Proprietário</span></div>
+      <h1 class="ch-title">Blacklist (bloqueio)</h1>
+      <p class="lead">Números na blacklist são <b>silenciosamente ignorados</b>: as mensagens deles não criam conversas nem geram notificação. Use para spam, trotes ou números indesejados.</p>
+
+      <ol class="steps">
+        <li><h4>Abra <span class="uimenu">🚫 Blacklist</span></h4><p>No menu lateral.</p></li>
+        <li><h4>Bloqueie um número</h4><p>Informe o <b>número</b> (ex.: 5511999999999), um <b>motivo</b> (opcional) e clique em <span class="uibtn">Bloquear</span>.</p></li>
+        <li><h4>Desbloqueie quando quiser</h4><p>Na tabela, clique em <span class="uimenu">Desbloquear</span> para voltar a receber as mensagens.</p></li>
+      </ol>
+
+      <div class="callout tip"><span class="ic">🕵️</span><div>Toda ação de bloqueio fica registrada na <b>Auditoria</b>, com quem fez e quando.</div></div>
+
+      <div class="pager"><a data-goto="assinatura"><small>Anterior</small><b><span class="gradient-text">←</span> Assinatura e avaliação</b></a><a class="next" data-goto="massa"><small>Próximo</small><b>Envio em massa <span class="gradient-text">→</span></b></a></div>
+    </article>
+
+    <!-- ===== MASSA ===== -->
+    <article class="chapter" data-ch="massa">
+      <div class="crumb">Gestão <span>›</span> <b>Envio em massa</b></div>
+      <div class="roles"><span class="role owner">👑 Proprietário</span></div>
+      <h1 class="ch-title">Envio em massa (broadcast)</h1>
+      <p class="lead">Dispare uma mensagem para vários contatos de uma vez — promoções, avisos, comunicados. O sistema envia com intervalo entre cada mensagem para reduzir o risco de bloqueio.</p>
+
+      <ol class="steps">
+        <li><h4>Abra <span class="uimenu">📣 Envio em Massa</span></h4><p>A tela tem duas colunas: contatos à esquerda, mensagem à direita.</p></li>
+        <li><h4>Selecione os destinatários</h4><p>Use a busca e marque os contatos, ou clique em <span class="uimenu">Selec. todos</span>. O contador mostra quantos estão selecionados.</p></li>
+        <li><h4>Escolha a linha e escreva</h4><p>Selecione a linha de envio (ou deixe a padrão) e digite a mensagem.</p></li>
+        <li><h4>Envie e acompanhe</h4><p>Clique em <span class="uibtn">📤 Enviar para X contacto(s)</span>. Uma barra de progresso mostra enviadas, falhas e percentual em tempo real.</p></li>
+      </ol>
+
+      <div class="callout warn"><span class="ic">🐢</span><div>O envio é <b>intencionalmente lento</b> (cerca de 1,5s por mensagem) para proteger o número contra bloqueios do WhatsApp. Em listas grandes, deixe a tela aberta até concluir.</div></div>
+      <div class="callout info"><span class="ic">📚</span><div>Todo disparo fica no histórico de campanhas, com data, autor, linha, totais e status — bom para auditoria e comparação.</div></div>
+
+      <div class="pager"><a data-goto="blacklist"><small>Anterior</small><b><span class="gradient-text">←</span> Blacklist</b></a><a class="next" data-goto="relatorios"><small>Próximo</small><b>Relatórios e SLA <span class="gradient-text">→</span></b></a></div>
+    </article>
+
+    <!-- ===== RELATORIOS ===== -->
+    <article class="chapter" data-ch="relatorios">
+      <div class="crumb">Gestão <span>›</span> <b>Relatórios e SLA</b></div>
+      <div class="roles"><span class="role owner">👑 Proprietário</span><span class="role sup">🛡️ Supervisor</span></div>
+      <h1 class="ch-title">Relatórios e SLA</h1>
+      <p class="lead">É aqui que você enxerga a saúde do atendimento: volume, tempo de resposta, produtividade por atendente e satisfação dos clientes.</p>
+
+      <ol class="steps">
+        <li><h4>Abra <span class="uimenu">Relatórios</span></h4><p>No menu lateral.</p></li>
+        <li><h4>Escolha o período</h4><p>Use o filtro <b>De / Até</b> ou os atalhos <b>Hoje</b>, <b>Semana</b>, <b>Mês</b>, <b>Ano</b>.</p></li>
+        <li><h4>Leia os indicadores</h4><p>Veja conversas totais, fechadas, duração média e taxa de satisfação, além de gráficos por hora, por dia e por atendente.</p></li>
+      </ol>
+
+      <h2>O que cada número diz</h2>
+      <ul class="bullets">
+        <li><b>Tempo médio de resposta</b> — quão rápido a equipe responde. Quanto menor, melhor.</li>
+        <li><b>Conversas por atendente</b> — distribuição da carga e quem fechou mais.</li>
+        <li><b>Taxa de satisfação</b> — média das notas 1–5 (se a <a data-goto="assinatura" style="color:var(--primary);font-weight:800">avaliação</a> estiver ativa).</li>
+        <li><b>Horários de pico</b> — quando chegam mais mensagens, para escalar a equipe.</li>
+      </ul>
+
+      <div class="callout tip"><span class="ic">📊</span><div>O <b>📊 Dashboard</b> mostra a operação <b>agora</b> (conversas ativas, equipe online); os <b>Relatórios</b> mostram a evolução ao longo do tempo. Use os dois juntos.</div></div>
+
+      <div class="pager"><a data-goto="massa"><small>Anterior</small><b><span class="gradient-text">←</span> Envio em massa</b></a><a class="next" data-goto="supervisor"><small>Próximo</small><b>Painel do supervisor <span class="gradient-text">→</span></b></a></div>
+    </article>
+
+    <!-- ===== SUPERVISOR ===== -->
+    <article class="chapter" data-ch="supervisor">
+      <div class="crumb">Gestão <span>›</span> <b>Painel do supervisor</b></div>
+      <div class="roles"><span class="role sup">🛡️ Supervisor</span></div>
+      <h1 class="ch-title">Painel do supervisor</h1>
+      <p class="lead">O supervisor é o meio-termo entre Proprietário e Atendente: <b>monitora a operação</b> e vê relatórios, mas não mexe nas configurações do sistema.</p>
+
+      <h2>O que o supervisor vê</h2>
+      <ul class="bullets">
+        <li><b>📊 Monitor</b> — painel em tempo real com status da equipe, carga de cada atendente e volume por hora.</li>
+        <li><b>💬 Conversas</b> — conversas dos departamentos sob a sua responsabilidade.</li>
+        <li><b>📊 Relatórios</b> — os mesmos indicadores de desempenho do Proprietário.</li>
+        <li><b>👥 Chat Interno</b> — para coordenar a equipe.</li>
+      </ul>
+
+      <div class="callout info"><span class="ic">🛡️</span><div>O supervisor <b>não</b> cria atendentes, departamentos ou automações — isso continua com o Proprietário. O foco dele é acompanhar e garantir a qualidade do atendimento.</div></div>
+
+      <div class="pager"><a data-goto="relatorios"><small>Anterior</small><b><span class="gradient-text">←</span> Relatórios e SLA</b></a><a class="next" data-goto="sistema"><small>Próximo</small><b>Auditoria e saúde <span class="gradient-text">→</span></b></a></div>
+    </article>
+
+    <!-- ===== SISTEMA ===== -->
+    <article class="chapter" data-ch="sistema">
+      <div class="crumb">Gestão <span>›</span> <b>Auditoria, métricas e saúde</b></div>
+      <div class="roles"><span class="role owner">👑 Proprietário</span></div>
+      <h1 class="ch-title">Auditoria, métricas e saúde</h1>
+      <p class="lead">Três telas de controle que dão segurança e tranquilidade sobre a operação.</p>
+
+      <h2>📋 Auditoria</h2>
+      <p>Registro de “quem fez o quê”: transferências, exclusões, bloqueios, mudanças de função, disparos. Filtre por <b>ação</b>, <b>usuário</b> e <b>período</b> para investigar qualquer evento.</p>
+
+      <h2>📊 Métricas</h2>
+      <p>Indicadores técnicos do servidor: mensagens recebidas/enviadas, tempo no ar, uso de memória e status das linhas. Útil para diagnosticar lentidão ou comportamento estranho.</p>
+
+      <h2>❤️ Saúde</h2>
+      <p>Um “check-up” instantâneo: estado geral, banco de dados, WhatsApp, notificações, transcrição e tempo no ar. Tudo verde = sistema saudável.</p>
+
+      <div class="callout tip"><span class="ic">🚨</span><div>A tela de Saúde tem um endereço público que você pode apontar para serviços de monitoramento (como UptimeRobot) e receber um alerta por e-mail/SMS caso o sistema caia.</div></div>
+
+      <div class="pager"><a data-goto="supervisor"><small>Anterior</small><b><span class="gradient-text">←</span> Painel do supervisor</b></a><a class="next" data-goto="perfil"><small>Próximo</small><b>Perfil e notificações <span class="gradient-text">→</span></b></a></div>
+    </article>
+
+    <!-- ===== PERFIL ===== -->
+    <article class="chapter" data-ch="perfil">
+      <div class="crumb">Gestão <span>›</span> <b>Perfil e notificações</b></div>
+      <div class="roles"><span class="role all">Todos os perfis</span></div>
+      <h1 class="ch-title">Perfil, senha e notificações</h1>
+      <p class="lead">Cada usuário gerencia seus próprios dados, senha e preferências de notificação.</p>
+
+      <h2>Alterar nome, e-mail e senha</h2>
+      <ol class="steps">
+        <li><h4>Abra <span class="uimenu">👤 Perfil / Senha</span></h4><p>No canto superior direito.</p></li>
+        <li><h4>Edite seus dados</h4><p>Para trocar <b>e-mail</b> ou <b>senha</b>, é preciso informar a <b>senha atual</b> por segurança. Para a nova senha, use no mínimo 6 caracteres.</p></li>
+      </ol>
+
+      <h2>Notificações push</h2>
+      <p>Ative o sino de notificações para ser avisado de novas mensagens mesmo com o painel em segundo plano. Configure também o <b>🌙 Não incomodar</b> definindo um intervalo de silêncio — menções continuam tocando, por serem urgentes.</p>
+
+      <div class="callout tip"><span class="ic">🌗</span><div>Prefere tela escura? Alterne entre <span class="uimenu">☀️ Modo claro</span> e <span class="uimenu">🌙 Modo escuro</span> a qualquer momento, no topo do painel.</div></div>
+
+      <h2>🌍 Idioma do painel</h2>
+      <p>A interface está disponível em <b>Português</b>, <b>Inglês</b> e <b>Espanhol</b>. Use o seletor de idioma no topo do painel para trocar — a escolha é individual de cada usuário e fica guardada para os próximos acessos.</p>
+      <div class="callout info"><span class="ic">💬</span><div>Mudar o idioma afeta apenas os menus e botões do painel. As suas conversas com clientes continuam exatamente como foram escritas.</div></div>
+
+      <h2>🎉 Você concluiu o tutorial!</h2>
+      <p>Agora você conhece o sistema de ponta a ponta. Volte a qualquer capítulo sempre que precisar — e bom atendimento!</p>
+      <div class="cards">
+        <a class="nav-card" data-goto="inicio"><div class="nc-ico">🔁</div><h3>Recomeçar o tutorial</h3><p>Voltar ao início e revisar os primeiros passos.</p></a>
+        <a class="nav-card" href="index.html"><div class="nc-ico">🏠</div><h3>Voltar ao site</h3><p>Ver planos, recursos e perguntas frequentes.</p></a>
+      </div>
+
+      <div class="pager"><a data-goto="sistema"><small>Anterior</small><b><span class="gradient-text">←</span> Auditoria e saúde</b></a><a class="next" data-goto="inicio"><small>Recomeçar</small><b>Voltar ao início <span class="gradient-text">→</span></b></a></div>
+    </article>
+
+  </main>
+</div>
+
+<script>
+  // ---- WhatsApp CTA (mesma config da landing) ----
+  window.WA_NUMBER = '559684112696';
+  var waLink = function(msg){ return 'https://wa.me/'+window.WA_NUMBER+'?text='+encodeURIComponent(msg||'Olá! Quero testar o WhatsApp Multi-Atendente.'); };
+  var cta = document.getElementById('topCta');
+  cta.href = waLink('Olá! Estou vendo o tutorial e quero testar o sistema.');
+  cta.target = '_blank'; cta.rel = 'noopener';
+
+  // ---- Ordem dos capítulos (define prev/next e progresso) ----
+  var ORDER = Array.prototype.map.call(document.querySelectorAll('.toc a[data-ch]'), function(a){ return a.getAttribute('data-ch'); });
+  var chapters = document.querySelectorAll('.chapter');
+  var tocLinks = document.querySelectorAll('.toc a[data-ch]');
+  var progressFill = document.getElementById('progressFill');
+  var sidebar = document.getElementById('sidebar');
+  var scrim = document.getElementById('scrim');
+
+  function closeMenu(){ sidebar.classList.remove('open'); scrim.classList.remove('show'); }
+
+  function show(ch, push){
+    if(ORDER.indexOf(ch) === -1){ ch = ORDER[0]; }
+    chapters.forEach(function(c){ c.classList.toggle('active', c.getAttribute('data-ch')===ch); });
+    tocLinks.forEach(function(a){ a.classList.toggle('active', a.getAttribute('data-ch')===ch); });
+    var idx = ORDER.indexOf(ch);
+    progressFill.style.width = (((idx+1)/ORDER.length)*100) + '%';
+    if(push){ history.pushState(null,'', '#'+ch); }
+    window.scrollTo({top:0, behavior:'smooth'});
+    var active = document.querySelector('.toc a.active');
+    if(active){ active.scrollIntoView({block:'nearest'}); }
+    closeMenu();
+  }
+
+  // navegação por links/cartões com data-ch ou data-goto
+  document.addEventListener('click', function(e){
+    var el = e.target.closest('[data-ch],[data-goto]');
+    if(!el) return;
+    if(el.tagName==='A' && el.getAttribute('href') && el.getAttribute('href').indexOf('#')!==0 && !el.hasAttribute('data-goto')) return; // links externos normais
+    var target = el.getAttribute('data-ch') || el.getAttribute('data-goto');
+    if(target){ e.preventDefault(); show(target, true); }
+  });
+
+  window.addEventListener('popstate', function(){ show((location.hash||'').replace('#',''), false); });
+
+  // ---- Busca na barra lateral ----
+  var search = document.getElementById('tocSearch');
+  var noResults = document.getElementById('noResults');
+  search.addEventListener('input', function(){
+    var q = this.value.trim().toLowerCase();
+    var anyVisible = false;
+    document.querySelectorAll('.toc li').forEach(function(li){
+      var a = li.querySelector('a');
+      var hit = a.textContent.toLowerCase().indexOf(q) !== -1;
+      a.classList.toggle('hidden', !hit);
+      if(hit) anyVisible = true;
+    });
+    document.querySelectorAll('.nav-group').forEach(function(g){
+      var visible = g.querySelectorAll('.toc a:not(.hidden)').length;
+      g.classList.toggle('empty', visible===0);
+    });
+    noResults.style.display = anyVisible ? 'none' : 'block';
+  });
+
+  // ---- Menu mobile ----
+  document.getElementById('menuToggle').addEventListener('click', function(){
+    sidebar.classList.toggle('open'); scrim.classList.toggle('show');
+  });
+  scrim.addEventListener('click', closeMenu);
+
+  // ---- Inicialização ----
+  show((location.hash||'').replace('#','') || ORDER[0], false);
+</script>
+</body>
+</html>
