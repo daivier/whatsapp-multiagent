@@ -1,2 +1,3 @@
 - [Arquitetura atual vs CLAUDE.md](project-arch-evolution.md) — multi-linha, departamentos, supervisor, chat interno, push, transcrição
 - [Bugs conhecidos por fixar](project-known-issues.md) — reopen UNIQUE, delete FK, sessão Baileys instável (tenant supermercados)
+- [Domínio SaaS + subdomínios](project-saas-domain-subdomains.md) — atendize.com, tenants em <slug>.atendize.com via wildcard DNS + cert Cloudflare

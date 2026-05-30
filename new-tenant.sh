@@ -21,7 +21,11 @@ SERVER_IP="104.197.219.5"
 REPO="https://github.com/daivier/whatsapp-multiagent.git"
 BASE_DIR="/home/daivier/whatsapp-tenants"
 TENANT_DIR="$BASE_DIR/$SLUG"
-DOMAIN="${SLUG}.${SERVER_IP}.nip.io"
+# Subdomínio real sob atendize.com — resolvido pelo registo wildcard *.atendize.com no Cloudflare.
+ZONE="atendize.com"
+DOMAIN="${SLUG}.${ZONE}"
+# Certificado wildcard (*.atendize.com) emitido uma vez via certbot dns-cloudflare.
+CERT_DIR="/etc/letsencrypt/live/${ZONE}"
 
 # --- Validação ---
 if [ -z "$SLUG" ] || [ -z "$PORT" ] || [ -z "$NAME" ] || [ -z "$EMAIL" ] || [ -z "$PASSWORD" ]; then
@@ -42,7 +46,7 @@ echo ""
 echo "=== Criar tenant: $NAME ==="
 echo "  Slug:    $SLUG"
 echo "  Porta:   $PORT"
-echo "  Domínio: http://$DOMAIN"
+echo "  Domínio: https://$DOMAIN"
 echo "  Email:   $EMAIL"
 echo ""
 
@@ -61,7 +65,7 @@ OWNER_NAME=Dono
 OWNER_EMAIL=$EMAIL
 OWNER_PASSWORD=$PASSWORD
 
-FRONTEND_URL=http://$DOMAIN
+FRONTEND_URL=https://$DOMAIN
 WA_SESSION_PATH=$TENANT_DIR/whatsapp-session
 PLAN=$PLANO
 EOF
@@ -72,7 +76,7 @@ npm install --silent
 # --- 3. Configurar e compilar frontend ---
 echo "[3/6] A compilar frontend..."
 cat > "$TENANT_DIR/frontend/.env" <<EOF
-VITE_API_URL=http://$DOMAIN
+VITE_API_URL=https://$DOMAIN
 VITE_TENANT_NAME=$NAME
 EOF
 
@@ -124,9 +128,22 @@ echo "[5/6] A criar config nginx..."
 NGINX_CONF="/etc/nginx/sites-available/wa-$SLUG"
 
 sudo tee "$NGINX_CONF" > /dev/null <<EOF
+# Redireciona HTTP -> HTTPS
 server {
     listen 80;
     server_name $DOMAIN;
+    return 301 https://\$host\$request_uri;
+}
+
+server {
+    listen 443 ssl;
+    server_name $DOMAIN;
+
+    # Certificado wildcard *.${ZONE} (partilhado por todos os tenants)
+    ssl_certificate     $CERT_DIR/fullchain.pem;
+    ssl_certificate_key $CERT_DIR/privkey.pem;
+
+    client_max_body_size 50m;
 
     location /socket.io/ {
         proxy_pass http://localhost:$PORT/socket.io/;
@@ -135,6 +152,7 @@ server {
         proxy_set_header Connection "upgrade";
         proxy_set_header Host \$host;
         proxy_set_header X-Real-IP \$remote_addr;
+        proxy_read_timeout 86400;
     }
 
     location ~ ^/(auth|users|conversations|messages|whatsapp|departments|push|lines|health|quick-replies|tags|settings|scheduled-messages|contacts|search|keyword-rules|blacklist|broadcast|uploads|internal-chat|faq|audit|metrics|plan) {
@@ -159,7 +177,7 @@ echo ""
 echo "[6/6] Tenant criado com sucesso!"
 echo ""
 echo "========================================"
-echo "  URL:    http://$DOMAIN"
+echo "  URL:    https://$DOMAIN"
 echo "  Email:  $EMAIL"
 echo "  Senha:  $PASSWORD"
 echo "  PM2:    wa-$SLUG (porta $PORT)"
