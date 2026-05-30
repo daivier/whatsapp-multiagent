@@ -204,7 +204,10 @@ router.patch('/:id/shift', authMiddleware, ownerOnly, (req, res) => {
 // GET /users/supervisor — dados em tempo real para painel supervisor (owner + supervisor)
 // Supervisor: restrito aos atendentes dos departamentos a que ele pertence.
 // Owner: vê todos os atendentes.
-router.get('/supervisor', authMiddleware, requireFeature('supervisores'), supervisorOrOwner, (req, res) => {
+// Nota: gateado por 'relatorios' (não 'supervisores') — este endpoint alimenta
+// o painel "Atendentes em tempo real" do Dashboard do dono, não só o supervisor.
+// O gate de 'supervisores' fica na CRIAÇÃO de supervisores (POST/PATCH acima).
+router.get('/supervisor', authMiddleware, requireFeature('relatorios'), supervisorOrOwner, (req, res) => {
   const isSupervisor = req.user.role === 'supervisor';
 
   // Lista de atendentes — supervisor só vê os do(s) seu(s) departamento(s)
