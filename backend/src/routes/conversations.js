@@ -327,7 +327,7 @@ router.post('/:id/notes', authMiddleware, (req, res) => {
   }
 
   // Processar @menções: emitir mention:new para cada utilizador mencionado
-  const allUsers = db.prepare('SELECT id, name FROM users WHERE active = 1').all();
+  const allUsers = db.prepare('SELECT id, name FROM users WHERE active = 1 AND hidden = 0').all();
   for (const u of allUsers) {
     if (u.id !== req.user.id && body.includes(`@${u.name}`)) {
       ioInstance.get()?.to(`user:${u.id}`).emit('mention:new', {
@@ -1193,7 +1193,7 @@ router.get('/ratings', authMiddleware, supervisorOrOwner, (req, res) => {
       ROUND(AVG(r.score), 2) as avg_score
     FROM users u
     LEFT JOIN ratings r ON r.attendant_id = u.id AND ${w}${rDept}
-    WHERE u.role IN ('attendant', 'owner') AND u.active = 1 ${attDeptFilter}
+    WHERE u.role IN ('attendant', 'owner') AND u.active = 1 AND u.hidden = 0 ${attDeptFilter}
     GROUP BY u.id ORDER BY avg_score DESC NULLS LAST
   `).all(...dp, ...dp);
 

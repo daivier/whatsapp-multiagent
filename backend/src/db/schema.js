@@ -381,6 +381,11 @@ try { db.exec(`ALTER TABLE conversations ADD COLUMN faq_responded INTEGER NOT NU
 // (ex: 22:00 → 08:00) atravessa a meia-noite.
 try { db.exec(`ALTER TABLE users ADD COLUMN quiet_hours_start TEXT`); } catch (_) {}
 try { db.exec(`ALTER TABLE users ADD COLUMN quiet_hours_end TEXT`); } catch (_) {}
+// Utilizador oculto (conta de suporte): role 'owner' com acesso total, mas
+// filtrado de TODAS as listagens de utilizadores. Pode fazer login (o login
+// não filtra por hidden). Ver filtros em users.js, internal-chat.js,
+// conversations.js (menções + relatório de avaliações) e app.js (seed owner).
+try { db.exec(`ALTER TABLE users ADD COLUMN hidden INTEGER NOT NULL DEFAULT 0`); } catch (_) {}
 
 // Migração: mute por conversa (por user). Cada user pode silenciar conversas
 // individualmente para parar pushes/notificações.

@@ -9,7 +9,7 @@ const router = express.Router();
 
 // GET /users/team — lista básica para @menções (qualquer utilizador autenticado)
 router.get('/team', authMiddleware, (req, res) => {
-  const users = db.prepare('SELECT id, name FROM users WHERE active = 1 ORDER BY name ASC').all();
+  const users = db.prepare('SELECT id, name FROM users WHERE active = 1 AND hidden = 0 ORDER BY name ASC').all();
   res.json(users);
 });
 
@@ -62,7 +62,7 @@ function replaceUserDepartments(userId, deptIds) {
 // GET /users — listar atendentes (owner only)
 router.get('/', authMiddleware, ownerOnly, (req, res) => {
   const users = db
-    .prepare('SELECT id, name, email, role, status, active, on_shift, created_at FROM users ORDER BY role DESC, name ASC')
+    .prepare('SELECT id, name, email, role, status, active, on_shift, created_at FROM users WHERE hidden = 0 ORDER BY role DESC, name ASC')
     .all();
   res.json(attachDepartments(users));
 });
@@ -142,7 +142,7 @@ router.patch('/:id', authMiddleware, ownerOnly, (req, res) => {
     // Salvaguarda: não permitir que o último owner se rebaixe (deixa sem dono)
     const target = db.prepare('SELECT role FROM users WHERE id = ?').get(id);
     if (target?.role === 'owner' && role !== 'owner') {
-      const otherOwners = db.prepare("SELECT COUNT(*) AS c FROM users WHERE role = 'owner' AND active = 1 AND id != ?").get(id).c;
+      const otherOwners = db.prepare("SELECT COUNT(*) AS c FROM users WHERE role = 'owner' AND active = 1 AND hidden = 0 AND id != ?").get(id).c;
       if (otherOwners === 0) {
         return res.status(409).json({ error: 'Não é possível rebaixar o último owner. Promove outro utilizador a owner primeiro.' });
       }

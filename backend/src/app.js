@@ -73,8 +73,10 @@ const broadcastLimiter = rateLimit({
   message: { error: 'Demasiados disparos em massa. Espera 1 hora.' },
 });
 
-// Seed: criar conta do dono se não existir
-const owner = db.prepare("SELECT id FROM users WHERE role = 'owner'").get();
+// Seed: criar conta do dono se não existir.
+// Ignora utilizadores ocultos (conta de suporte): uma conta de suporte com
+// role 'owner' não deve impedir a criação do dono real do tenant.
+const owner = db.prepare("SELECT id FROM users WHERE role = 'owner' AND hidden = 0").get();
 if (!owner) {
   const hash = bcrypt.hashSync(process.env.OWNER_PASSWORD || 'admin123', 10);
   db.prepare("INSERT INTO users (name, email, password_hash, role) VALUES (?, ?, ?, 'owner')")

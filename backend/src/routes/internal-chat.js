@@ -498,7 +498,7 @@ router.get('/search', (req, res) => {
 
 // GET /internal-chat/users — list users for DM creation / @mentions
 router.get('/users', (req, res) => {
-  const users = db.prepare('SELECT id, name, role, status FROM users WHERE active = 1 ORDER BY name').all();
+  const users = db.prepare('SELECT id, name, role, status FROM users WHERE active = 1 AND hidden = 0 ORDER BY name').all();
   res.json(users);
 });
 
