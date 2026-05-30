@@ -89,8 +89,7 @@ echo "[4/6] A registar no PM2..."
 # IMPORTANTE: cwd tem de ser $TENANT_DIR/backend para o dotenv encontrar o .env
 pm2 start "$TENANT_DIR/backend/src/app.js" \
   --name "wa-$SLUG" \
-  --cwd "$TENANT_DIR/backend" \
-  --
+  --cwd "$TENANT_DIR/backend"
 pm2 save
 
 # --- 4.5 Conta de suporte oculta (se configurada na VM) ---
