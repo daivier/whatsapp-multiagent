@@ -10,6 +10,17 @@
  *
  * Para actualizar o código de TODOS os clientes de uma vez:
  *   pm2 reload ecosystem.config.js
+ *
+ * ESTADO REAL (2026-05-30):
+ *   - Em execução POR ESTE ficheiro: whatsapp-sucataodejeova (diaadia, porta
+ *     3005, PLAN profissional) e whatsapp-diaristou (porta 3006).
+ *   - whatsapp-supermercados e whatsapp-sac-supermercados MIGRARAM para o modelo
+ *     clone (apps wa-supermercados / wa-sac-* em /home/daivier/whatsapp-tenants/).
+ *     Os blocos abaixo continuam aqui por histórico mas NÃO estão a correr daqui.
+ *   - PLAN e VAPID_* vêm agora deste ficheiro + secrets.local.js (gitignored),
+ *     com os valores REAIS dos processos. Sem isto, um reload caía nos defaults
+ *     inseguros e deslogava todos. Antes de `pm2 reload`, confirmar que o
+ *     secrets.local.js da VM existe e está correto.
  */
 
 const BASE = '/home/daivier/whatsapp-multiagent/backend';
@@ -57,6 +68,7 @@ module.exports = {
         OWNER_EMAIL: 'dono@loja.com',
         OWNER_PASSWORD: S('supermercados').OWNER_PASSWORD,
         FRONTEND_URL: 'https://atendimento.supermercadosfortaleza.com.br',
+        PLAN: 'empresarial',
       },
     },
 
@@ -78,6 +90,9 @@ module.exports = {
         OWNER_EMAIL: 'dono@loja.com',
         OWNER_PASSWORD: S('sucataodejeova').OWNER_PASSWORD,
         FRONTEND_URL: 'https://diaadia.code2scan.com',
+        PLAN: 'profissional',                              // tem csat (avaliação)
+        VAPID_PUBLIC_KEY: S('sucataodejeova').VAPID_PUBLIC_KEY,
+        VAPID_PRIVATE_KEY: S('sucataodejeova').VAPID_PRIVATE_KEY,
       },
     },
 
@@ -99,6 +114,7 @@ module.exports = {
         OWNER_EMAIL: 'dono@loja.com',
         OWNER_PASSWORD: S('diaristou').OWNER_PASSWORD,
         FRONTEND_URL: 'https://atendimento.diaristou.com.br',
+        PLAN: 'empresarial',
       },
     },
 
@@ -120,6 +136,7 @@ module.exports = {
         OWNER_EMAIL: 'dono@loja.com',
         OWNER_PASSWORD: S('sac-supermercados').OWNER_PASSWORD,
         FRONTEND_URL: 'https://atendimentosac.supermercadosfortaleza.com.br',
+        PLAN: 'empresarial',
       },
     },
   ],
