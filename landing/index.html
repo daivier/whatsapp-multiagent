@@ -590,28 +590,25 @@
   menu.addEventListener('click',function(e){if(e.target.tagName==='A')setOpen(false);});
   document.addEventListener('click',function(e){if(menu.classList.contains('open')&&!menu.contains(e.target)&&e.target!==btn)setOpen(false);});
 })();</script>
-<!-- Modal de contratação (signup + Pix) -->
+<!-- Modal de contratação (assinatura por cartão) -->
 <div id="su-modal" class="su-overlay">
   <div class="su-box">
     <button class="su-close" onclick="suClose()" aria-label="Fechar">&times;</button>
     <div id="su-form-view">
-      <h3 class="su-title">Contratar <span id="su-nome"></span></h3>
-      <p class="su-sub">Preencha os dados e pague por Pix. A ativação é feita logo após a confirmação do pagamento.</p>
+      <h3 class="su-title">Assinar <span id="su-nome"></span></h3>
+      <p class="su-sub">Preencha os dados. No passo seguinte você paga com cartão (cobrança mensal automática) no ambiente seguro do Mercado Pago.</p>
       <form id="su-form">
         <input name="empresa" placeholder="Nome da empresa" required>
         <input name="responsavel" placeholder="Seu nome">
         <input name="email" type="email" placeholder="Email" required>
         <input name="whatsapp" placeholder="WhatsApp (com DDD)">
-        <button type="submit" class="su-submit" id="su-submit">Gerar Pix <span id="su-valor"></span></button>
+        <button type="submit" class="su-submit" id="su-submit">Assinar com cartão <span id="su-valor"></span></button>
         <div id="su-error" class="su-error"></div>
       </form>
     </div>
-    <div id="su-pix-view" style="display:none">
-      <h3 class="su-title">Pague por Pix</h3>
-      <p class="su-sub">Escaneie o QR no app do seu banco ou copie o código. A conta é ativada automaticamente após o pagamento.</p>
-      <img id="su-qr" class="su-qr" alt="QR Code Pix">
-      <button class="su-copy" id="su-copy" onclick="suCopy()">Copiar código Pix</button>
-      <div id="su-status" class="su-status">⏳ Aguardando pagamento…</div>
+    <div id="su-status-view" style="display:none">
+      <h3 class="su-title">A confirmar a sua assinatura</h3>
+      <div id="su-status" class="su-status">⏳ A confirmar o pagamento…</div>
     </div>
   </div>
 </div>
@@ -619,36 +616,39 @@
 (function(){
   var NAMES={basico:'Básico',profissional:'Profissional',empresarial:'Empresarial'};
   var PRICES={basico:'R$197',profissional:'R$397',empresarial:'R$797'};
-  var plano=null, paymentId=null, poll=null;
+  var KEY='atendize_sub';
+  var plano=null, subId=null, poll=null, ticks=0;
   function $(id){return document.getElementById(id);}
-  window.suOpen=function(p){plano=p;$('su-nome').textContent=NAMES[p]||'';$('su-valor').textContent=PRICES[p]||'';$('su-form-view').style.display='';$('su-pix-view').style.display='none';$('su-error').textContent='';$('su-form').reset();$('su-modal').style.display='flex';};
+  window.suOpen=function(p){plano=p;$('su-nome').textContent=NAMES[p]||'';$('su-valor').textContent=PRICES[p]||'';$('su-form-view').style.display='';$('su-status-view').style.display='none';$('su-error').textContent='';$('su-form').reset();$('su-modal').style.display='flex';};
   window.suClose=function(){$('su-modal').style.display='none';if(poll){clearInterval(poll);poll=null;}};
-  window.suCopy=function(){var t=$('su-qr').dataset.code||'';if(navigator.clipboard)navigator.clipboard.writeText(t);var b=$('su-copy');b.textContent='Copiado ✓';setTimeout(function(){b.textContent='Copiar código Pix';},1500);};
   document.querySelectorAll('[data-plano]').forEach(function(el){el.addEventListener('click',function(e){e.preventDefault();suOpen(el.dataset.plano);});});
   $('su-modal').addEventListener('click',function(e){if(e.target.id==='su-modal')suClose();});
   $('su-form').addEventListener('submit',async function(e){
     e.preventDefault();
-    var btn=$('su-submit'),old=btn.textContent;btn.disabled=true;btn.textContent='A gerar Pix…';$('su-error').textContent='';
+    var btn=$('su-submit'),old=btn.textContent;btn.disabled=true;btn.textContent='A preparar…';$('su-error').textContent='';
     var fd=Object.fromEntries(new FormData(e.target).entries());fd.plano=plano;
     try{
       var r=await fetch('/api/signup',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(fd)});
       var d=await r.json();
-      if(!r.ok||!d.qr_code_base64){$('su-error').textContent=d.error||'Não foi possível gerar o Pix.';btn.disabled=false;btn.textContent=old;return;}
-      paymentId=d.payment_id;
-      var qr=$('su-qr');qr.src='data:image/png;base64,'+d.qr_code_base64;qr.dataset.code=d.qr_code||'';
-      $('su-form-view').style.display='none';$('su-pix-view').style.display='';
-      poll=setInterval(suCheck,4000);
+      if(!r.ok||!d.init_point){$('su-error').textContent=d.error||'Não foi possível iniciar a assinatura.';btn.disabled=false;btn.textContent=old;return;}
+      try{localStorage.setItem(KEY,d.preapproval_id);}catch(_){}
+      window.location.href=d.init_point; // checkout hospedado do Mercado Pago
     }catch(_){$('su-error').textContent='Falha de ligação. Tenta novamente.';btn.disabled=false;btn.textContent=old;}
   });
+  function done(){try{localStorage.removeItem(KEY);}catch(_){}if(poll){clearInterval(poll);poll=null;}}
+  function startStatus(id){
+    subId=id;ticks=0;
+    $('su-form-view').style.display='none';$('su-status-view').style.display='';$('su-modal').style.display='flex';
+    if(poll)clearInterval(poll);poll=setInterval(suCheck,4000);suCheck();
+  }
   async function suCheck(){
-    if(!paymentId)return;
+    if(!subId)return;ticks++;
     try{
-      var r=await fetch('/api/signup/'+paymentId+'/status');
+      var r=await fetch('/api/signup/'+subId+'/status');
       var d=await r.json();
       var s=$('su-status');
       if(d.provisioned&&d.url){
-        clearInterval(poll);poll=null;
-        s.style.color='#16a34a';
+        done();s.style.color='#16a34a';
         s.innerHTML='✅ <b>Conta criada e pronta!</b>'
           +'<br>Acesso: <a href="'+d.url+'" target="_blank" rel="noopener">'+d.url+'</a>'
           +'<br>Login: <b>'+d.email+'</b>'
@@ -656,15 +656,23 @@
           +'<br><small>Guarde a senha — pode alterá-la depois de entrar.</small>'
           +'<br><a class="su-copy" style="display:inline-block;margin-top:12px;text-decoration:none" href="'+d.url+'" target="_blank" rel="noopener">Acessar agora →</a>';
       }else if(d.provision_status==='error'){
-        clearInterval(poll);poll=null;
+        done();s.style.color='#16a34a';
+        s.innerHTML='✅ Assinatura confirmada! A sua conta será ativada em instantes — entraremos em contacto se necessário.';
+      }else if(d.status==='authorized'){
         s.style.color='#16a34a';
-        s.innerHTML='✅ Pagamento confirmado! A sua conta será ativada em instantes — entraremos em contacto se necessário.';
-      }else if(d.status==='approved'){
-        s.style.color='#16a34a';
-        s.innerHTML='✅ Pagamento confirmado! ⏳ A preparar a sua conta… isto pode levar alguns minutos. <b>Não feche esta página.</b>';
+        s.innerHTML='✅ Assinatura confirmada! ⏳ A preparar a sua conta… pode levar alguns minutos. <b>Não feche esta página.</b>';
+      }else if(d.status==='cancelled'||d.status==='paused'){
+        done();s.style.color='#b45309';
+        s.innerHTML='A assinatura não foi concluída. Se foi engano, tente novamente pelos planos.';
+      }else{
+        s.innerHTML='⏳ A confirmar o pagamento…';
+        if(ticks>180){done();s.innerHTML='Não detetámos a confirmação. Se já pagou, aguarde alguns minutos ou fale connosco pelo WhatsApp.';}
       }
     }catch(_){}
   }
+  // Ao regressar do checkout do Mercado Pago, retomar o acompanhamento.
+  var pending=null;try{pending=localStorage.getItem(KEY);}catch(_){}
+  if(pending){startStatus(pending);}
 })();
 </script>
 </body>

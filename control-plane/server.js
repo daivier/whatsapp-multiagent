@@ -34,6 +34,9 @@ const TENANTS_DIR = process.env.TENANTS_DIR || '/home/daivier/whatsapp-tenants';
 const ZONE = process.env.ZONE || 'atendize.com';
 const PORT_BASE = parseInt(process.env.PORT_BASE || '3031', 10);
 const AUTO_PROVISION = process.env.AUTO_PROVISION !== '0'; // ligado por default
+const LANDING_URL = process.env.LANDING_URL || `https://${ZONE}`;
+// Para onde o MP redireciona o cliente após autorizar o cartão.
+const BACK_URL = process.env.MP_BACK_URL || `${LANDING_URL}/?assinatura=ok`;
 
 // --- Email de boas-vindas (Gmail SMTP por default; tudo configurável por env) ---
 const SMTP_HOST = process.env.SMTP_HOST || 'smtp.gmail.com';
@@ -84,27 +87,36 @@ for (const col of [
   try { db.exec(`ALTER TABLE signups ADD COLUMN ${col}`); } catch (_) { /* já existe */ }
 }
 
-async function mpCreatePix(amount, description, email) {
-  const res = await fetch('https://api.mercadopago.com/v1/payments', {
+// Cria uma ASSINATURA recorrente (preapproval) no Mercado Pago. Sem card_token
+// + status 'pending' => o MP devolve um init_point (checkout hospedado) para
+// onde redirecionamos o cliente inserir o cartão. Cobra automaticamente todo mês.
+async function mpCreatePreapproval(planKey, p, email) {
+  const res = await fetch('https://api.mercadopago.com/preapproval', {
     method: 'POST',
     headers: {
       Authorization: `Bearer ${MP_TOKEN}`,
       'Content-Type': 'application/json',
-      'X-Idempotency-Key': crypto.randomUUID(),
     },
     body: JSON.stringify({
-      transaction_amount: amount,
-      description,
-      payment_method_id: 'pix',
-      payer: { email: email || FALLBACK_EMAIL },
+      reason: `Atendize — Plano ${p.label}`,
+      external_reference: planKey,
+      payer_email: email,
+      back_url: BACK_URL,
       notification_url: process.env.WEBHOOK_URL || undefined,
+      auto_recurring: {
+        frequency: 1,
+        frequency_type: 'months',
+        transaction_amount: p.preco,
+        currency_id: 'BRL',
+      },
+      status: 'pending',
     }),
   });
   return res.json();
 }
 
-async function mpGetPayment(id) {
-  const res = await fetch(`https://api.mercadopago.com/v1/payments/${id}`, {
+async function mpGetPreapproval(id) {
+  const res = await fetch(`https://api.mercadopago.com/preapproval/${id}`, {
     headers: { Authorization: `Bearer ${MP_TOKEN}` },
   });
   return res.json();
@@ -316,7 +328,8 @@ async function provisionTenant(id) {
 const app = express();
 app.use(express.json());
 
-// POST /signup — cria pagamento Pix + regista o lead. Devolve o QR para a landing.
+// POST /signup — cria a ASSINATURA (cartão recorrente) + regista o lead.
+// Devolve init_point (checkout do MP) para a landing redirecionar.
 app.post('/signup', async (req, res) => {
   const { empresa, responsavel, email, whatsapp, plano } = req.body || {};
   const p = PLANS[plano];
@@ -324,23 +337,20 @@ app.post('/signup', async (req, res) => {
     return res.status(400).json({ error: 'Preenche empresa, email e um plano válido.' });
   }
   try {
-    const pay = await mpCreatePix(p.preco, `${p.label} — WhatsApp Multi-Atendente`, email);
-    const td = pay && pay.point_of_interaction && pay.point_of_interaction.transaction_data;
-    if (!pay.id || !td) {
-      console.error('[signup] MP falhou:', pay && (pay.message || pay.status), JSON.stringify(pay && pay.cause || []));
-      return res.status(502).json({ error: 'Não foi possível gerar o Pix. Tenta novamente.' });
+    const sub = await mpCreatePreapproval(plano, p, email.trim());
+    if (!sub.id || !sub.init_point) {
+      console.error('[signup] MP preapproval falhou:', sub && (sub.message || sub.status), JSON.stringify(sub && sub.cause || []));
+      return res.status(502).json({ error: 'Não foi possível iniciar a assinatura. Tenta novamente.' });
     }
     db.prepare(`INSERT INTO signups (empresa, responsavel, email, whatsapp, plano, preco, mp_payment_id, status)
                 VALUES (?, ?, ?, ?, ?, ?, ?, ?)`)
-      .run(empresa.trim(), (responsavel || '').trim(), email.trim(), (whatsapp || '').trim(), plano, p.preco, String(pay.id), pay.status);
+      .run(empresa.trim(), (responsavel || '').trim(), email.trim(), (whatsapp || '').trim(), plano, p.preco, String(sub.id), sub.status || 'pending');
     res.json({
-      payment_id: pay.id,
-      status: pay.status,
+      preapproval_id: sub.id,
+      init_point: sub.init_point,   // URL do checkout hospedado do MP
+      status: sub.status || 'pending',
       plano: p.label,
       valor: p.preco,
-      qr_code: td.qr_code,             // copia-e-cola
-      qr_code_base64: td.qr_code_base64, // imagem
-      ticket_url: td.ticket_url,
     });
   } catch (e) {
     console.error('[signup]', e.message);
@@ -357,23 +367,23 @@ app.get('/signup/:paymentId/status', async (req, res) => {
   let row = db.prepare('SELECT * FROM signups WHERE mp_payment_id = ?').get(pid);
   let status = row ? row.status : 'unknown';
 
-  // Consulta o MP só enquanto ainda não está aprovado — evita roundtrips a cada
-  // poll durante os minutos de provisionamento.
-  if (row && row.status !== 'approved') {
+  // Consulta o MP só enquanto a assinatura ainda não está autorizada — evita
+  // roundtrips a cada poll durante os minutos de provisionamento.
+  if (row && row.status !== 'authorized') {
     try {
-      const pay = await mpGetPayment(pid);
-      if (pay && pay.status) {
-        status = pay.status;
-        if (pay.status !== row.status) {
-          const paidStamp = pay.status === 'approved' ? 'CURRENT_TIMESTAMP' : 'paid_at';
-          db.prepare(`UPDATE signups SET status = ?, paid_at = ${paidStamp} WHERE id = ?`).run(pay.status, row.id);
+      const sub = await mpGetPreapproval(pid);
+      if (sub && sub.status) {
+        status = sub.status;
+        if (sub.status !== row.status) {
+          const paidStamp = sub.status === 'authorized' ? 'CURRENT_TIMESTAMP' : 'paid_at';
+          db.prepare(`UPDATE signups SET status = ?, paid_at = ${paidStamp} WHERE id = ?`).run(sub.status, row.id);
           row = db.prepare('SELECT * FROM signups WHERE id = ?').get(row.id);
         }
       }
     } catch (_) { /* mantém o status da BD se o MP falhar */ }
   }
 
-  if (row && row.status === 'approved' && AUTO_PROVISION) provisionTenant(row.id);
+  if (row && row.status === 'authorized' && AUTO_PROVISION) provisionTenant(row.id);
 
   // Resposta enriquecida com o estado do provisionamento.
   const resp = { status };
@@ -393,22 +403,26 @@ app.get('/signup/:paymentId/status', async (req, res) => {
   res.json(resp);
 });
 
-// POST /webhook — Mercado Pago notifica alterações de pagamento.
+// POST /webhook — Mercado Pago notifica alterações da assinatura (preapproval).
+// (O polling do /status é o gatilho principal; o webhook é reforço.)
 app.post('/webhook', async (req, res) => {
   res.sendStatus(200); // responder sempre rápido, processar depois
   try {
     const id = (req.body && req.body.data && req.body.data.id) || req.query['data.id'] || req.query.id;
     const topic = (req.body && req.body.type) || req.query.topic || req.query.type;
-    if (!id || (topic && topic !== 'payment')) return;
-    const pay = await mpGetPayment(id);
-    if (!pay || !pay.id) return;
-    const row = db.prepare('SELECT * FROM signups WHERE mp_payment_id = ?').get(String(pay.id));
+    if (!id) return;
+    // Só nos interessa o evento da assinatura (subscription_preapproval).
+    // subscription_authorized_payment (cobranças recorrentes) é ignorado aqui.
+    if (topic && !String(topic).includes('preapproval')) return;
+    const sub = await mpGetPreapproval(id);
+    if (!sub || !sub.id) return;
+    const row = db.prepare('SELECT * FROM signups WHERE mp_payment_id = ?').get(String(sub.id));
     if (!row) return;
-    if (pay.status !== row.status) {
-      const paidStamp = pay.status === 'approved' ? "CURRENT_TIMESTAMP" : "paid_at";
-      db.prepare(`UPDATE signups SET status = ?, paid_at = ${paidStamp} WHERE id = ?`).run(pay.status, row.id);
+    if (sub.status !== row.status) {
+      const paidStamp = sub.status === 'authorized' ? "CURRENT_TIMESTAMP" : "paid_at";
+      db.prepare(`UPDATE signups SET status = ?, paid_at = ${paidStamp} WHERE id = ?`).run(sub.status, row.id);
     }
-    if (pay.status === 'approved' && !row.provisioned && AUTO_PROVISION) {
+    if (sub.status === 'authorized' && !row.provisioned && AUTO_PROVISION) {
       provisionTenant(row.id); // provisiona o tenant em background
     }
   } catch (e) {
