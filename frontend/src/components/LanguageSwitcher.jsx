@@ -1,4 +1,5 @@
 import { useTranslation } from 'react-i18next';
+import { useAuth } from '../context/AuthContext';
 
 const LANGS = [
   { code: 'pt', label: '🇵🇹 PT' },
@@ -8,6 +9,9 @@ const LANGS = [
 
 export default function LanguageSwitcher({ compact = false, style }) {
   const { i18n } = useTranslation();
+  const { hasFeature } = useAuth();
+  // Multi-idioma é uma funcionalidade de plano — esconde se não disponível.
+  if (!hasFeature('multi_idioma')) return null;
   const current = i18n.language?.split('-')[0] || 'pt';
   return (
     <select

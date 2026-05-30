@@ -189,7 +189,7 @@ function MessageContent({ msg, onMediaLoad }) {
 }
 
 export default function ChatWindow({ conversation: convProp, socket, onClose, onDelete, onConversationChange }) {
-  const { user } = useAuth();
+  const { user, hasFeature } = useAuth();
   const [conversation, setConversation] = useState(convProp);
   const [messages, setMessages] = useState([]);
   const [hasMoreMessages, setHasMoreMessages] = useState(false);
@@ -1075,12 +1075,14 @@ export default function ChatWindow({ conversation: convProp, socket, onClose, on
                   🏷️ Etiquetas {convTags.length > 0 && <span style={{ background: 'var(--accent)', color: '#fff', borderRadius: '999px', fontSize: '0.65rem', padding: '0 5px', fontWeight: 700, marginLeft: '2px' }}>{convTags.length}</span>}
                 </div>
 
+                {hasFeature('pdf') && (
                 <div onClick={() => { setShowExport(v => !v); setShowOverflow(false); }}
                   style={{ padding: '0.4rem 0.65rem', cursor: 'pointer', fontSize: '0.83rem', borderRadius: 'var(--r-sm)', display: 'flex', alignItems: 'center', gap: '0.5rem' }}
                   onMouseEnter={e => e.currentTarget.style.background = 'var(--bg)'}
                   onMouseLeave={e => e.currentTarget.style.background = 'none'}>
                   📥 Exportar histórico
                 </div>
+                )}
 
                 <div onClick={() => { loadHistory(); setShowOverflow(false); }}
                   style={{ padding: '0.4rem 0.65rem', cursor: 'pointer', fontSize: '0.83rem', borderRadius: 'var(--r-sm)', display: 'flex', alignItems: 'center', gap: '0.5rem' }}
@@ -1089,7 +1091,7 @@ export default function ChatWindow({ conversation: convProp, socket, onClose, on
                   🕐 Histórico mensagens
                 </div>
 
-                {!isClosed && (
+                {!isClosed && hasFeature('transferencia') && (
                   <div onClick={() => { openTransfer(); setShowOverflow(false); }}
                     style={{ padding: '0.4rem 0.65rem', cursor: 'pointer', fontSize: '0.83rem', borderRadius: 'var(--r-sm)', display: 'flex', alignItems: 'center', gap: '0.5rem', color: 'var(--accent)' }}
                     onMouseEnter={e => e.currentTarget.style.background = 'var(--bg)'}

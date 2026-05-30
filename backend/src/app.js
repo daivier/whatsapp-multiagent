@@ -102,6 +102,9 @@ if (linesCount === 0) {
   }
 }
 
+// Planos comerciais — enforcement server-side de funcionalidades e limites
+const { requireFeature, planInfo } = require('./plan');
+
 // Rotas
 app.use('/auth/login', loginLimiter);
 app.use('/auth', authRoutes);
@@ -111,18 +114,21 @@ app.use('/messages', messagesRoutes);
 app.use('/quick-replies', quickRepliesRoutes);
 app.use('/tags', tagsRoutes);
 app.use('/settings', settingsRoutes);
-app.use('/scheduled-messages', scheduledMessagesRoutes);
+app.use('/scheduled-messages', requireFeature('agendamento'), scheduledMessagesRoutes);
 app.use('/contacts', contactsRoutes);
 app.use('/search', searchRoutes);
-app.use('/keyword-rules', keywordRulesRoutes);
-app.use('/blacklist', blacklistRoutes);
-app.use('/broadcast', authMiddleware, broadcastLimiter, broadcastRoutes);
-app.use('/departments', departmentsRoutes);
+app.use('/keyword-rules', requireFeature('roteamento'), keywordRulesRoutes);
+app.use('/blacklist', requireFeature('blacklist'), blacklistRoutes);
+app.use('/broadcast', authMiddleware, requireFeature('broadcast'), broadcastLimiter, broadcastRoutes);
+app.use('/departments', requireFeature('departamentos'), departmentsRoutes);
 app.use('/push', pushRoutes);
 app.use('/lines', linesRoutes);
-app.use('/internal-chat', internalChatRoutes);
-app.use('/faq', faqRoutes);
-app.use('/audit', auditRoutes);
+app.use('/internal-chat', requireFeature('chat_interno'), internalChatRoutes);
+app.use('/faq', requireFeature('bot'), faqRoutes);
+app.use('/audit', requireFeature('auditoria'), auditRoutes);
+
+// Plano atual do tenant — a UI lê isto para esconder funcionalidades e mostrar upsell
+app.get('/plan', authMiddleware, (req, res) => res.json(planInfo()));
 
 // Health check — sem auth, designed para monitoring/uptime probes (UptimeRobot, etc).
 // Devolve 200 se DB responde; 503 se algo crítico está down. Nunca expõe dados sensíveis.

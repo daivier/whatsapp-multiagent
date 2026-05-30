@@ -14,6 +14,11 @@ api.interceptors.response.use(
     if (error.response?.status === 401) {
       window.dispatchEvent(new Event('auth:force-logout'));
     }
+    // Recurso bloqueado pelo plano — avisa a UI para mostrar upsell amigável
+    // em vez de um erro cru. Componentes podem ouvir 'plan:upgrade-needed'.
+    if (error.response?.status === 403 && error.response.data?.upgrade) {
+      window.dispatchEvent(new CustomEvent('plan:upgrade-needed', { detail: error.response.data }));
+    }
     return Promise.reject(error);
   }
 );

@@ -22,6 +22,7 @@ const { computeTargetDepartment, pickLeastBusyAttendant } = require('./routing')
 const { transcribeAudio } = require('./transcribe');
 const { analyzeSentiment } = require('../utils/sentiment');
 const { matchFaq } = require('../utils/faq-matcher');
+const { hasFeature } = require('../plan');
 const metrics = require('../metrics');
 const push = require('../push');
 const fs = require('fs');
@@ -777,14 +778,14 @@ async function handleIncomingMessage(msg, lineId) {
     .run(conversation.id, fromMe ? 1 : 0, safeBody, mediaUrl, mediaType, mediaFilename, replyToId, incomingWaId);
   db.prepare('UPDATE conversations SET updated_at = CURRENT_TIMESTAMP WHERE id = ?').run(conversation.id);
 
-  if (!fromMe && mediaUrl && mediaType?.startsWith('audio/')) {
+  if (hasFeature('transcricao') && !fromMe && mediaUrl && mediaType?.startsWith('audio/')) {
     const filename = mediaUrl.split('/').pop();
     const absPath = path.join(UPLOADS_DIR, filename);
     transcribeAudio(absPath, insRes.lastInsertRowid).catch(err => console.error('[transcribe]', err.message));
   }
 
   // Sentiment do cliente (só para mensagens inbound com texto)
-  if (!fromMe && safeBody && safeBody.trim()) {
+  if (hasFeature('sentimento') && !fromMe && safeBody && safeBody.trim()) {
     try {
       const sentiment = analyzeSentiment(safeBody);
       if (sentiment === 'negative') {
@@ -831,7 +832,7 @@ async function handleIncomingMessage(msg, lineId) {
 
   // Bot FAQ semântico — só na primeira mensagem da conversa, se ainda não
   // respondeu uma vez e a conv não tem msgs nossas. Não bloqueia outros bots.
-  if (!fromMe && body && body.trim() && !conversation.faq_responded) {
+  if (hasFeature('bot') && !fromMe && body && body.trim() && !conversation.faq_responded) {
     try {
       const ourMsgs = db.prepare('SELECT COUNT(*) AS c FROM messages WHERE conversation_id = ? AND from_me = 1').get(conversation.id).c;
       if (ourMsgs <= 1) { // 0 ou só a signature

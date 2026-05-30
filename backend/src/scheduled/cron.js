@@ -1,6 +1,7 @@
 const db = require('../db/schema');
 const { sendMessage } = require('../whatsapp/client');
 const push = require('../push');
+const { hasFeature } = require('../plan');
 
 function startScheduledMessagesCron(io) {
   setInterval(async () => {
@@ -115,7 +116,7 @@ function startScheduledMessagesCron(io) {
       `).all(autoCloseHours);
 
       if (stale.length) {
-        const ratingEnabled = db.prepare("SELECT value FROM settings WHERE key = 'rating_enabled'").get()?.value === '1';
+        const ratingEnabled = hasFeature('csat') && db.prepare("SELECT value FROM settings WHERE key = 'rating_enabled'").get()?.value === '1';
         const ratingMsg = db.prepare("SELECT value FROM settings WHERE key = 'rating_message'").get()?.value
           || 'Como avaliaria o nosso atendimento? Responda com 1 (Muito mau) a 5 (Excelente).';
 

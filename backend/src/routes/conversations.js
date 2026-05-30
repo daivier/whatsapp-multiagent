@@ -8,6 +8,7 @@ const { sendMessage, sendMedia, registerLidMapping, runLidMerge } = require('../
 const ioInstance = require('../io-instance');
 const push = require('../push');
 const { logAction } = require('../utils/audit');
+const { requireFeature, hasFeature } = require('../plan');
 
 const router = express.Router();
 
@@ -430,7 +431,7 @@ router.get('/contact/:phone', authMiddleware, (req, res) => {
 });
 
 // POST /conversations/:id/transfer
-router.post('/:id/transfer', authMiddleware, async (req, res) => {
+router.post('/:id/transfer', authMiddleware, requireFeature('transferencia'), async (req, res) => {
   const { attendant_id, notify = true } = req.body;
   if (!attendant_id) return res.status(400).json({ error: 'attendant_id obrigatório' });
 
@@ -529,7 +530,7 @@ router.patch('/:id/close', authMiddleware, async (req, res) => {
   if (!conv) return res.status(404).json({ error: 'Conversa não encontrada' });
   if (req.user.role === 'attendant' && conv.assigned_to !== req.user.id) return res.status(403).json({ error: 'Sem permissão' });
 
-  const ratingEnabled = db.prepare("SELECT value FROM settings WHERE key = 'rating_enabled'").get()?.value === '1';
+  const ratingEnabled = hasFeature('csat') && db.prepare("SELECT value FROM settings WHERE key = 'rating_enabled'").get()?.value === '1';
 
   db.prepare(`UPDATE conversations SET status = 'closed', updated_at = CURRENT_TIMESTAMP WHERE id = ?`).run(req.params.id);
 
@@ -740,7 +741,7 @@ router.post('/bulk/close', authMiddleware, (req, res) => {
 
 // POST /conversations/bulk/transfer — atribui N conversas a um atendente
 // body: { ids, attendant_id }
-router.post('/bulk/transfer', authMiddleware, (req, res) => {
+router.post('/bulk/transfer', authMiddleware, requireFeature('transferencia'), (req, res) => {
   const { ids: rawIds, attendant_id } = req.body;
   if (!attendant_id) return res.status(400).json({ error: 'attendant_id obrigatório' });
   const attendant = db.prepare("SELECT id, name FROM users WHERE id = ? AND role IN ('attendant', 'supervisor') AND active = 1").get(attendant_id);
@@ -853,7 +854,7 @@ router.delete('/:id', authMiddleware, ownerOnly, (req, res) => {
 // GET /conversations/dashboard — dados ao vivo para o dashboard principal
 // Supervisor: vê apenas dados dos departamentos a que pertence.
 // Owner: vê tudo.
-router.get('/dashboard', authMiddleware, supervisorOrOwner, (req, res) => {
+router.get('/dashboard', authMiddleware, requireFeature('relatorios'), supervisorOrOwner, (req, res) => {
   const slaMinutes = parseInt(db.prepare("SELECT value FROM settings WHERE key = 'sla_minutes'").get()?.value || '30', 10);
 
   // Filtro condicional por departamento (só para supervisor). Helpers para
@@ -987,7 +988,7 @@ router.get('/dashboard', authMiddleware, supervisorOrOwner, (req, res) => {
 });
 
 // GET /conversations/metrics
-router.get('/metrics', authMiddleware, ownerOnly, (req, res) => {
+router.get('/metrics', authMiddleware, requireFeature('relatorios'), ownerOnly, (req, res) => {
   const metrics = db.prepare(`
     SELECT
       COUNT(*) as total,
@@ -1001,7 +1002,7 @@ router.get('/metrics', authMiddleware, ownerOnly, (req, res) => {
 
 // GET /conversations/export — CSV com histórico
 // Owner: tudo. Supervisor: só conversas dos seus departamentos.
-router.get('/export', authMiddleware, supervisorOrOwner, (req, res) => {
+router.get('/export', authMiddleware, requireFeature('relatorios'), supervisorOrOwner, (req, res) => {
   const isSupervisor = req.user.role === 'supervisor';
   const userDeptIds = isSupervisor
     ? db.prepare('SELECT department_id FROM user_departments WHERE user_id = ?').all(req.user.id).map(r => r.department_id)
@@ -1035,7 +1036,7 @@ router.get('/export', authMiddleware, supervisorOrOwner, (req, res) => {
 });
 
 // GET /conversations/transfer-logs
-router.get('/transfer-logs', authMiddleware, ownerOnly, (req, res) => {
+router.get('/transfer-logs', authMiddleware, requireFeature('relatorios'), ownerOnly, (req, res) => {
   const logs = db.prepare(`
     SELECT tl.id, tl.created_at,
       conv.id as conversation_id, con.name as contact_name, con.phone,
@@ -1054,7 +1055,7 @@ router.get('/transfer-logs', authMiddleware, ownerOnly, (req, res) => {
 
 // GET /conversations/reports?period=today|week|month|all
 // Owner: todos os dados. Supervisor: restrito aos departamentos dele.
-router.get('/reports', authMiddleware, supervisorOrOwner, (req, res) => {
+router.get('/reports', authMiddleware, requireFeature('relatorios'), supervisorOrOwner, (req, res) => {
   const VALID = ['today', 'week', 'month', 'all'];
   const period = VALID.includes(req.query.period) ? req.query.period : 'month';
 
@@ -1156,7 +1157,7 @@ router.get('/reports', authMiddleware, supervisorOrOwner, (req, res) => {
 
 // GET /conversations/ratings?period=today|week|month|all
 // Owner: todos. Supervisor: só ratings das conversas dos seus departamentos.
-router.get('/ratings', authMiddleware, supervisorOrOwner, (req, res) => {
+router.get('/ratings', authMiddleware, requireFeature('relatorios'), supervisorOrOwner, (req, res) => {
   const VALID = ['today', 'week', 'month', 'all'];
   const period = VALID.includes(req.query.period) ? req.query.period : 'month';
   const PERIOD = {

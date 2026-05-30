@@ -15,6 +15,7 @@ PORT="$2"
 NAME="$3"
 EMAIL="$4"
 PASSWORD="$5"
+PLANO="${6:-empresarial}"   # basico | profissional | empresarial (default: empresarial)
 
 SERVER_IP="104.197.219.5"
 REPO="https://github.com/daivier/whatsapp-multiagent.git"
@@ -24,8 +25,9 @@ DOMAIN="${SLUG}.${SERVER_IP}.nip.io"
 
 # --- Validação ---
 if [ -z "$SLUG" ] || [ -z "$PORT" ] || [ -z "$NAME" ] || [ -z "$EMAIL" ] || [ -z "$PASSWORD" ]; then
-  echo "Uso: $0 <slug> <porta> <nome> <email-dono> <senha-dono>"
-  echo "Exemplo: $0 loja-abc 3011 \"Loja ABC\" dono@loja-abc.com senha123"
+  echo "Uso: $0 <slug> <porta> <nome> <email-dono> <senha-dono> [plano]"
+  echo "Exemplo: $0 loja-abc 3011 \"Loja ABC\" dono@loja-abc.com senha123 profissional"
+  echo "plano (opcional): basico | profissional | empresarial (default: empresarial)"
   exit 1
 fi
 
@@ -61,6 +63,7 @@ OWNER_PASSWORD=$PASSWORD
 
 FRONTEND_URL=http://$DOMAIN
 WA_SESSION_PATH=$TENANT_DIR/whatsapp-session
+PLAN=$PLANO
 EOF
 
 cd "$TENANT_DIR/backend"
@@ -160,6 +163,7 @@ echo "  URL:    http://$DOMAIN"
 echo "  Email:  $EMAIL"
 echo "  Senha:  $PASSWORD"
 echo "  PM2:    wa-$SLUG (porta $PORT)"
+echo "  Plano:  $PLANO"
 echo "========================================"
 echo ""
 echo "Próximo passo: acede ao URL e vai a WhatsApp para escanear o QR Code."

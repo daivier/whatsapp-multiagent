@@ -4,6 +4,7 @@ const db = require('../db/schema');
 const { authMiddleware, ownerOnly, supervisorOrOwner } = require('../middleware/auth');
 const { logAction } = require('../utils/audit');
 const { assignWaitingConversations } = require('../whatsapp/routing');
+const { hasFeature, getLimit, requireFeature } = require('../plan');
 
 const router = express.Router();
 
@@ -75,6 +76,19 @@ router.post('/', authMiddleware, ownerOnly, (req, res) => {
   const existing = db.prepare('SELECT id FROM users WHERE email = ?').get(email);
   if (existing) return res.status(409).json({ error: 'Email já existe' });
 
+  // Enforcement de plano: supervisores só em planos que o permitam; atendentes
+  // limitados pelo plano (owner não conta para o limite de atendentes).
+  if (role === 'supervisor' && !hasFeature('supervisores')) {
+    return res.status(403).json({ error: 'Supervisores não estão disponíveis no seu plano.', feature: 'supervisores', upgrade: true });
+  }
+  if (role === 'attendant') {
+    const max = getLimit('maxAtendentes');
+    if (Number.isFinite(max)) {
+      const count = db.prepare("SELECT COUNT(*) AS c FROM users WHERE role = 'attendant' AND active = 1").get().c;
+      if (count >= max) return res.status(403).json({ error: `Limite de ${max} atendentes do seu plano atingido.`, feature: 'maxAtendentes', upgrade: true });
+    }
+  }
+
   const hash = bcrypt.hashSync(password, 10);
   const result = db.prepare('INSERT INTO users (name, email, password_hash, role) VALUES (?, ?, ?, ?)').run(name, email, hash, role);
   if (Array.isArray(department_ids)) replaceUserDepartments(result.lastInsertRowid, department_ids);
@@ -139,6 +153,9 @@ router.patch('/:id', authMiddleware, ownerOnly, (req, res) => {
     if (!VALID_ROLES.includes(role)) {
       return res.status(400).json({ error: `role inválido. Aceites: ${VALID_ROLES.join(', ')}` });
     }
+    if (role === 'supervisor' && !hasFeature('supervisores')) {
+      return res.status(403).json({ error: 'Supervisores não estão disponíveis no seu plano.', feature: 'supervisores', upgrade: true });
+    }
     // Salvaguarda: não permitir que o último owner se rebaixe (deixa sem dono)
     const target = db.prepare('SELECT role FROM users WHERE id = ?').get(id);
     if (target?.role === 'owner' && role !== 'owner') {
@@ -187,7 +204,7 @@ router.patch('/:id/shift', authMiddleware, ownerOnly, (req, res) => {
 // GET /users/supervisor — dados em tempo real para painel supervisor (owner + supervisor)
 // Supervisor: restrito aos atendentes dos departamentos a que ele pertence.
 // Owner: vê todos os atendentes.
-router.get('/supervisor', authMiddleware, supervisorOrOwner, (req, res) => {
+router.get('/supervisor', authMiddleware, requireFeature('supervisores'), supervisorOrOwner, (req, res) => {
   const isSupervisor = req.user.role === 'supervisor';
 
   // Lista de atendentes — supervisor só vê os do(s) seu(s) departamento(s)

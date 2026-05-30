@@ -4,6 +4,7 @@ const db = require('../db/schema');
 const { authMiddleware, ownerOnly } = require('../middleware/auth');
 const ioInstance = require('../io-instance');
 const wa = require('../whatsapp/client');
+const { getLimit } = require('../plan');
 
 const router = express.Router();
 
@@ -62,6 +63,13 @@ router.get('/:id/qr', authMiddleware, ownerOnly, (req, res) => {
 router.post('/', authMiddleware, ownerOnly, async (req, res) => {
   const { name, color } = req.body;
   if (!name?.trim()) return res.status(400).json({ error: 'name obrigatório' });
+
+  // Enforcement de plano: limite de linhas WhatsApp.
+  const maxLinhas = getLimit('maxLinhas');
+  if (Number.isFinite(maxLinhas)) {
+    const count = db.prepare("SELECT COUNT(*) AS c FROM lines WHERE active = 1").get().c;
+    if (count >= maxLinhas) return res.status(403).json({ error: `Limite de ${maxLinhas} linha(s) do seu plano atingido.`, feature: 'maxLinhas', upgrade: true });
+  }
 
   // session_path: gerado a partir do base WA_SESSION_PATH + nome do tenant
   const base = process.env.WA_SESSION_PATH || path.join(__dirname, '../../baileys-session');

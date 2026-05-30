@@ -40,7 +40,7 @@ function SimpleBar({ label, value, max, color }) {
 }
 
 export default function AdminPanel({ socket }) {
-  const { user, logout } = useAuth();
+  const { user, logout, hasFeature, plan } = useAuth();
   const { dark, toggle: toggleTheme } = useTheme();
   const [tab, setTab] = useState('dashboard');
   const [internalUnread, setInternalUnread] = useState(0);
@@ -887,6 +887,32 @@ export default function AdminPanel({ socket }) {
     ['audit','📋 Auditoria'],['metrics','📊 Métricas'],['health','❤️ Saúde'],
   ];
 
+  // Gating por plano: cada aba pode exigir uma funcionalidade. Abas sem
+  // funcionalidade associada são base (sempre visíveis).
+  const TAB_FEATURE = {
+    dashboard: 'relatorios', reports: 'relatorios', transfers: 'relatorios',
+    departments: 'departamentos', scheduled: 'agendamento', broadcast: 'broadcast',
+    bot: 'bot', faq: 'bot', audit: 'auditoria', metrics: 'metricas', health: 'metricas',
+    blacklist: 'blacklist', chat: 'chat_interno', rating: 'csat',
+  };
+  const visibleTabs = TABS.filter(([key]) => !TAB_FEATURE[key] || hasFeature(TAB_FEATURE[key]));
+
+  // Se a aba atual deixar de estar disponível no plano, volta para Conversas.
+  useEffect(() => {
+    if (plan && !visibleTabs.some(([k]) => k === tab)) setTab('conversations');
+  }, [plan]);
+
+  // Upsell: quando o servidor bloqueia algo por plano (403 upgrade), avisa.
+  const [upgradeMsg, setUpgradeMsg] = useState('');
+  useEffect(() => {
+    function onUpgrade(e) {
+      setUpgradeMsg(e.detail?.error || 'Este recurso está disponível num plano superior.');
+      setTimeout(() => setUpgradeMsg(''), 6000);
+    }
+    window.addEventListener('plan:upgrade-needed', onUpgrade);
+    return () => window.removeEventListener('plan:upgrade-needed', onUpgrade);
+  }, []);
+
   function selectTab(key) {
     setTab(key);
     setShowSidebar(false);
@@ -904,6 +930,12 @@ export default function AdminPanel({ socket }) {
           <button onClick={() => setTakenNotice(null)} style={{ background: 'none', border: 'none', color: '#fff', cursor: 'pointer', fontSize: '1rem', lineHeight: 1 }}>✕</button>
         </div>
       )}
+      {upgradeMsg && (
+        <div style={{ position: 'fixed', top: '1rem', left: '50%', transform: 'translateX(-50%)', zIndex: 9999, background: '#7c3aed', color: '#fff', padding: '0.65rem 1.25rem', borderRadius: '8px', boxShadow: '0 4px 12px rgba(0,0,0,0.25)', fontSize: '0.9rem', fontWeight: 600, display: 'flex', gap: '0.75rem', alignItems: 'center', maxWidth: '90vw' }}>
+          <span>🔒 {upgradeMsg}</span>
+          <button onClick={() => setUpgradeMsg('')} style={{ background: 'none', border: 'none', color: '#fff', cursor: 'pointer', fontSize: '1rem', lineHeight: 1 }}>✕</button>
+        </div>
+      )}
       {isMobile && showSidebar && (
         <div onClick={() => setShowSidebar(false)} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.35)', zIndex: 150 }} />
       )}
@@ -915,10 +947,11 @@ export default function AdminPanel({ socket }) {
             <div style={{ minWidth: 0 }}>
               <p style={S.logoName}>{import.meta.env.VITE_TENANT_NAME || 'WhatsApp'}</p>
               <span style={S.ownerBadge}>{user.name}</span>
+              {plan && <span style={{ display: 'inline-block', marginTop: '3px', fontSize: '0.62rem', fontWeight: 700, color: '#5b5cf6', background: 'rgba(91,92,246,.12)', borderRadius: '6px', padding: '1px 7px' }}>Plano {plan.label}</span>}
             </div>
           </div>
           <nav style={S.nav}>
-            {TABS.map(([key, label]) => {
+            {visibleTabs.map(([key, label]) => {
               const badge = key === 'chat' ? internalUnread : key === 'conversations' ? convsUnread : 0;
               return (
                 <button key={key} style={{ ...S.navBtn, ...(tab === key ? S.navActive : {}), position: 'relative' }} onClick={() => selectTab(key)}>
@@ -2788,6 +2821,7 @@ export default function AdminPanel({ socket }) {
               </button>
             </div>
 
+            {hasFeature('quiet_hours') && (<>
             {/* QUIET HOURS — silenciar pushes em janela horária */}
             <hr style={{ border: 'none', borderTop: '1px solid var(--border)', margin: '0.5rem 0 0.25rem' }} />
             <div>
@@ -2815,6 +2849,7 @@ export default function AdminPanel({ socket }) {
               )}
               {quietMsg && <p style={{ fontSize: '0.78rem', margin: '0.4rem 0 0', color: quietMsg.startsWith('✓') ? 'var(--success, #22c55e)' : 'var(--danger)' }}>{quietMsg}</p>}
             </div>
+            </>)}
           </div>
         </div>
       )}
